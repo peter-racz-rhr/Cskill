@@ -1,0 +1,1407 @@
+<title>Kelp &amp; Compass</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="A sea-kayaking trip site built entirely from Modern Web Guidance patterns. Flip “Show guides” to see which guide powers each part.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Figtree:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+/* Layout: a sticky, shrinking harbour-bar header over full-width bands; each view is a hash route
+   swapped with view transitions. Colours come from light-dark(), so color-scheme alone switches theme. */
+:root {
+  color-scheme: light dark;
+  --bg: light-dark(#eef4f3, #071619);
+  --surface: light-dark(#ffffff, #0e2327);
+  --sunk: light-dark(#e1ebe9, #12302f);
+  --ink: light-dark(#0d2a2f, #e2efed);
+  --muted: light-dark(#4d6a6e, #97b3b0);
+  --line: light-dark(#c9d9d7, #23413f);
+  --accent: light-dark(#d4491c, #ff7d4f);      /* buoy orange */
+  --accent-ink: light-dark(#ffffff, #1a0a03);
+  --kelp: light-dark(#2c7351, #6fd3a0);
+  --sea: light-dark(#14566b, #6cc4dd);
+  --bad: light-dark(#b42318, #ff8a80);
+  --hl: light-dark(#ffe17a, #6b5200);
+  --hl-ink: light-dark(#0d2a2f, #fff4cc);
+  --shadow: 0 12px 32px light-dark(rgb(13 42 47 / .14), rgb(0 0 0 / .5));
+  --font-display: "Unbounded", "Arial Black", system-ui, sans-serif;
+  --font-body: "Figtree", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --radius: 14px;
+  --spring: linear(0, 0.016 0.5%, 0.06 1%, 0.226 2%, 1.116 5.4%, 1.375 6.6%, 1.527 7.7%, 1.565 8.2%, 1.585 8.8%, 1.581 9.3%, 1.559 9.8%, 1.458 10.9%, 0.937 14.3%, 0.784 15.5%, 0.693 16.6%, 0.67 17.1%, 0.657 17.7%, 0.671 18.7%, 0.729 19.8%, 1.042 23.3%, 1.13 24.5%, 1.182 25.6%, 1.201 26.7%, 1.192 27.7%, 1.156 28.8%, 0.977 32.2%, 0.925 33.4%, 0.894 34.5%, 0.888 35.5%, 0.896 36.5%, 1.003 41.1%, 1.022 42.6%, 1.026 44.1%, 0.999 50.5%, 0.996 53.8%, 1);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; } }
+:root[data-theme="dark"] { color-scheme: dark; }
+:root[data-theme="light"] { color-scheme: light; }
+/* The visitor's own choice in Display settings wins over the viewer's theme. */
+:root[data-scheme="light"] { color-scheme: light; }
+:root[data-scheme="dark"] { color-scheme: dark; }
+
+* { box-sizing: border-box; }
+html { scrollbar-color: var(--muted) var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 1.0625rem/1.6 var(--font-body); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 60; background: var(--surface); }
+.wrap { max-width: 1160px; margin-inline: auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.12; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2rem, 1.2rem + 3.6vw, 3.6rem); font-weight: 800; }
+h2 { font-size: clamp(1.4rem, 1.1rem + 1.2vw, 2rem); font-weight: 700; }
+h3 { font-size: 1.15rem; font-weight: 700; }
+p { margin: 0; text-wrap: pretty; }
+a { color: var(--sea); text-decoration: underline solid currentColor max(1px, 0.08em); text-underline-offset: 0.18em; text-decoration-skip-ink: auto; }
+a:hover { text-decoration-thickness: max(2px, 0.12em); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.muted { color: var(--muted); }
+.eyebrow { font: 600 0.78rem/1.2 var(--font-body); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.stack { display: grid; gap: 14px; }
+button, .btn { font: 600 0.95rem/1 var(--font-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 10px 16px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
+button:hover, .btn:hover { border-color: var(--accent); }
+.btn.primary, button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.icon-btn { width: 40px; height: 40px; padding: 0; justify-content: center; }
+section.band { padding-block: 56px; }
+[popover] { color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 12px; }
+dialog { color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); padding: 24px; max-width: min(520px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgb(4 16 18 / .55); }
+/* prevent-page-scroll-under-modal-dialog */
+dialog:modal { overscroll-behavior: contain; }
+dialog::backdrop { overflow: hidden; overscroll-behavior: contain; }
+/* animate-to-from-top-layer + motion: per-rule reduced-motion, overlay kept during exit */
+@media (prefers-reduced-motion: no-preference) {
+  dialog, [popover], dialog::backdrop {
+    transition: opacity .22s ease-out, translate .22s ease-out, display .22s, overlay .22s;
+    transition-behavior: allow-discrete;
+  }
+  dialog:not([open]), [popover]:not(:popover-open) { opacity: 0; translate: 0 6px; }
+  dialog:not([open])::backdrop { opacity: 0; }
+  @starting-style {
+    dialog[open], [popover]:popover-open { opacity: 0; translate: 0 6px; }
+    dialog[open]::backdrop { opacity: 0; }
+  }
+}
+
+/* ---------- guide labels ("Show guides") ---------- */
+.guide-tags { display: none; }
+.show-guides [data-guides] { outline: 2px dashed color-mix(in oklab, var(--accent) 70%, transparent); outline-offset: 3px; }
+.show-guides [data-guides]:not(header, .header-bar, [popover], dialog) { position: relative; }
+.show-guides .guide-tags { display: flex; flex-wrap: wrap; gap: 4px; position: absolute; inset-block-start: 4px; inset-inline-start: 4px; z-index: 40; width: max-content; max-width: max(calc(100% - 8px), min(240px, 90vw)); pointer-events: auto; }
+.guide-tags a { font: 600 11px/1.2 var(--font-mono); background: var(--accent); color: var(--accent-ink); padding: 3px 7px; border-radius: 6px; text-decoration: none; overflow-wrap: anywhere; box-shadow: 0 2px 6px rgb(0 0 0 / .2); }
+.guide-tags a:hover { text-decoration: underline; }
+
+/* ---------- header: sticky, shrinks on scroll, stuck-state aware ---------- */
+.site-header { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 50; }
+.header-bar { position: relative; background: var(--surface); border-bottom: 1px solid var(--line); }
+.header-inner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 14px; }
+.header-inner > * { flex-shrink: 0; white-space: nowrap; }
+.logo { display: inline-flex; align-items: center; gap: 10px; font: 800 1.05rem/1 var(--font-display); color: var(--ink); text-decoration: none; letter-spacing: -0.02em; transform-origin: left center; }
+.logo-mark { width: 30px; height: 30px; border-radius: 50%; background: conic-gradient(from 200deg, var(--accent) 0 25%, var(--sea) 0 60%, var(--kelp) 0); }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.site-menu { list-style: none; margin: 0; padding: 0; }
+.site-menu a { display: block; padding: 8px 12px; border-radius: 999px; color: var(--ink); text-decoration: none; font-weight: 600; }
+.site-menu a:hover { background: var(--sunk); }
+.site-menu a[aria-current="page"] { background: var(--ink); color: var(--bg); }
+.count { display: inline-grid; place-items: center; min-width: 1.4em; height: 1.4em; padding: 0 4px; margin-left: 4px; border-radius: 999px; font-size: .75rem; background: var(--accent); color: var(--accent-ink); }
+.count:empty { display: none; }
+.menu-button { anchor-name: --menu-button; }
+.site-header:not(.is-wide) .site-menu { position: fixed; inset: auto; inset-block-start: anchor(--menu-button bottom); inset-inline-end: anchor(--menu-button right); margin-block-start: 8px; min-width: 200px; padding: 6px; }
+.site-header.is-wide .menu-button { display: none; }
+.site-header.is-wide .site-menu { display: flex; gap: 2px; position: static; border: 0; box-shadow: none; background: none; padding: 0; inset: auto; }
+.switch-label { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: .9rem; cursor: pointer; }
+input[type="checkbox"][switch] { accent-color: var(--accent); margin: 0; cursor: pointer; inline-size: 2.2em; block-size: 1.25em; }
+input[type="checkbox"].switch-fallback { appearance: none; inline-size: 2.4em; block-size: 1.35em; border-radius: 999px; background: var(--line); position: relative; margin: 0; cursor: pointer; }
+input[type="checkbox"].switch-fallback::before { content: ""; position: absolute; inset: 3px auto 3px 3px; aspect-ratio: 1; border-radius: 50%; background: var(--surface); transition: translate .2s; }
+input[type="checkbox"].switch-fallback:checked { background: var(--accent); }
+input[type="checkbox"].switch-fallback:checked::before { translate: 1.05em 0; }
+#scroll-progress { position: absolute; inset: auto 0 -1px; height: 3px; background: var(--accent); transform-origin: 0 50%; transform: scaleX(0); }
+@media (prefers-reduced-motion: no-preference) {
+  @supports ((animation-timeline: scroll()) and (animation-range: 0% 100%)) {
+    @keyframes grow-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+    #scroll-progress { animation: grow-progress auto linear; animation-timeline: scroll(root block); }
+    @keyframes shrink-logo { to { scale: 0.86; } }
+    .logo { animation: shrink-logo linear both; animation-timeline: scroll(root block); animation-range: 0 140px; }
+    @keyframes header-shadow { to { box-shadow: 0 6px 20px rgb(0 0 0 / .12); } }
+    .header-bar { animation: header-shadow linear both; animation-timeline: scroll(root block); animation-range: 0 140px; }
+  }
+}
+#display-btn { anchor-name: --display-btn; }
+#display-pop { inset: auto; margin: 8px 0 0; position-anchor: --display-btn; position-area: block-end span-inline-start; position-try-fallbacks: flip-inline; width: 240px; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; border: 0; padding: 0; margin: 8px 0 0; }
+.seg label { text-align: center; padding: 8px 4px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; font-weight: 600; font-size: .9rem; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label:has(input:checked) { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.seg label:has(input:focus-visible) { outline: 3px solid var(--accent); outline-offset: 2px; }
+.tip { inset: auto; margin: 6px 0 0; padding: 4px 9px; font-size: .8rem; font-weight: 600; background: var(--ink); color: var(--bg); border: 0; position-area: block-end; position-try-fallbacks: flip-block; }
+#tip-display { position-anchor: --display-btn; }
+
+/* ---------- home ---------- */
+.hero { position: relative; overflow: clip; background: linear-gradient(180deg, light-dark(#bfe3e6, #0b2f38) 0%, light-dark(#e8f3f1, #071619) 100%); }
+.hero-inner { position: relative; z-index: 2; padding-block: 72px 140px; display: grid; gap: 18px; max-width: 760px; }
+.hero h1 span { color: var(--accent); }
+.hero .lede { font-size: 1.2rem; color: var(--muted); max-width: 52ch; }
+.layer { position: absolute; inset: auto 0 0; pointer-events: none; }
+.layer.far { height: 190px; background: light-dark(#8fc3c4, #12424a); clip-path: polygon(0 60%, 12% 35%, 22% 55%, 35% 20%, 48% 50%, 60% 28%, 74% 52%, 86% 30%, 100% 50%, 100% 100%, 0 100%); }
+.layer.mid { height: 120px; background: light-dark(#4d9aa3, #1a5b63); clip-path: polygon(0 40%, 10% 52%, 20% 38%, 30% 55%, 42% 40%, 55% 58%, 68% 42%, 80% 60%, 92% 44%, 100% 55%, 100% 100%, 0 100%); }
+.layer.near { height: 70px; background: var(--bg); clip-path: polygon(0 45%, 8% 30%, 18% 50%, 30% 32%, 44% 52%, 58% 30%, 72% 50%, 86% 34%, 100% 48%, 100% 100%, 0 100%); }
+@media (prefers-reduced-motion: no-preference) {
+  @supports ((animation-timeline: view()) and (animation-range: entry)) {
+    @keyframes drift-far { to { translate: 0 -60px; } }
+    @keyframes drift-mid { to { translate: 0 -30px; } }
+    .hero .layer.far { animation: drift-far linear both; animation-timeline: --hero; animation-range: exit 0% exit 100%; }
+    .hero .layer.mid { animation: drift-mid linear both; animation-timeline: --hero; animation-range: exit 0% exit 100%; }
+    .hero { view-timeline: --hero block; }
+  }
+}
+.featured-head { display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.carousel { display: flex; gap: 16px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: 16px; padding: 8px 16px 18px; overscroll-behavior-x: contain;
+  scrollbar-color: var(--accent) var(--sunk); scrollbar-width: thin;
+  -webkit-mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent); mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent); }
+.slide { flex: 0 0 min(78%, 360px); scroll-snap-align: center; container-type: scroll-state; }
+.slide-inner { display: grid; border-radius: var(--radius); overflow: clip; background: var(--surface); border: 1px solid var(--line); text-decoration: none; color: inherit; }
+.slide-inner .art { height: 160px; }
+.slide-inner .body { padding: 14px 16px; display: grid; gap: 4px; }
+@media (prefers-reduced-motion: no-preference) {
+  .slide-inner { transition: scale .35s var(--spring), opacity .3s; transition-duration: .7s, .3s; }
+  @supports (container-type: scroll-state) {
+    .slide-inner { scale: .93; opacity: .7; }
+    @container scroll-state(snapped: x) { .slide-inner { scale: 1; opacity: 1; } }
+  }
+}
+.why { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 16px; margin-top: 22px; }
+.why article { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; display: grid; gap: 8px; }
+.why .num { font: 800 2rem/1 var(--font-display); color: var(--kelp); font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: no-preference) {
+  @supports ((animation-timeline: view()) and (animation-range: entry)) {
+    @keyframes rise { from { opacity: .15; translate: 0 40px; } }
+    .reveal { animation: rise linear both; animation-timeline: view(); animation-range: entry 0% entry 70%; }
+  }
+}
+.tour-step { inset: auto; margin: 12px; width: min(280px, calc(100vw - 40px)); padding: 16px; border: 2px solid var(--accent); position-area: block-end span-inline-start; position-try-fallbacks: flip-block, flip-inline; }
+#tour-1 { position-anchor: --guides-switch; }
+#tour-2 { position-anchor: --display-btn; }
+#tour-3 { position-anchor: --menu-button; }
+.site-header.is-wide ~ #tour-3 { position-anchor: --nav-trips; }
+.guides-switch { anchor-name: --guides-switch; }
+.tour-step h2 { font-size: 1rem; margin-bottom: 6px; }
+.tour-step .row { margin-top: 12px; justify-content: space-between; }
+
+/* ---------- art ---------- */
+.art { position: relative; background: linear-gradient(160deg, var(--c1), var(--c2)); overflow: clip; }
+.art::before, .art::after { content: ""; position: absolute; inset: auto 0 0; }
+.art::before { height: 55%; background: color-mix(in oklab, var(--c2) 70%, black); clip-path: polygon(0 50%, 15% 30%, 30% 55%, 48% 25%, 66% 50%, 82% 28%, 100% 48%, 100% 100%, 0 100%); opacity: .7; }
+.art::after { height: 30%; background: color-mix(in oklab, var(--c1) 40%, white); clip-path: polygon(0 40%, 20% 60%, 40% 35%, 60% 62%, 80% 38%, 100% 58%, 100% 100%, 0 100%); opacity: .35; }
+
+/* ---------- trips ---------- */
+.filters-wrap { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 68px); z-index: 20; container-type: scroll-state; container-name: filter-bar; margin-block: 18px; }
+.filters { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: end; padding: 14px 16px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); transition: box-shadow .3s, border-color .3s; }
+@container filter-bar scroll-state(stuck: top) { .filters { box-shadow: var(--shadow); border-color: transparent; } }
+.field { display: grid; gap: 4px; }
+.field > span, .field > label { font-weight: 600; font-size: .85rem; }
+input[type="search"], input[type="text"], input[type="email"], input[type="tel"], textarea, select { font: inherit; color: var(--ink); background: var(--bg); border: 1.5px solid var(--line); border-radius: 10px; padding: 9px 12px; }
+input[type="search"] { min-width: 14ch; }
+input[type="range"] { accent-color: var(--accent); width: 160px; }
+output { font-variant-numeric: tabular-nums; font-weight: 700; }
+.region-select, .region-select::picker(select) { appearance: base-select; }
+.region-select { min-width: 13rem; border-radius: 10px; display: flex; align-items: center; gap: 8px; }
+.region-select::picker(select) { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 4px; box-shadow: var(--shadow); }
+.region-select option { padding: 8px 10px; border-radius: 8px; display: flex; gap: 8px; align-items: center; }
+.region-select option:hover, .region-select option:focus-visible { background: var(--sunk); }
+.region-select option:checked { font-weight: 700; }
+.region-select .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+.results-line { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 16px; }
+.trip { container-type: inline-size; container-name: trip; view-transition-class: trip-card; }
+.trip-card { display: grid; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: clip; height: 100%; }
+.trip-card:has(.card-link:hover) { border-color: var(--accent); }
+.trip-card:has(.card-link:focus-visible) { outline: 3px solid var(--accent); outline-offset: 2px; }
+.trip-card .card-link:focus-visible { outline: none; }
+.trip-card .art { height: 150px; }
+.trip-card .body { padding: 14px 16px 16px; display: grid; gap: 8px; align-content: start; }
+.trip-card h3 { font-size: clamp(1.05rem, 4.5cqi, 1.35rem); }
+.trip-card .card-link { color: inherit; text-decoration: none; }
+.trip-card .card-link::after { content: ""; position: absolute; inset: 0; }
+.trip-card { position: relative; }
+.trip-card .summary { color: var(--muted); font-size: .95rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.trip-card .foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; }
+.trip-card .price { font-weight: 700; font-variant-numeric: tabular-nums; }
+.region-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .85rem; color: var(--muted); }
+.save { position: relative; z-index: 2; }
+.save[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+@media (prefers-reduced-motion: no-preference) { .save[aria-pressed="true"] .heart { animation: pop .6s var(--spring); } }
+@keyframes pop { from { scale: .4; } }
+@container trip (width > 470px) {
+  .trip-card { grid-template-columns: 42% 1fr; }
+  .trip-card .art { height: 100%; min-height: 190px; }
+}
+.badge { --badge-bg: #888; display: inline-block; padding: 3px 9px; border-radius: 999px; font: 700 .75rem/1.4 var(--font-body); background: var(--badge-bg);
+  /* contrast-color fallback from the guide: pick black or white from the background's relative luminance */
+  --wcag-y-threshold: 0.17913; --y: max(0, sign(var(--wcag-y-threshold) - y));
+  color: color(from var(--badge-bg) xyz-d65 calc(var(--y) * 0.9505) var(--y) calc(var(--y) * 1.089)); }
+@supports (color: contrast-color(red)) { .badge { color: contrast-color(var(--badge-bg)); } }
+.badge.Beginner { --badge-bg: #6fd3a0; } .badge.Intermediate { --badge-bg: #f2c14e; } .badge.Advanced { --badge-bg: #b8360f; }
+.empty { padding: 40px; text-align: center; border: 1px dashed var(--line); border-radius: var(--radius); color: var(--muted); }
+::highlight(trip-search) { background-color: var(--hl); color: var(--hl-ink); }
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-group(.trip-card) { animation-duration: .45s; animation-timing-function: cubic-bezier(.2,.8,.2,1); }
+}
+@media (prefers-reduced-motion: reduce) { ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; } }
+
+/* ---------- trip detail ---------- */
+.breadcrumb ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: .9rem; }
+.breadcrumb > ol > li + li::before { content: "/" / ""; color: var(--muted); margin-inline-end: 8px; }
+.breadcrumb [aria-current="page"] { font-weight: 600; }
+.detail-hero { border-radius: 20px; height: clamp(180px, 30vw, 300px); margin-block: 16px 22px; }
+.detail-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 32px; align-items: end; }
+.detail-head h1 { font-size: clamp(1.8rem, 1.2rem + 2.6vw, 3rem); width: fit-content; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-top: 10px; color: var(--muted); }
+.facts b { color: var(--ink); }
+#guide-link { anchor-name: --guide-link; }
+#guide-card { inset: auto; margin: 8px 0; width: min(300px, calc(100vw - 32px)); padding: 16px; position-anchor: --guide-link; position-area: block-end span-inline-end; position-try-fallbacks: flip-block, flip-inline; }
+#guide-card .avatar { width: 52px; height: 52px; border-radius: 50%; background: conic-gradient(var(--kelp), var(--sea), var(--kelp)); float: left; margin: 0 12px 6px 0; }
+[interestfor] { interest-delay: .4s .2s; }
+.share { display: inline-flex; position: relative; }
+.share-bubble { position: absolute; inset-block-start: calc(100% + 6px); inset-inline-end: 0; white-space: nowrap; font-size: .8rem; padding: 4px 9px; border-radius: 8px; background: var(--ink); color: var(--bg); }
+.share-bubble:empty { display: none; }
+.tabs { margin-top: 28px; }
+.tablist { position: relative; display: flex; gap: 2px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.tablist button { border: 0; background: none; border-radius: 10px 10px 0 0; padding: 12px 16px; color: var(--muted); }
+.tablist button:hover { color: var(--ink); background: var(--sunk); }
+.tablist button[aria-selected="true"] { color: var(--ink); anchor-name: --active-tab; }
+.tablist::before { content: ""; position: absolute; position-anchor: --active-tab; left: anchor(left); right: anchor(right); bottom: anchor(bottom); height: 3px; background: var(--accent); border-radius: 3px; }
+@supports not (anchor-name: --a) { .tablist button[aria-selected="true"] { box-shadow: inset 0 -3px var(--accent); } .tablist::before { display: none; } }
+@media (prefers-reduced-motion: no-preference) { .tablist::before { transition: left .3s var(--spring), right .3s var(--spring); transition-duration: .6s; } }
+[role="tabpanel"] { padding-block: 22px; }
+.overview { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 28px; }
+.overview p + p { margin-top: 12px; }
+.included { list-style: none; padding: 16px 18px; margin: 0; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); display: grid; gap: 8px; }
+.included li::before { content: "✓" / ""; color: var(--kelp); font-weight: 800; margin-right: 8px; }
+.accordion { display: grid; gap: 8px; max-width: 760px; }
+.accordion details { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.accordion summary { list-style: none; display: flex; align-items: center; gap: .8ch; padding: 14px 16px; font-weight: 700; cursor: pointer; border-radius: 12px; }
+.accordion summary::-webkit-details-marker { display: none; }
+.accordion summary::before { content: ""; inline-size: 1em; block-size: 1em; flex-shrink: 0; background-color: currentColor; rotate: -90deg;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 9l6 6 6-6' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center / contain; }
+.accordion details[open] > summary::before { rotate: 0deg; }
+.accordion summary:hover { background: var(--sunk); }
+.accordion .day { color: var(--accent); font-family: var(--font-mono); font-size: .85rem; }
+.accordion .content { padding: 0 16px 16px 44px; color: var(--muted); }
+details::details-content { interpolate-size: allow-keywords; overflow: clip; contain: layout; }
+details:not([open])::details-content { block-size: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .accordion summary::before { transition: rotate .2s; }
+  details::details-content { transition: block-size, content-visibility, display; transition-duration: .3s; transition-timing-function: ease-in-out; transition-behavior: allow-discrete; }
+}
+.table-wrapper { overflow: auto; max-inline-size: 100%; container-type: inline-size; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+table { border-collapse: separate; border-spacing: 0; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--line); }
+thead th { position: sticky; inset-block-start: 0; background: var(--sunk); z-index: 1; font-size: .85rem; }
+thead th button { border: 0; background: none; padding: 4px 6px; border-radius: 6px; font-size: .85rem; }
+th[aria-sort="ascending"] button::after { content: " ▲" / ""; }
+th[aria-sort="descending"] button::after { content: " ▼" / ""; }
+tbody tr:last-child > * { border-bottom: 0; }
+tbody tr { view-transition-class: dep-row; }
+.spots-low { color: var(--bad); font-weight: 700; }
+.sort-bar { display: none; }
+@container (width < 560px) {
+  .sort-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: .9rem; }
+  .sort-bar button { padding: 6px 10px; font-size: .85rem; }
+  .sort-bar button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+}
+@container (width < 560px) {
+  thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  table, tbody, tr, th, td { display: block; }
+  tbody tr { padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  tbody th, tbody td { border: 0; padding: 4px 0; display: flex; justify-content: space-between; gap: 12px; }
+  tbody [data-label]::before { content: attr(data-label); font-weight: 600; color: var(--muted); }
+}
+
+/* ---------- booking ---------- */
+.book-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 32px; align-items: start; }
+.summary-card { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 84px); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; display: grid; gap: 14px; justify-items: center; text-align: center; }
+@property --value { syntax: "<number>"; inherits: true; initial-value: 0; }
+progress.ring::-webkit-progress-bar { display: none; background: none; }
+progress.ring::-webkit-progress-value { display: none; background: none; }
+progress.ring::-moz-progress-bar { display: none; background: none; }
+progress.ring { appearance: none; --size: 130px; --thickness: 12px; width: var(--size); height: var(--size); border-radius: 50%;
+  transition: --value .4s cubic-bezier(.4,0,.2,1);
+  background: conic-gradient(var(--kelp) calc(var(--value) * 1%), var(--sunk) 0);
+  background-clip: border-area; border: var(--thickness) solid transparent; background-origin: border-box; }
+.ring-wrap { position: relative; display: grid; place-items: center; }
+.ring-wrap .pct { position: absolute; font: 700 1.4rem/1 var(--font-display); font-variant-numeric: tabular-nums; }
+form.booking { display: grid; gap: 18px; }
+fieldset { border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: var(--radius); padding: 16px 18px 18px; margin: 0; display: grid; gap: 14px; background: var(--surface); transition: border-color .2s; }
+fieldset:has(:user-valid):not(:has(:user-invalid, [aria-invalid="true"])) { border-left-color: var(--kelp); }
+fieldset:has(:user-invalid, [aria-invalid="true"]) { border-left-color: var(--bad); }
+legend { font: 700 1rem/1 var(--font-display); padding: 0 6px; }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 14px; }
+.ff { display: grid; gap: 4px; }
+.ff label { font-weight: 600; font-size: .9rem; }
+.ff .hint { color: var(--muted); font-size: .82rem; }
+.ff .error-msg { display: none; color: var(--bad); font-size: .85rem; font-weight: 600; }
+.ff .error-msg::before { content: "⚠ " / ""; }
+.ff input:user-invalid, .ff textarea:user-invalid, .ff [aria-invalid="true"] { border-color: var(--bad); background: color-mix(in oklab, var(--bad) 7%, var(--bg)); }
+.ff:has(:user-invalid, [aria-invalid="true"]) .error-msg { display: block; }
+textarea.notes { field-sizing: content; min-block-size: 3lh; max-block-size: 10lh; resize: vertical; }
+.total { font: 800 1.6rem/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.submit-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+progress.spin { appearance: none; inline-size: 18px; block-size: 18px; border: 3px solid currentColor; border-right-color: transparent; border-radius: 50%; background: none; }
+progress.spin::-webkit-progress-bar { display: none; background: none; }
+progress.spin::-webkit-progress-value { display: none; background: none; }
+progress.spin::-moz-progress-bar { display: none; background: none; }
+@media (prefers-reduced-motion: no-preference) { progress.spin { animation: spin .8s linear infinite; } }
+@keyframes spin { to { rotate: 1turn; } }
+
+/* ---------- journal ---------- */
+.article { max-width: 68ch; margin-inline: auto; font-size: 1.12rem; line-height: 1.7; }
+.article p { text-wrap: pretty; hanging-punctuation: first; }
+.article p + p { margin-top: 1em; }
+.article h2 { margin: 1.6em 0 .5em; }
+.article figure { margin: 2em 0; }
+.article figure .art { height: 220px; border-radius: var(--radius); }
+.article figcaption { color: var(--muted); font-size: .9rem; margin-top: 8px; }
+.article .deferred { content-visibility: auto; contain-intrinsic-size: auto none auto 600px; }
+.kicker { text-decoration: underline wavy var(--accent) max(1px, 0.06em); text-underline-offset: .25em; text-decoration-skip-ink: none; }
+.ai-box { border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; background: var(--surface); display: grid; gap: 10px; margin-block: 24px; }
+.ai-box ul { margin: 0; padding-left: 20px; }
+.comments { max-width: 68ch; margin: 40px auto 0; display: grid; gap: 14px; }
+.comment { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--surface); overflow-wrap: anywhere; }
+.comment .who { font-weight: 700; font-size: .9rem; }
+.comment-form textarea { width: 100%; field-sizing: content; min-block-size: 2lh; }
+
+/* ---------- saved (swipe to remove) ---------- */
+.SwipeableList { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; max-width: 640px; }
+.SwipeableList-item { contain: content; border-radius: var(--radius); background: var(--bad); interpolate-size: allow-keywords; }
+.SwipeableList-track { display: grid; grid-template-columns: 100% 100% 100%; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: none; scrollbar-width: none; }
+.SwipeableList-track::-webkit-scrollbar { display: none; }
+.SwipeableList-track > * { scroll-snap-align: start; scroll-snap-stop: always; }
+.SwipeableList-action { display: flex; align-items: center; padding: 0 22px; color: #fff; font-weight: 700; }
+.SwipeableList-action.start { justify-content: flex-end; }
+.SwipeableList-content { display: flex; align-items: center; gap: 14px; padding: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.SwipeableList-content .art { width: 64px; height: 64px; border-radius: 10px; flex: none; }
+.SwipeableList-content .grow { flex: 1; min-width: 0; }
+.SwipeableList-item.is-removing { block-size: 0; opacity: 0; margin-block: -5px; }
+@media (prefers-reduced-motion: no-preference) { .SwipeableList-item { transition: block-size .3s ease, opacity .3s ease, margin .3s ease; } }
+
+/* ---------- footer & guides dialog ---------- */
+footer { border-top: 1px solid var(--line); margin-top: 40px; padding-block: 28px 48px; color: var(--muted); }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; align-items: center; }
+#guides-dialog { max-width: min(720px, calc(100vw - 32px)); width: 100%; max-height: min(80dvh, 720px); }
+#guides-dialog .list { columns: 2 220px; column-gap: 24px; margin: 12px 0 0; padding: 0; list-style: none; }
+#guides-dialog li { break-inside: avoid; padding: 4px 0; font-size: .92rem; }
+#guides-dialog li a { font-family: var(--font-mono); font-size: .85rem; }
+#guides-dialog li span { color: var(--muted); font-size: .8rem; display: block; }
+
+.view { padding-bottom: 24px; }
+.view-title:focus { outline: none; }
+.page-head { padding-block: 36px 8px; display: grid; gap: 8px; }
+@media (max-width: 520px) {
+  .narrow-hide { display: none; }
+  .logo { font-size: .88rem; gap: 7px; }
+  .logo-mark { width: 24px; height: 24px; }
+  .nav-right { gap: 6px; }
+  .header-inner { gap: 8px; }
+  .menu-button { width: 40px; height: 40px; padding: 0; justify-content: center; }
+}
+@media (max-width: 860px) {
+  .book-layout, .overview { grid-template-columns: minmax(0, 1fr); }
+  .summary-card { position: static; order: -1; grid-template-columns: auto 1fr; justify-items: start; text-align: left; }
+  .detail-head { grid-template-columns: minmax(0, 1fr); }
+  .filters-wrap { top: calc(env(safe-area-inset-top, 0px) + 64px); }
+}
+</style>
+
+<header class="site-header" id="site-header" data-guides="navbar shrinking-header-on-scroll scroll-progress-indicator">
+  <div class="header-bar">
+    <div class="wrap header-inner" id="header-inner">
+      <a class="logo" href="#home"><span class="logo-mark" aria-hidden="true"></span>Kelp &amp; Compass</a>
+      <div class="nav-right">
+        <nav aria-label="Primary">
+          <button class="menu-button" type="button" popovertarget="site-menu" aria-controls="site-menu" aria-label="Menu">☰<span class="narrow-hide" aria-hidden="true"> Menu</span></button>
+          <ul id="site-menu" class="site-menu" popover="auto">
+            <li><a href="#home" data-nav="home">Home</a></li>
+            <li><a href="#trips" data-nav="trips" id="nav-trips" style="anchor-name: --nav-trips">Trips</a></li>
+            <li><a href="#journal" data-nav="journal">Journal</a></li>
+            <li><a href="#saved" data-nav="saved">Saved<span class="count" id="saved-count"></span></a></li>
+            <li><a href="#book" data-nav="book">Book</a></li>
+          </ul>
+        </nav>
+        <label class="switch-label guides-switch" data-guides="switch"><input type="checkbox" switch id="show-guides"> <span><span class="narrow-hide">Show </span>guides</span></label>
+        <span data-guides="dark-mode-toggle interest-triggered-tooltips"><button type="button" class="icon-btn" id="display-btn" popovertarget="display-pop" aria-label="Display settings" interestfor="tip-display"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg></button></span>
+      </div>
+    </div>
+    <div id="scroll-progress" aria-hidden="true"></div>
+  </div>
+</header>
+<div id="tip-display" class="tip" popover="hint">Display settings</div>
+<div id="display-pop" popover="auto" aria-label="Display settings" data-guides="dark-mode">
+  <strong>Colour scheme</strong>
+  <fieldset class="seg">
+    <legend class="vh">Colour scheme</legend>
+    <label><input type="radio" name="scheme" value="light"> Light</label>
+    <label><input type="radio" name="scheme" value="system" checked> System</label>
+    <label><input type="radio" name="scheme" value="dark"> Dark</label>
+  </fieldset>
+  <p class="muted" style="font-size:.85rem;margin-top:8px">Only <code>color-scheme</code> changes; every colour uses <code>light-dark()</code>.</p>
+</div>
+
+<main id="main">
+  <!-- ======================= HOME ======================= -->
+  <div class="view" id="view-home" data-view="home">
+    <section class="hero" data-guides="parallax-scroll-effects improve-text-layout-and-legibility">
+      <div class="layer far" aria-hidden="true"></div>
+      <div class="layer mid" aria-hidden="true"></div>
+      <div class="layer near" aria-hidden="true"></div>
+      <div class="wrap">
+        <div class="hero-inner">
+          <p class="eyebrow">Small-group sea kayaking since 2011</p>
+          <h1 class="view-title" tabindex="-1">Paddle the coast <span>nobody</span> drives to.</h1>
+          <p class="lede">Guided trips of 2 to 7 days, six paddlers per guide, from Norwegian fjords to the kelp forests of Big Sur. Every boat, tent and meal is sorted.</p>
+          <div class="row">
+            <a class="btn primary" href="#trips">Browse trips</a>
+            <span data-guides="persistent-app-tours"><button type="button" id="start-tour">Take the 30-second tour</button></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="band" aria-labelledby="featured-h">
+      <div class="wrap">
+        <div class="featured-head">
+          <div><p class="eyebrow">Next season</p><h2 id="featured-h">Featured trips</h2></div>
+          <p class="muted">Swipe or scroll; the trip in focus lifts forward.</p>
+        </div>
+      </div>
+      <div class="wrap" style="padding-inline:0">
+        <div class="carousel" id="carousel" tabindex="0" role="group" aria-label="Featured trips" data-guides="carousel carousel-snap-highlights customize-scrollbar-color-and-thickness soft-edge-content-fade physics-based-easing"></div>
+      </div>
+    </section>
+
+    <section class="band" aria-labelledby="why-h" style="padding-top:0">
+      <div class="wrap">
+        <p class="eyebrow">Why paddle with us</p>
+        <h2 id="why-h">Built around small groups and long days on the water</h2>
+        <div class="why" data-guides="scroll-entry-exit-effects motion">
+          <article class="reveal"><span class="num">6:1</span><h3>Paddlers per guide</h3><p class="muted">Never more. Everyone gets coached, nobody waits at the back.</p></article>
+          <article class="reveal"><span class="num">4.2 km/h</span><h3>Typical cruising pace</h3><p class="muted">Steady enough for first-timers, with longer loops for those who want them.</p></article>
+          <article class="reveal"><span class="num">0</span><h3>Single-use plastic</h3><p class="muted">Refill stations on every route and meals packed in reusable tins.</p></article>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ======================= TRIPS ======================= -->
+  <div class="view" id="view-trips" data-view="trips" hidden>
+    <div class="wrap">
+      <div class="page-head">
+        <p class="eyebrow">2027 season</p>
+        <h1 class="view-title" tabindex="-1">All trips</h1>
+      </div>
+      <div class="filters-wrap" data-guides="state-aware-sticky-headers">
+        <form class="filters" id="filters" role="search" aria-label="Filter trips">
+          <div class="field" data-guides="highlight-text-ranges">
+            <label for="q">Search</label>
+            <input type="search" id="q" placeholder="fjord, caves, orca…" autocomplete="off">
+          </div>
+          <div class="field" data-guides="branded-select-styling">
+            <label for="region">Region</label>
+            <select id="region" class="region-select">
+              <button><selectedcontent></selectedcontent></button>
+              <option value="all" selected><span class="dot" style="background:var(--muted)"></span>All regions</option>
+              <option value="Europe"><span class="dot" style="background:#3b82c4"></span>Europe</option>
+              <option value="North America"><span class="dot" style="background:#2c7351"></span>North America</option>
+            </select>
+          </div>
+          <div class="field" data-guides="slider">
+            <label for="days">Up to <output id="days-out" for="days">7</output> days</label>
+            <input type="range" id="days" min="2" max="7" value="7" step="1">
+          </div>
+          <label class="switch-label" style="padding-bottom:10px" data-guides="switch"><input type="checkbox" switch id="beginner"> Beginner friendly only</label>
+        </form>
+      </div>
+      <div class="results-line">
+        <p id="result-count" role="status" class="muted"></p>
+        <p class="muted" style="font-size:.9rem">Tap a card for details. ♥ saves it for later.</p>
+      </div>
+      <div data-guides="group-element-transitions size-aware-styling fluid-scaling card contrast-color single-line-overflow"><ul class="grid" id="trip-grid"></ul></div>
+      <p class="empty" id="no-trips" hidden>No trip matches those filters. Try a longer trip length or another region.</p>
+    </div>
+  </div>
+
+  <!-- ======================= TRIP DETAIL ======================= -->
+  <div class="view" id="view-trip" data-view="trip" hidden>
+    <div class="wrap">
+      <nav class="breadcrumb" aria-label="Breadcrumb" style="padding-top:24px" data-guides="breadcrumbs">
+        <ol><li><a href="#home">Home</a></li><li><a href="#trips">Trips</a></li><li><span aria-current="page" id="crumb-name"></span></li></ol>
+      </nav>
+      <div class="detail-hero art" id="detail-art" data-guides="same-document-transitions"></div>
+      <div class="detail-head">
+        <div>
+          <p class="eyebrow" id="d-region"></p>
+          <h1 class="view-title" id="d-title" tabindex="-1"></h1>
+          <div class="facts" id="d-facts"></div>
+        </div>
+        <div class="row">
+          <span class="share" data-guides="copy-button">
+            <button type="button" command="--copy-link" commandfor="d-title" aria-label="Copy a link to this trip">Copy link</button>
+            <span class="share-bubble" role="status" id="share-bubble"></span>
+          </span>
+          <a class="btn primary" href="#book" id="d-book">Book this trip</a>
+        </div>
+      </div>
+
+      <div class="tabs" data-guides="tabs anchor-positioning-tab-underline search-hidden-content">
+        <div class="tablist" focusgroup="tablist nomemory" aria-label="Trip details" id="tablist">
+          <button type="button" id="t-overview" aria-selected="true" aria-controls="p-overview" focusgroupstart>Overview</button>
+          <button type="button" id="t-itin" aria-selected="false" aria-controls="p-itin">Day by day</button>
+          <button type="button" id="t-dep" aria-selected="false" aria-controls="p-dep">Departures</button>
+          <button type="button" id="t-faq" aria-selected="false" aria-controls="p-faq">FAQ</button>
+        </div>
+        <div role="tabpanel" id="p-overview" aria-labelledby="t-overview" tabindex="0">
+          <div class="overview">
+            <div id="d-overview"></div>
+            <ul class="included" id="d-included" aria-label="Included"></ul>
+          </div>
+        </div>
+        <div role="tabpanel" id="p-itin" aria-labelledby="t-itin" tabindex="0" hidden="until-found">
+          <div class="accordion" id="d-itin" data-guides="accordion"></div>
+        </div>
+        <div role="tabpanel" id="p-dep" aria-labelledby="t-dep" tabindex="0" hidden="until-found">
+          <div class="table-wrapper" data-guides="responsive-table sortable-table support-global-calendar-systems">
+            <div class="sort-bar" role="group" aria-label="Sort departures">
+              <span class="muted">Sort by</span>
+              <button type="button" data-sort-col="0">Date</button><button type="button" data-sort-col="1">Spots left</button><button type="button" data-sort-col="2">Price</button>
+            </div>
+            <table id="dep-table">
+              <caption class="vh">Departures, sortable by date, spots left and price</caption>
+              <thead><tr>
+                <th scope="col" data-type="date" aria-sort="ascending"><button type="button" commandfor="dep-table" command="--sort">Date</button></th>
+                <th scope="col" data-type="number"><button type="button" commandfor="dep-table" command="--sort">Spots left</button></th>
+                <th scope="col" data-type="number"><button type="button" commandfor="dep-table" command="--sort">Price</button></th>
+                <th scope="col"><span class="vh">Book</span></th>
+              </tr></thead>
+              <tbody id="dep-body"></tbody>
+            </table>
+          </div>
+          <p class="vh" role="status" id="sort-status"></p>
+        </div>
+        <div role="tabpanel" id="p-faq" aria-labelledby="t-faq" tabindex="0" hidden="until-found">
+          <div class="accordion" data-guides="accordion search-hidden-content">
+            <details name="faq"><summary>Do I need kayaking experience?</summary><div class="content">Not for Beginner trips. Day one starts on flat water with strokes, rescues and a dry-bag packing lesson.</div></details>
+            <details name="faq"><summary>What if the weather turns?</summary><div class="content">Guides plan two routes for each day and swap to the sheltered one when wind passes 18 knots.</div></details>
+            <details name="faq"><summary>Can I bring my own kayak?</summary><div class="content">Yes, if it has bulkheads and deck lines. Tell us when you book so we can check it fits the trailer.</div></details>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="guide-card" popover="hint" data-guides="hovercard">
+    <div class="avatar" aria-hidden="true"></div>
+    <strong id="gc-name"></strong>
+    <p class="muted" id="gc-bio" style="font-size:.92rem"></p>
+  </div>
+
+  <!-- ======================= BOOK ======================= -->
+  <div class="view" id="view-book" data-view="book" hidden>
+    <div class="wrap">
+      <div class="page-head"><p class="eyebrow">Booking</p><h1 class="view-title" tabindex="-1">Reserve your place</h1>
+        <p class="muted">This is a demo: nothing is charged or sent. Your browser's autofill works on every field.</p></div>
+      <div class="book-layout" style="margin-top:18px">
+        <form class="booking" id="booking" novalidate data-guides="autofill-address-form autofill-payment-form validate-input-after-interaction required-field-feedback accessible-error-announcement style-parent-with-has">
+          <fieldset>
+            <legend>Trip</legend>
+            <div class="grid-2">
+              <div class="ff">
+                <label for="b-trip">Trip and departure</label>
+                <select id="b-trip" name="trip" required></select>
+              </div>
+              <div class="ff" data-guides="slider">
+                <label for="b-group">Paddlers: <output id="b-group-out" for="b-group">2</output></label>
+                <input type="range" id="b-group" name="group" min="1" max="6" value="2">
+              </div>
+            </div>
+            <label class="switch-label" data-guides="switch"><input type="checkbox" switch id="b-wetsuit" name="wetsuit"> Rent wetsuits (€35 each)</label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Lead paddler</legend>
+            <div class="ff">
+              <label for="b-name">Full name</label>
+              <input type="text" id="b-name" name="name" autocomplete="name" required aria-describedby="b-name-err">
+              <span class="error-msg" id="b-name-err">Enter the name on your ID.</span>
+            </div>
+            <div class="grid-2">
+              <div class="ff">
+                <label for="b-email">Email</label>
+                <span class="hint" id="b-email-hint">We send the packing list here.</span>
+                <input type="email" id="b-email" name="email" autocomplete="email" required aria-describedby="b-email-hint b-email-err">
+                <span class="error-msg" id="b-email-err">Enter an email like name@example.com.</span>
+              </div>
+              <div class="ff">
+                <label for="b-tel">Phone</label>
+                <span class="hint" id="b-tel-hint">For weather updates on the day.</span>
+                <input type="tel" id="b-tel" name="tel" autocomplete="tel" required aria-describedby="b-tel-hint b-tel-err">
+                <span class="error-msg" id="b-tel-err">Enter a phone number.</span>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Billing address</legend>
+            <div class="ff">
+              <label for="b-addr">Street address</label>
+              <input type="text" id="b-addr" name="address-line1" autocomplete="billing address-line1" required aria-describedby="b-addr-err">
+              <span class="error-msg" id="b-addr-err">Enter your street address.</span>
+            </div>
+            <div class="grid-2">
+              <div class="ff">
+                <label for="b-city">Town or city</label>
+                <input type="text" id="b-city" name="city" autocomplete="billing address-level2" required aria-describedby="b-city-err">
+                <span class="error-msg" id="b-city-err">Enter your town or city.</span>
+              </div>
+              <div class="ff">
+                <label for="b-postal">Postcode</label>
+                <input type="text" id="b-postal" name="postal-code" autocomplete="billing postal-code" required aria-describedby="b-postal-err">
+                <span class="error-msg" id="b-postal-err">Enter your postcode.</span>
+              </div>
+            </div>
+            <div class="ff">
+              <label for="b-country">Country</label>
+              <input type="text" id="b-country" name="country" autocomplete="billing country-name" required aria-describedby="b-country-err">
+              <span class="error-msg" id="b-country-err">Enter your country.</span>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Payment</legend>
+            <div class="ff">
+              <label for="cc-name">Name on card</label>
+              <input type="text" id="cc-name" name="cc-name" autocomplete="cc-name" required aria-describedby="cc-name-err">
+              <span class="error-msg" id="cc-name-err">Enter the name shown on the card.</span>
+            </div>
+            <div class="ff">
+              <label for="cc-number">Card number</label>
+              <span class="hint" id="cc-number-hint">13 to 19 digits; spaces are fine.</span>
+              <input type="text" id="cc-number" name="cc-number" autocomplete="cc-number" inputmode="numeric" pattern="[\d ]{13,23}" required aria-describedby="cc-number-hint cc-number-err">
+              <span class="error-msg" id="cc-number-err">Enter a card number of 13 to 19 digits.</span>
+            </div>
+            <div class="grid-2">
+              <div class="ff">
+                <label for="cc-exp">Expiry</label>
+                <span class="hint" id="cc-exp-hint">MM/YY</span>
+                <input type="text" id="cc-exp" name="cc-exp" autocomplete="cc-exp" inputmode="numeric" pattern="(0[1-9]|1[0-2])\s?/\s?\d{2}" required aria-describedby="cc-exp-hint cc-exp-err">
+                <span class="error-msg" id="cc-exp-err">Use the format MM/YY.</span>
+              </div>
+              <div class="ff">
+                <label for="cc-csc">Security code</label>
+                <span class="hint" id="cc-csc-hint">3 or 4 digits on the back</span>
+                <input type="text" id="cc-csc" name="cc-csc" autocomplete="cc-csc" inputmode="numeric" pattern="\d{3,4}" required aria-describedby="cc-csc-hint cc-csc-err">
+                <span class="error-msg" id="cc-csc-err">Enter the 3 or 4 digit code.</span>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Anything the guide should know?</legend>
+            <div class="ff" data-guides="form-fields-automatically-fit-contents">
+              <label for="b-notes">Notes (optional)</label>
+              <textarea id="b-notes" name="notes" class="notes" placeholder="Allergies, experience, a birthday on the trip…"></textarea>
+            </div>
+          </fieldset>
+
+          <div class="submit-row" data-guides="spinner">
+            <button type="submit" class="primary" id="b-submit">Review booking</button>
+            <p id="b-status" role="status" class="muted"></p>
+          </div>
+        </form>
+
+        <aside class="summary-card" aria-label="Booking summary" data-guides="progress-ring">
+          <div class="ring-wrap">
+            <progress class="ring" id="b-progress" max="100" value="0" aria-label="Form completion"></progress>
+            <span class="pct" id="b-pct" aria-hidden="true">0%</span>
+          </div>
+          <div class="stack" style="gap:6px">
+            <p class="muted" style="font-size:.9rem">Estimated total</p>
+            <p class="total" id="b-total">€0</p>
+            <p class="muted" style="font-size:.85rem" id="b-total-detail"></p>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+  <dialog id="confirm-dialog" aria-labelledby="confirm-h" data-guides="dialog prevent-page-scroll-under-modal-dialog animate-to-from-top-layer">
+    <h2 id="confirm-h" style="font-size:1.3rem">Confirm your booking</h2>
+    <p class="muted" id="confirm-text" style="margin-top:8px"></p>
+    <form method="dialog" class="row" style="justify-content:flex-end;margin-top:20px">
+      <button value="cancel" autofocus>Go back</button>
+      <button value="confirm" class="primary">Confirm and pay</button>
+    </form>
+  </dialog>
+
+  <!-- ======================= JOURNAL ======================= -->
+  <div class="view" id="view-journal" data-view="journal" hidden>
+    <div class="wrap">
+      <div class="page-head" style="max-width:68ch;margin-inline:auto">
+        <p class="eyebrow">Journal · Big Sur Coast</p>
+        <h1 class="view-title" tabindex="-1">Three days among the kelp</h1>
+        <p class="muted">By Ines Marlow · 7 min read</p>
+      </div>
+      <article class="article" id="story" data-guides="typography improve-text-layout-and-legibility custom-text-decorations">
+        <div class="ai-box" data-guides="summarizer">
+          <div class="row" style="justify-content:space-between">
+            <strong>Short on time?</strong>
+            <button type="button" id="summarize">Summarize with on-device AI</button>
+          </div>
+          <div id="summary-out" aria-live="polite" class="muted" style="font-size:.95rem">Uses your browser's built-in Summarizer when it has one. Nothing leaves your device.</div>
+        </div>
+        <p>We launched from Monastery Beach at first light, while the swell was still asleep. Below the hull the water turned from slate to bottle green, and then the kelp began: tall golden stalks swaying in a current we could barely feel.</p>
+        <p>Giant kelp grows up to <span class="kicker">sixty centimetres a day</span>. Paddle through it slowly and you hear it before you see anything else: the gulp of sea otters cracking urchins on their bellies, the hiss of fronds against the bow.</p>
+        <figure class="reveal" data-guides="scroll-entry-exit-effects"><div class="art" style="--c1:#2b8a6e;--c2:#0b3b46" role="img" aria-label="Illustration of kelp fronds under a green sea"></div><figcaption>The canopy at Point Lobos, 7:40 a.m.</figcaption></figure>
+        <section class="deferred" data-guides="defer-rendering-heavy-content">
+          <h2>Day two: the long crossing</h2>
+          <p>The forecast promised eight knots from the north-west and delivered fifteen. Our guide, Marco, split the group into two pods, moved the slower boats into the lee of the cliffs and kept up a running commentary about cormorant nests to keep minds off sore shoulders.</p>
+          <p>By noon we had crossed the bay. Lunch was fish tacos on a beach that only appears at low tide, and a nap that lasted exactly as long as the tide allowed.</p>
+          <figure class="reveal"><div class="art" style="--c1:#e9a35b;--c2:#7a3e2a" role="img" aria-label="Illustration of a sunset over a cove"></div><figcaption>Camp at Andrew Molera, after the crossing.</figcaption></figure>
+          <h2>Day three: otters, and a lesson in patience</h2>
+          <p>On the last morning we drifted for an hour without paddling at all. A mother otter and her pup floated twenty metres off, wrapped in kelp so they wouldn't drift apart while they slept. Nobody spoke. Nobody needed to.</p>
+          <p>If you go, pack a warm hat even in July, eat the second taco, and let the guide choose the route. The coast has been doing this for a long time; it knows the way.</p>
+        </section>
+      </article>
+
+      <section class="comments" aria-labelledby="comments-h" data-guides="sanitize-untrusted-html ime-safe-enter-submit">
+        <h2 id="comments-h" style="font-size:1.3rem">Comments</h2>
+        <div id="comment-list" class="stack" style="gap:10px"></div>
+        <form class="comment-form stack" id="comment-form" style="gap:8px">
+          <label for="comment-text"><strong>Add a comment</strong> <span class="muted" style="font-size:.85rem">Enter posts, Shift+Enter adds a line. **bold**, _italic_ and plain HTML work; scripts and event handlers are stripped.</span></label>
+          <textarea id="comment-text" rows="2" placeholder="Try: I loved it! <img src=x onerror=alert(1)>"></textarea>
+          <div><button type="submit" class="primary">Post comment</button></div>
+        </form>
+      </section>
+    </div>
+  </div>
+
+  <!-- ======================= SAVED ======================= -->
+  <div class="view" id="view-saved" data-view="saved" hidden>
+    <div class="wrap">
+      <div class="page-head"><p class="eyebrow">Your list</p><h1 class="view-title" tabindex="-1">Saved trips</h1>
+        <p class="muted">Swipe a trip sideways to remove it, or use its Remove button.</p></div>
+      <div data-guides="swipe-to-remove" style="margin-top:18px;max-width:640px"><ul class="SwipeableList" id="saved-list"></ul></div>
+      <p class="empty" id="saved-empty" hidden style="max-width:640px">Nothing saved yet. Tap ♥ on any trip to keep it here.</p>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Kelp &amp; Compass is a fictional company. Every pattern on this page comes from Google Chrome's Modern Web Guidance.</span>
+    <button type="button" command="show-modal" commandfor="guides-dialog" id="guides-btn">Guides used here</button>
+  </div>
+</footer>
+
+<dialog id="guides-dialog" aria-labelledby="gd-h" closedby="any" data-guides="light-dismiss-a-dialog declarative-dialog-popover-control">
+  <div class="row" style="justify-content:space-between">
+    <h2 id="gd-h" style="font-size:1.3rem">Guides used on this site</h2>
+    <button type="button" command="close" commandfor="guides-dialog" autofocus>Close</button>
+  </div>
+  <p class="muted" id="gd-sum" style="margin-top:6px"></p>
+  <ul class="list" id="gd-list"></ul>
+</dialog>
+
+<div id="toast" popover="manual" data-guides="persistent-toast-notifications" style="inset:auto 16px calc(16px + env(safe-area-inset-bottom, 0px)) auto;margin:0;max-width:min(360px,calc(100vw - 32px))">
+  <div class="row" style="flex-wrap:nowrap;align-items:start"><span id="toast-msg" style="flex:1"></span><button type="button" id="toast-close" class="icon-btn" style="width:30px;height:30px" aria-label="Dismiss notification">×</button></div>
+</div>
+<div id="announcer" aria-live="polite" class="vh"></div>
+
+<dialog id="tour-1" class="tour-step" popover="manual" role="dialog" aria-labelledby="tour-1-h">
+  <h2 id="tour-1-h">See the guides behind the page</h2>
+  <p class="muted">Flip this switch and every part of the site is labelled with the guide that built it. Each label opens that guide.</p>
+  <div class="row"><span class="muted">1 of 3</span><button type="button" class="primary" data-tour-next>Next</button></div>
+</dialog>
+<dialog id="tour-2" class="tour-step" popover="manual" role="dialog" aria-labelledby="tour-2-h">
+  <h2 id="tour-2-h">Light, dark or system</h2>
+  <p class="muted">Pick a colour scheme here. Forms and scrollbars follow it too.</p>
+  <div class="row"><span class="muted">2 of 3</span><button type="button" class="primary" data-tour-next>Next</button></div>
+</dialog>
+<dialog id="tour-3" class="tour-step" popover="manual" role="dialog" aria-labelledby="tour-3-h">
+  <h2 id="tour-3-h">Then pick a trip</h2>
+  <p class="muted">Filter trips, open one, sort its departures and try the booking form. Nothing is charged.</p>
+  <div class="row"><span class="muted">3 of 3</span><button type="button" class="primary" data-tour-next>Done</button></div>
+</dialog>
+
+<script>
+(() => {
+"use strict";
+const $ = (id) => document.getElementById(id);
+const ATLAS = "https://claude.ai/artifact/7mUybibEGjtJXckTp2LbET#";
+const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+                set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+const money = new Intl.NumberFormat(undefined, { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+const dateFmt = new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+
+/* ---------------- data ---------------- */
+const TRIPS = [
+  { id: "orca", name: "Orca Sound Crossing", region: "Salish Sea, Canada", area: "North America", days: 5, level: "Intermediate", price: 1290, c1: "#3b7fa8", c2: "#0d2f45",
+    summary: "Island-hop the Broughton Archipelago where resident orcas feed at dusk.", guide: ["Tala Whitecloud", "Grew up on Malcolm Island and has logged 400 orca sightings."],
+    overview: ["Five days threading between forested islands, with camps chosen for their view of the passes where orcas travel.", "Expect 12–18 km a day with a rest morning on day three."],
+    included: ["Expedition kayaks and gear", "All camp meals", "Hydrophone for listening to orcas", "Water taxi from Port McNeill"],
+    itinerary: ["Launch from Telegraph Cove", "Blackfish Sound and the first camp", "Rest morning and a hydrophone session", "Crossing to Village Island", "Return paddle and farewell dinner"],
+    deps: [["2027-06-14", 4, 1290], ["2027-07-05", 1, 1390], ["2027-08-02", 6, 1390], ["2027-09-06", 3, 1190]] },
+  { id: "kelp", name: "Kelp Forest Weekender", region: "Big Sur Coast, USA", area: "North America", days: 2, level: "Beginner", price: 420, c1: "#2b8a6e", c2: "#0b3b46",
+    summary: "Two calm mornings drifting over giant kelp with sea otters for company.", guide: ["Marco Ruiz", "Marine biologist who has led otter counts at Point Lobos for a decade."],
+    overview: ["The gentlest way into sea kayaking: sheltered coves, short distances and a lot of floating still.", "Wetsuits are recommended; the Pacific stays cold all summer."],
+    included: ["Sit-on-top kayaks", "Wetsuits and booties", "Picnic lunches", "Marine-life field guide"],
+    itinerary: ["Stroke clinic and the Monastery Beach kelp", "Point Lobos at first light"],
+    deps: [["2027-04-17", 8, 420], ["2027-05-22", 2, 420], ["2027-06-19", 5, 460]] },
+  { id: "fjord", name: "Fjord Light Expedition", region: "Western Norway", area: "Europe", days: 7, level: "Advanced", price: 2150, c1: "#5b7db8", c2: "#1a2440",
+    summary: "A week under thousand-metre walls in Nærøyfjord, camping by waterfalls.", guide: ["Sigrid Aune", "Former national team paddler who knows every waterfall camp by name."],
+    overview: ["The classic Norwegian fjord journey, with long days under the midsummer sun and nights that never quite go dark.", "Requires confident rescue skills and 20 km days."],
+    included: ["Expedition kayaks", "Dry suits", "All meals", "Ferry and train transfers from Bergen"],
+    itinerary: ["Bergen to Gudvangen", "Into Nærøyfjord", "Waterfall camp", "Aurlandsfjord crossing", "Rest day and summit hike", "Sognefjord open water", "Flåm and the train home"],
+    deps: [["2027-06-20", 3, 2150], ["2027-07-11", 0, 2250], ["2027-08-08", 5, 2150]] },
+  { id: "lagoon", name: "Turquoise Lagoon Loop", region: "Dalmatian Coast, Croatia", area: "Europe", days: 4, level: "Beginner", price: 760, c1: "#2bb3c0", c2: "#126b7a",
+    summary: "Warm water, island villages and swims off the back of the boat.", guide: ["Luka Barić", "Born on Brač; knows which konoba still grills the morning catch."],
+    overview: ["Short hops between islands with long lunches in harbour villages.", "Ideal for a first multi-day trip or families with teenagers."],
+    included: ["Double kayaks", "Guesthouse rooms", "Breakfasts and dinners", "Snorkel kit"],
+    itinerary: ["Split to Brač", "Bol and the Golden Horn", "Hvar's hidden coves", "Pakleni islands and return"],
+    deps: [["2027-05-08", 6, 760], ["2027-06-12", 2, 820], ["2027-09-18", 7, 720]] },
+  { id: "glacier", name: "Glacier Edge Paddle", region: "Southeast Alaska, USA", area: "North America", days: 6, level: "Advanced", price: 1890, c1: "#7fb8d6", c2: "#23435e",
+    summary: "Paddle among icebergs to the face of a tidewater glacier.", guide: ["June Kasaan", "Tlingit guide and ice pilot with twelve seasons in Tracy Arm."],
+    overview: ["Cold, remote and unforgettable. We camp on moraine beaches and watch ice calve from a safe distance.", "Dry suits and previous multi-day experience required."],
+    included: ["Expedition kayaks", "Dry suits", "Bear-proof food storage", "Float-plane drop-off"],
+    itinerary: ["Float plane to Tracy Arm", "Iceberg alley", "Sawyer Glacier face", "Moraine camp and hike", "Harbour seal nursery", "Pick-up and Juneau"],
+    deps: [["2027-07-01", 2, 1890], ["2027-07-22", 4, 1990]] },
+  { id: "caves", name: "Sea Caves of the Algarve", region: "Algarve, Portugal", area: "Europe", days: 3, level: "Intermediate", price: 540, c1: "#e0a458", c2: "#8a4b2b",
+    summary: "Golden cliffs, hidden beaches and the cathedral cave at Benagil.", guide: ["Rita Matos", "Geologist who can date every arch you paddle under."],
+    overview: ["Three days exploring arches and caves that are only reachable from the water.", "Some open-water stretches; comfortable for anyone who has paddled before."],
+    included: ["Touring kayaks", "Two nights in Carvoeiro", "Breakfasts and one seafood dinner", "Waterproof camera case"],
+    itinerary: ["Ponta da Piedade arches", "Benagil and Marinha", "Algar Seco and farewell lunch"],
+    deps: [["2027-04-03", 5, 540], ["2027-05-15", 3, 560], ["2027-10-02", 8, 520]] },
+];
+const byId = Object.fromEntries(TRIPS.map((t) => [t.id, t]));
+const art = (el, t) => { el.style.setProperty("--c1", t.c1); el.style.setProperty("--c2", t.c2); };
+
+/* ---------------- guide labels ---------------- */
+function addGuideTags(root = document) {
+  for (const el of root.querySelectorAll("[data-guides]")) {
+    if (el.querySelector(":scope > .guide-tags")) continue;
+    const box = document.createElement("span");
+    box.className = "guide-tags";
+    for (const id of el.dataset.guides.split(/\s+/)) {
+      const a = document.createElement("a");
+      a.href = ATLAS + id; a.target = "_blank"; a.rel = "noopener"; a.textContent = id;
+      a.title = `Open the “${id}” guide in the Atlas`;
+      box.append(a);
+    }
+    el.prepend(box);
+  }
+}
+// Keep every label inside the screen: shift any that would spill past the right edge.
+function fitTags() {
+  if (!document.body.classList.contains("show-guides")) return;
+  for (const box of document.querySelectorAll(".guide-tags")) {
+    box.style.translate = "";
+    const r = box.getBoundingClientRect();
+    if (r.width && r.right > innerWidth - 8) box.style.translate = `${Math.round(innerWidth - 8 - r.right)}px 0`;
+  }
+}
+addEventListener("resize", fitTags);
+addEventListener("hashchange", () => setTimeout(fitTags, 400));
+const guidesSwitch = $("show-guides");
+guidesSwitch.addEventListener("change", () => {
+  addGuideTags();
+  document.body.classList.toggle("show-guides", guidesSwitch.checked);
+  fitTags();
+  announce(guidesSwitch.checked ? "Guide labels shown" : "Guide labels hidden");
+});
+
+/* switch fallback where <input switch> is unsupported (guide: switch) */
+if (!("switch" in HTMLInputElement.prototype)) {
+  for (const s of document.querySelectorAll("input[switch]")) { s.classList.add("switch-fallback"); s.setAttribute("role", "switch"); }
+}
+
+/* Invoker Commands, closedby and interestfor fallbacks, each only where missing */
+if (!("commandForElement" in HTMLButtonElement.prototype)) {
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("button[commandfor][command]"); if (!b) return;
+    const t = $(b.getAttribute("commandfor")); if (!t) return;
+    const c = b.getAttribute("command");
+    const ev = new Event("command", { cancelable: true }); ev.command = c; ev.source = b;
+    if (!t.dispatchEvent(ev)) return;
+    ({ "show-modal": () => t.showModal(), "close": () => t.close(b.value), "toggle-popover": () => t.togglePopover() })[c]?.();
+  });
+}
+if (!("closedBy" in HTMLDialogElement.prototype)) {
+  const outside = (e, d) => { const r = d.getBoundingClientRect(); return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom; };
+  for (const d of document.querySelectorAll('dialog[closedby="any"]')) {
+    let down = false;
+    d.addEventListener("pointerdown", (e) => { down = outside(e, d); });
+    d.addEventListener("pointerup", (e) => { if (down && outside(e, d)) d.close(); });
+  }
+}
+function wireInterest(src) {
+  if ("interestForElement" in HTMLButtonElement.prototype || src.dataset.interestWired) return;
+  src.dataset.interestWired = "1";
+  const t = $(src.getAttribute("interestfor")); if (!t) return;
+  let timer;
+  const show = () => { clearTimeout(timer); timer = setTimeout(() => { if (!t.matches(":popover-open")) { try { t.showPopover({ source: src }); } catch { t.showPopover(); } } }, 400); };
+  const hide = () => { clearTimeout(timer); timer = setTimeout(() => { if (!t.matches(":hover") && !src.matches(":hover")) t.hidePopover?.(); }, 250); };
+  src.addEventListener("pointerenter", show); src.addEventListener("focus", show);
+  src.addEventListener("pointerleave", hide); src.addEventListener("blur", hide); t.addEventListener("pointerleave", hide);
+}
+document.querySelectorAll("[interestfor]").forEach(wireInterest);
+
+/* ---------------- announcer + toast ---------------- */
+function announce(msg) { const a = $("announcer"); a.textContent = ""; requestAnimationFrame(() => (a.textContent = msg)); }
+const toast = $("toast"); let toastTimer;
+function notify(msg) {
+  $("toast-msg").textContent = msg; announce(msg);
+  if (!toast.matches(":popover-open")) toast.showPopover();
+  armToast();
+}
+function armToast() { clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.hidePopover(), 5000); }
+toast.addEventListener("pointerenter", () => clearTimeout(toastTimer));
+toast.addEventListener("focusin", () => clearTimeout(toastTimer));
+toast.addEventListener("pointerleave", armToast);
+toast.addEventListener("focusout", armToast);
+$("toast-close").addEventListener("click", () => toast.hidePopover());
+
+/* ---------------- colour scheme (dark-mode-toggle) ---------------- */
+function applyScheme(v) {
+  if (v === "system") document.documentElement.removeAttribute("data-scheme"); else document.documentElement.dataset.scheme = v;
+}
+const savedScheme = store.get("kc-scheme", "system");
+applyScheme(savedScheme);
+document.querySelector(`input[name="scheme"][value="${savedScheme}"]`).checked = true;
+document.addEventListener("change", (e) => {
+  if (e.target.name !== "scheme") return;
+  applyScheme(e.target.value);
+  if (e.target.value === "system") { try { localStorage.removeItem("kc-scheme"); } catch {} } else store.set("kc-scheme", e.target.value);
+});
+
+/* ---------------- navbar: inline when it fits, popover when not ---------------- */
+const header = $("site-header"), headerInner = $("header-inner"), siteMenu = $("site-menu");
+function layoutNav() {
+  if (siteMenu.matches(":popover-open")) siteMenu.hidePopover();
+  header.classList.add("is-wide"); siteMenu.removeAttribute("popover");
+  if (headerInner.scrollWidth > headerInner.clientWidth) { header.classList.remove("is-wide"); siteMenu.setAttribute("popover", "auto"); }
+}
+new ResizeObserver(layoutNav).observe(headerInner);
+siteMenu.addEventListener("click", (e) => { if (e.target.closest("a") && siteMenu.matches(":popover-open")) siteMenu.hidePopover(); });
+
+/* ---------------- saved trips ---------------- */
+let saved = store.get("kc-saved", ["kelp", "fjord"]).filter((id) => byId[id]);
+function setSaved(next) {
+  saved = next; store.set("kc-saved", saved);
+  $("saved-count").textContent = saved.length || "";
+  for (const b of document.querySelectorAll(".save")) {
+    const on = saved.includes(b.dataset.trip);
+    b.setAttribute("aria-pressed", on);
+  }
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest(".save"); if (!b) return;
+  const id = b.dataset.trip, t = byId[id];
+  if (saved.includes(id)) { setSaved(saved.filter((x) => x !== id)); notify(`Removed ${t.name} from Saved.`); }
+  else { setSaved([...saved, id]); notify(`Saved ${t.name}. Find it under Saved.`); }
+});
+
+/* ---------------- home: carousel ---------------- */
+for (const t of TRIPS) {
+  const slide = document.createElement("div"); slide.className = "slide";
+  slide.setAttribute("role", "group"); slide.setAttribute("aria-roledescription", "slide"); slide.setAttribute("aria-label", t.name);
+  const a = document.createElement("a"); a.className = "slide-inner"; a.href = "#trip-" + t.id;
+  const ar = document.createElement("div"); ar.className = "art"; art(ar, t);
+  const body = document.createElement("div"); body.className = "body";
+  const h = document.createElement("h3"); h.textContent = t.name;
+  const p = document.createElement("p"); p.className = "muted"; p.textContent = `${t.days} days · ${t.region} · from ${money.format(t.price)}`;
+  body.append(h, p); a.append(ar, body); slide.append(a); $("carousel").append(slide);
+}
+
+/* ---------------- tour (persistent-app-tours) ---------------- */
+const tourSteps = ["tour-1", "tour-2", "tour-3"].map($);
+let tourAt = -1;
+function tour(n) {
+  tourSteps.forEach((s) => s.matches(":popover-open") && s.hidePopover());
+  if (n >= tourSteps.length) { $("main").inert = false; tourAt = -1; $("start-tour").focus(); return; }
+  tourAt = n; $("main").inert = true;
+  tourSteps[n].showPopover();
+  tourSteps[n].querySelector("[data-tour-next]").focus();
+}
+$("start-tour").addEventListener("click", () => tour(0));
+document.addEventListener("click", (e) => { if (e.target.closest("[data-tour-next]")) tour(tourAt + 1); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && tourAt >= 0) tour(tourSteps.length); });
+
+/* ---------------- trips: cards, filters, search highlight ---------------- */
+const grid = $("trip-grid");
+const cards = new Map();
+for (const t of TRIPS) {
+  const li = document.createElement("li"); li.className = "trip"; li.style.viewTransitionName = "card-" + t.id;
+  li.innerHTML = `<article class="trip-card">
+      <div class="art" style="view-transition-name: art-${t.id}"></div>
+      <div class="body">
+        <p class="region-line"></p>
+        <h3><a class="card-link" href="#trip-${t.id}"></a></h3>
+        <p class="summary"></p>
+        <div class="foot">
+          <span class="row" style="gap:8px"><span class="badge ${t.level}"></span><span class="price"></span></span>
+          <button type="button" class="save icon-btn" data-trip="${t.id}" aria-pressed="false" aria-label="Save ${t.name}"><span class="heart" aria-hidden="true">♥</span></button>
+        </div>
+      </div></article>`;
+  art(li.querySelector(".art"), t);
+  li.querySelector(".region-line").textContent = `${t.region} · ${t.days} days`;
+  li.querySelector(".card-link").textContent = t.name;
+  li.querySelector(".summary").textContent = t.summary;
+  li.querySelector(".badge").textContent = t.level;
+  li.querySelector(".price").textContent = "from " + money.format(t.price);
+  cards.set(t.id, li); grid.append(li);
+}
+const q = $("q"), region = $("region"), days = $("days"), beginner = $("beginner");
+function matches(t) {
+  const terms = q.value.toLowerCase().split(/\s+/).filter(Boolean);
+  const hay = `${t.name} ${t.region} ${t.summary} ${t.level}`.toLowerCase();
+  return terms.every((w) => hay.includes(w)) && (region.value === "all" || t.area === region.value) && t.days <= +days.value && (!beginner.checked || t.level === "Beginner");
+}
+function applyFilters(animate = true) {
+  const update = () => {
+    let n = 0;
+    for (const t of TRIPS) { const show = matches(t); cards.get(t.id).hidden = !show; n += show; }
+    $("no-trips").hidden = n > 0;
+    $("result-count").textContent = `${n} of ${TRIPS.length} trips`;
+    highlightSearch();
+  };
+  if (animate && document.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches && currentView === "trips") document.startViewTransition(update);
+  else update();
+}
+function highlightSearch() {
+  if (!CSS.highlights) return;
+  CSS.highlights.delete("trip-search");
+  const terms = q.value.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+  if (!terms.length) return;
+  const ranges = [];
+  for (const li of cards.values()) {
+    if (li.hidden) continue;
+    const walker = document.createTreeWalker(li.querySelector(".body"), NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const text = n.textContent.toLowerCase();
+      for (const w of terms) { let i = text.indexOf(w); while (i !== -1) { const r = new Range(); r.setStart(n, i); r.setEnd(n, i + w.length); ranges.push(r); i = text.indexOf(w, i + w.length); } }
+    }
+  }
+  if (ranges.length) CSS.highlights.set("trip-search", new Highlight(...ranges));
+}
+let qTimer;
+q.addEventListener("input", () => { clearTimeout(qTimer); qTimer = setTimeout(() => applyFilters(), 180); });
+region.addEventListener("change", () => applyFilters());
+days.addEventListener("input", () => { $("days-out").value = days.value; applyFilters(); });
+beginner.addEventListener("change", () => applyFilters());
+$("filters").addEventListener("submit", (e) => e.preventDefault());
+
+/* ---------------- trip detail ---------------- */
+let currentTrip = null;
+function renderTrip(t) {
+  currentTrip = t;
+  $("crumb-name").textContent = t.name;
+  art($("detail-art"), t);
+  $("d-region").textContent = t.region;
+  $("d-title").textContent = t.name;
+  const facts = $("d-facts"); facts.replaceChildren();
+  const fact = (html) => { const s = document.createElement("span"); s.innerHTML = html; facts.append(s); };
+  fact(`<b>${t.days}</b> days`);
+  const badge = document.createElement("span"); badge.className = "badge " + t.level; badge.textContent = t.level; facts.append(badge);
+  fact(`from <b>${money.format(t.price)}</b>`);
+  const g = document.createElement("span"); g.append("Guide: ");
+  const gl = document.createElement("a"); gl.href = "#trip-" + t.id; gl.id = "guide-link"; gl.textContent = t.guide[0];
+  gl.setAttribute("interestfor", "guide-card"); gl.addEventListener("click", (e) => e.preventDefault());
+  g.append(gl); facts.append(g); wireInterest(gl);
+  $("gc-name").textContent = t.guide[0]; $("gc-bio").textContent = t.guide[1];
+  $("d-overview").replaceChildren(...t.overview.map((s) => { const p = document.createElement("p"); p.textContent = s; return p; }));
+  $("d-included").replaceChildren(...t.included.map((s) => { const li = document.createElement("li"); li.textContent = s; return li; }));
+  $("d-itin").replaceChildren(...t.itinerary.map((s, i) => {
+    const d = document.createElement("details"); const su = document.createElement("summary");
+    const day = document.createElement("span"); day.className = "day"; day.textContent = `Day ${i + 1}`;
+    su.append(day, " ", s); const c = document.createElement("div"); c.className = "content";
+    c.textContent = i === 0 ? "Meet at 8:00 for a safety briefing, boat fitting and a short warm-up paddle." : i === t.itinerary.length - 1 ? "Pack up, last paddle together and transfers back by mid-afternoon." : "Breakfast at camp, 4–6 hours on the water with a long lunch stop, and an evening by the fire.";
+    d.append(su, c); return d;
+  }));
+  const body = $("dep-body"); body.replaceChildren();
+  for (const [date, spots, price] of t.deps) {
+    const tr = document.createElement("tr"); tr.style.viewTransitionName = `dep-${t.id}-${date}`;
+    tr.dataset.date = date; tr.dataset.spots = spots; tr.dataset.price = price;
+    const th = document.createElement("th"); th.scope = "row"; th.dataset.label = "Date"; th.textContent = dateFmt.format(new Date(date));
+    const s = document.createElement("td"); s.dataset.label = "Spots left"; s.textContent = spots === 0 ? "Full" : spots; if (spots > 0 && spots <= 2) s.className = "spots-low";
+    const p = document.createElement("td"); p.dataset.label = "Price"; p.textContent = money.format(price);
+    const b = document.createElement("td");
+    if (spots > 0) { const a = document.createElement("a"); a.className = "btn"; a.href = "#book"; a.textContent = "Book"; a.dataset.dep = `${t.id}|${date}`; a.setAttribute("aria-label", `Book ${dateFmt.format(new Date(date))}`); b.append(a); }
+    else b.textContent = "Waitlist";
+    tr.append(th, s, p, b); body.append(tr);
+  }
+  document.querySelectorAll("#dep-table thead th").forEach((h, i) => (i === 0 ? h.setAttribute("aria-sort", "ascending") : h.removeAttribute("aria-sort")));
+  $("d-book").dataset.dep = `${t.id}|${t.deps.find((d) => d[1] > 0)?.[0] ?? t.deps[0][0]}`;
+  selectTab($("t-overview"));
+}
+/* tabs */
+const tabs = [...$("tablist").querySelectorAll("button")];
+function selectTab(tab) {
+  const go = () => tabs.forEach((t) => {
+    t.setAttribute("aria-selected", t === tab); t.toggleAttribute("focusgroupstart", t === tab);
+    if (!Object.hasOwn(HTMLElement.prototype, "focusGroup")) t.tabIndex = t === tab ? 0 : -1;
+    $(t.getAttribute("aria-controls")).hidden = t === tab ? false : "until-found";
+  });
+  go();
+}
+if (!Object.hasOwn(HTMLElement.prototype, "focusGroup")) {
+  $("tablist").setAttribute("role", "tablist"); tabs.forEach((t) => t.setAttribute("role", "tab"));
+  $("tablist").addEventListener("keydown", (e) => {
+    const i = tabs.indexOf(document.activeElement); if (i < 0) return;
+    const j = { ArrowRight: (i + 1) % tabs.length, ArrowLeft: (i - 1 + tabs.length) % tabs.length, Home: 0, End: tabs.length - 1 }[e.key];
+    if (j === undefined) return; e.preventDefault(); tabs[j].focus(); selectTab(tabs[j]);
+  });
+}
+$("tablist").addEventListener("click", (e) => { const t = e.target.closest("button"); if (t) selectTab(t); });
+$("tablist").addEventListener("focusin", (e) => { const t = e.target.closest("button"); if (t) selectTab(t); });
+for (const panel of document.querySelectorAll('[role="tabpanel"]')) panel.addEventListener("beforematch", () => selectTab($(panel.getAttribute("aria-labelledby"))));
+/* sortable departures */
+$("dep-table").addEventListener("command", (e) => {
+  if (e.command !== "--sort") return;
+  const th = e.source.closest("th");
+  const dir = th.getAttribute("aria-sort") === "ascending" ? "descending" : "ascending";
+  for (const h of e.target.tHead.rows[0].cells) h.removeAttribute("aria-sort");
+  th.setAttribute("aria-sort", dir);
+  const key = ["date", "spots", "price"][th.cellIndex];
+  const body = $("dep-body");
+  const rows = [...body.rows].sort((a, b) => {
+    const x = a.dataset[key], y = b.dataset[key];
+    const c = key === "date" ? x.localeCompare(y) : x - y;
+    return dir === "ascending" ? c : -c;
+  });
+  const move = () => rows.forEach((r) => body.append(r));
+  if (document.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches) document.startViewTransition(move); else move();
+  $("sort-status").textContent = `Sorted by ${e.source.textContent.trim()}, ${dir}, ${rows.length} rows`;
+  document.querySelectorAll(".sort-bar button").forEach((b) => b.setAttribute("aria-pressed", +b.dataset.sortCol === th.cellIndex));
+}, { capture: true });
+// Narrow screens hide the header row (card layout), so a visible sort bar drives the same header buttons.
+document.querySelector(".sort-bar").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-sort-col]"); if (!b) return;
+  $("dep-table").tHead.rows[0].cells[b.dataset.sortCol].querySelector("button").click();
+});
+/* copy link */
+document.addEventListener("command", async (e) => {
+  if (e.command !== "--copy-link" || !currentTrip) return;
+  const bubble = $("share-bubble");
+  const url = `https://kelpandcompass.example/trips/${currentTrip.id}`;
+  try { await navigator.clipboard.writeText(url); bubble.textContent = "Link copied"; }
+  catch { bubble.textContent = "Copy blocked. The link is " + url; }
+  clearTimeout(bubble.t); bubble.t = setTimeout(() => (bubble.textContent = ""), 2500);
+}, { capture: true });
+
+/* ---------------- booking ---------------- */
+const form = $("booking"), tripSel = $("b-trip"), group = $("b-group"), wetsuit = $("b-wetsuit");
+for (const t of TRIPS) {
+  const og = document.createElement("optgroup"); og.label = t.name;
+  for (const [date, spots, price] of t.deps) {
+    if (!spots) continue;
+    const o = document.createElement("option"); o.value = `${t.id}|${date}`; o.dataset.price = price; o.dataset.spots = spots;
+    o.textContent = `${dateFmt.format(new Date(date))} · ${money.format(price)}`; og.append(o);
+  }
+  tripSel.append(og);
+}
+function bookingTotal() {
+  const o = tripSel.selectedOptions[0]; const n = +group.value;
+  const base = (+o?.dataset.price || 0) * n, extra = wetsuit.checked ? 35 * n : 0;
+  $("b-total").textContent = money.format(base + extra);
+  const [id] = (o?.value || "|").split("|");
+  $("b-total-detail").textContent = o ? `${byId[id].name}, ${n} paddler${n > 1 ? "s" : ""}${extra ? ", wetsuits" : ""}` : "";
+  group.max = Math.min(6, +o?.dataset.spots || 6); $("b-group-out").value = group.value;
+  return base + extra;
+}
+const required = [...form.querySelectorAll("[required]")];
+function progressUpdate() {
+  const done = required.filter((f) => f.checkValidity()).length;
+  const pct = Math.round(done / required.length * 100);
+  const ring = $("b-progress"); ring.value = pct; ring.style.setProperty("--value", pct); $("b-pct").textContent = pct + "%";
+}
+/* aria-invalid bridge for :user-invalid (required-field-feedback, accessible-error-announcement) */
+function syncInvalid(f) { if (f.matches(":user-invalid") || (form.dataset.tried && !f.checkValidity())) f.setAttribute("aria-invalid", "true"); else f.removeAttribute("aria-invalid"); }
+form.addEventListener("focusout", (e) => { if (e.target.matches("input, textarea, select")) setTimeout(() => syncInvalid(e.target)); });
+form.addEventListener("input", (e) => { if (e.target.hasAttribute("aria-invalid")) syncInvalid(e.target); progressUpdate(); bookingTotal(); });
+form.addEventListener("change", () => { progressUpdate(); bookingTotal(); });
+form.addEventListener("submit", (e) => {
+  e.preventDefault();
+  form.dataset.tried = "1";
+  const bad = required.filter((f) => !f.checkValidity());
+  bad.forEach((f) => f.setAttribute("aria-invalid", "true"));
+  if (bad.length) {
+    $("b-status").textContent = `${bad.length} field${bad.length > 1 ? "s need" : " needs"} attention.`;
+    bad[0].focus();
+    return;
+  }
+  $("b-status").textContent = "";
+  const o = tripSel.selectedOptions[0];
+  $("confirm-text").textContent = `${o.parentElement.label}, ${o.textContent.split(" · ")[0]}, for ${group.value} paddler${group.value > 1 ? "s" : ""}. Total ${money.format(bookingTotal())}.`;
+  $("confirm-dialog").showModal();
+});
+$("confirm-dialog").addEventListener("close", () => {
+  if ($("confirm-dialog").returnValue !== "confirm") return;
+  $("confirm-dialog").returnValue = "";
+  const btn = $("b-submit"); btn.disabled = true;
+  btn.innerHTML = '<progress class="spin" aria-label="Booking"></progress> Booking…';
+  setTimeout(() => {
+    btn.disabled = false; btn.textContent = "Review booking";
+    notify(`Booked! A confirmation would go to ${$("b-email").value}.`);
+    form.reset(); delete form.dataset.tried; required.forEach((f) => f.removeAttribute("aria-invalid"));
+    bookingTotal(); progressUpdate();
+  }, 1400);
+});
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("[data-dep]"); if (!a) return;
+  tripSel.value = a.dataset.dep; bookingTotal(); progressUpdate();
+});
+
+/* ---------------- journal: summarizer, comments ---------------- */
+$("summarize").addEventListener("click", async () => {
+  const out = $("summary-out");
+  if (!("Summarizer" in self)) { out.textContent = "Your browser doesn't include the built-in Summarizer API yet (it's in recent desktop Chrome). The story is still right here below."; return; }
+  const options = { type: "key-points", format: "plain-text", length: "short", sharedContext: "A travel journal entry about a sea-kayaking trip", outputLanguage: "en" };
+  try {
+    const availability = await Summarizer.availability(options);
+    if (availability === "unavailable") { out.textContent = "This device can't run the on-device summarizer."; return; }
+    out.textContent = availability === "available" ? "Summarizing…" : "Downloading the on-device model…";
+    const summarizer = await Summarizer.create({ ...options, monitor(m) { m.addEventListener("downloadprogress", (ev) => { out.textContent = `Downloading the model: ${Math.round(ev.loaded * 100)}%`; }); } });
+    const text = [...$("story").querySelectorAll("p")].map((p) => p.textContent).join("\n");
+    const result = await summarizer.summarize(text);
+    const ul = document.createElement("ul");
+    for (const line of result.split("\n").map((l) => l.replace(/^[-*•]\s*/, "").trim()).filter(Boolean)) { const li = document.createElement("li"); li.textContent = line; ul.append(li); }
+    out.replaceChildren(ul);
+  } catch (err) { out.textContent = "The summarizer couldn't run here: " + err.message; }
+});
+let purifyPromise;
+function loadDOMPurify() { // only fetched in browsers without the Sanitizer API
+  purifyPromise ??= new Promise((res, rej) => { const sc = document.createElement("script"); sc.src = "https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"; sc.onload = () => res(window.DOMPurify); sc.onerror = rej; document.head.append(sc); });
+  return purifyPromise;
+}
+async function safeSetHTML(el, html) {
+  const elements = ["p", "b", "strong", "i", "em", "a", "br", "code", "ul", "ol", "li", "img"];
+  const attributes = ["href", "src", "alt"];
+  if ("setHTML" in Element.prototype) { el.setHTML(html, { sanitizer: { elements, attributes } }); return; }
+  const DOMPurify = await loadDOMPurify().catch(() => null);
+  if (!DOMPurify) { el.textContent = html.replace(/<[^>]*>/g, ""); return; }
+  el.innerHTML = DOMPurify.sanitize(html, { ALLOWED_TAGS: [...elements, "#text"], ALLOWED_ATTR: attributes, ALLOW_ARIA_ATTR: false, ALLOW_DATA_ATTR: false, KEEP_CONTENT: false });
+}
+function miniMarkdown(s) { return s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/(^|\W)_(.+?)_(?=\W|$)/g, "$1<em>$2</em>").replace(/\n/g, "<br>"); }
+async function addComment(who, text) {
+  const c = document.createElement("div"); c.className = "comment";
+  const w = document.createElement("div"); w.className = "who"; w.textContent = who;
+  const body = document.createElement("div");
+  await safeSetHTML(body, miniMarkdown(text));
+  for (const a of body.querySelectorAll("a")) { a.target = "_blank"; a.rel = "noopener nofollow"; }
+  for (const img of body.querySelectorAll("img")) img.remove(); // no remote images in comments
+  c.append(w, body); $("comment-list").append(c);
+}
+addComment("Priya", "The **otter pup** part got me. Booking the weekender for June!");
+const ct = $("comment-text");
+ct.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" || e.shiftKey) return;
+  if (e.isComposing || e.keyCode === 229) return; // IME is confirming a candidate, not submitting
+  e.preventDefault(); $("comment-form").requestSubmit();
+});
+$("comment-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = ct.value.trim(); if (!text) return;
+  await addComment("You", text); ct.value = ""; announce("Comment posted");
+});
+
+/* ---------------- saved: swipe to remove ---------------- */
+function renderSaved() {
+  const list = $("saved-list"); list.replaceChildren();
+  $("saved-empty").hidden = saved.length > 0;
+  for (const id of saved) {
+    const t = byId[id];
+    const li = document.createElement("li"); li.className = "SwipeableList-item"; li.dataset.trip = id;
+    li.innerHTML = `<div class="SwipeableList-track"><div class="SwipeableList-action start" aria-hidden="true">Remove</div>
+      <div class="SwipeableList-content"><div class="art"></div><div class="grow"><strong></strong><p class="muted region-line"></p></div>
+      <a class="btn" href="#trip-${id}">View</a><button type="button" class="remove">Remove</button></div>
+      <div class="SwipeableList-action" aria-hidden="true">Remove</div></div>`;
+    art(li.querySelector(".art"), t);
+    li.querySelector("strong").textContent = t.name;
+    li.querySelector(".region-line").textContent = `${t.region} · ${t.days} days · from ${money.format(t.price)}`;
+    li.querySelector(".remove").setAttribute("aria-label", `Remove ${t.name}`);
+    list.append(li);
+  }
+  requestAnimationFrame(() => list.querySelectorAll(".SwipeableList-item").forEach(initSwipe));
+}
+function initSwipe(li) {
+  const track = li.querySelector(".SwipeableList-track");
+  track.scrollLeft = track.clientWidth; // rest on the content
+  li.classList.add("is-initialized");
+  let done = false;
+  track.addEventListener("scroll", () => {
+    if (done) return;
+    const offset = Math.abs(track.scrollLeft - track.clientWidth) / track.clientWidth;
+    if (offset > 0.2 && track.matches(":active, :hover") || offset > 0.6) { done = true; removeSaved(li); }
+  }, { passive: true });
+}
+function removeSaved(li) {
+  const id = li.dataset.trip;
+  li.style.blockSize = li.offsetHeight + "px";
+  requestAnimationFrame(() => { li.classList.add("is-removing"); li.style.blockSize = ""; });
+  const finish = () => { li.remove(); setSaved(saved.filter((x) => x !== id)); $("saved-empty").hidden = saved.length > 0; };
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) finish(); else setTimeout(finish, 320);
+  notify(`Removed ${byId[id].name} from Saved.`);
+}
+$("saved-list").addEventListener("click", (e) => { const b = e.target.closest(".remove"); if (b) { const li = b.closest("li"); const next = li.nextElementSibling || li.previousElementSibling; removeSaved(li); (next?.querySelector(".remove") || $("view-saved").querySelector(".view-title")).focus(); } });
+
+/* ---------------- routing with view transitions ---------------- */
+let currentView = null;
+function route() {
+  const hash = location.hash.slice(1) || "home";
+  let view = hash, trip = null;
+  if (hash.startsWith("trip-")) { trip = byId[hash.slice(5)]; view = trip ? "trip" : "trips"; }
+  if (!$("view-" + view)) view = "home";
+  const fromCard = currentView === "trips" && trip ? cards.get(trip.id) : null;
+  const backToCard = currentView === "trip" && view === "trips" && currentTrip ? cards.get(currentTrip.id) : null;
+  const update = () => {
+    if (trip) renderTrip(trip);
+    if (view === "saved") renderSaved();
+    if (view === "book") { bookingTotal(); progressUpdate(); }
+    for (const v of document.querySelectorAll("[data-view]")) v.hidden = v.dataset.view !== view;
+    for (const a of document.querySelectorAll("[data-nav]")) a.toggleAttribute("aria-current", a.dataset.nav === view || (view === "trip" && a.dataset.nav === "trips"));
+    document.querySelectorAll("[data-nav][aria-current]").forEach((a) => a.setAttribute("aria-current", "page"));
+    // Shared element: the trip's art morphs between its card and the detail hero (same-document-transitions)
+    $("detail-art").style.viewTransitionName = trip ? "art-" + trip.id : "none";
+    if (fromCard) fromCard.querySelector(".art").style.viewTransitionName = "none";
+    if (backToCard) backToCard.querySelector(".art").style.viewTransitionName = "art-" + currentTrip.id;
+    currentView = view;
+    scrollTo(0, 0);
+    document.title = (trip ? trip.name + " · " : view === "home" ? "" : $("view-" + view).querySelector(".view-title").textContent + " · ") + "Kelp & Compass";
+  };
+  const focusTitle = () => $("view-" + view).querySelector(".view-title")?.focus({ preventScroll: true });
+  const cleanup = () => { if (fromCard) fromCard.querySelector(".art").style.viewTransitionName = "art-" + trip.id; };
+  if (document.startViewTransition && currentView !== null && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    const tr = document.startViewTransition(update);
+    tr.finished.finally(() => { focusTitle(); cleanup(); });
+  } else { update(); if (currentView !== null) focusTitle(); cleanup(); }
+}
+addEventListener("hashchange", route);
+
+/* ---------------- guides dialog ---------------- */
+function fillGuides() {
+  const where = new Map();
+  for (const el of document.querySelectorAll("[data-guides]")) {
+    const v = el.closest("[data-view]")?.dataset.view;
+    const label = { home: "Home", trips: "Trips", trip: "Trip page", book: "Booking", journal: "Journal", saved: "Saved" }[v] || "Every page";
+    for (const id of el.dataset.guides.split(/\s+/)) { if (!where.has(id)) where.set(id, new Set()); where.get(id).add(label); }
+  }
+  const ids = [...where.keys()].sort();
+  $("gd-sum").textContent = `${ids.length} of the skill's 208 guides are working on this site. Each name opens the guide in the Atlas.`;
+  $("gd-list").replaceChildren(...ids.map((id) => {
+    const li = document.createElement("li");
+    const a = document.createElement("a"); a.href = ATLAS + id; a.target = "_blank"; a.rel = "noopener"; a.textContent = id;
+    const s = document.createElement("span"); s.textContent = [...where.get(id)].join(", ");
+    li.append(a, s); return li;
+  }));
+}
+$("guides-btn").addEventListener("click", fillGuides);
+
+/* ---------------- start ---------------- */
+setSaved(saved);
+applyFilters(false);
+bookingTotal(); progressUpdate();
+route();
+})();
+</script>
