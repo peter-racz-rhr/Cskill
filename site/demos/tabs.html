@@ -1,0 +1,51 @@
+<style>
+.tabs { max-width: 600px; }
+[focusgroup] { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+[focusgroup] button { position: relative; border: 0; background: none; border-radius: 6px 6px 0 0; padding: 10px 14px; color: var(--muted); font-weight: 600; }
+[focusgroup] button:hover { color: var(--ink); background: var(--surface); }
+[aria-selected="true"] {
+  color: var(--accent) !important;
+  &::after { content: ""; position: absolute; inset: auto 0 0; border-block-end: 3px solid var(--accent); }
+}
+[role="tabpanel"] { padding: 16px 4px; }
+[role="tabpanel"] h3 { font-size: 17px; margin-bottom: 6px; }
+</style>
+
+<div class="tabs">
+  <div focusgroup="tablist nomemory" aria-label="Web platform technologies">
+    <button type="button" id="html-tab" aria-selected="true" aria-controls="html-panel" focusgroupstart>HTML</button>
+    <button type="button" id="css-tab" aria-selected="false" aria-controls="css-panel">CSS</button>
+    <button type="button" id="js-tab" aria-selected="false" aria-controls="js-panel">JavaScript</button>
+  </div>
+  <div role="tabpanel" id="html-panel" aria-labelledby="html-tab" tabindex="0">
+    <h3>Structure</h3>
+    <p class="muted">HTML gives content its meaning: headings, lists, forms and the built-in controls that work with a keyboard for free.</p>
+  </div>
+  <div role="tabpanel" id="css-panel" aria-labelledby="css-tab" tabindex="0" hidden="until-found">
+    <h3>Presentation</h3>
+    <p class="muted">CSS lays things out and styles them. Container queries let a component respond to the space it's given.</p>
+  </div>
+  <div role="tabpanel" id="js-panel" aria-labelledby="js-tab" tabindex="0" hidden="until-found">
+    <h3>Behaviour</h3>
+    <p class="muted">JavaScript adds what markup can't do alone, such as fetching data or reacting to what the user types.</p>
+  </div>
+</div>
+<p class="note">Arrow keys move between tabs; Tab moves into the panel. Inactive panels use <code>hidden="until-found"</code>, so find-in-page for “container” switches tabs.</p>
+
+<script>
+const tablist = document.querySelector("[focusgroup]");
+const tabs = [...tablist.querySelectorAll("button")];
+function select(selected) {
+  for (const tab of tabs) {
+    tab.ariaSelected = tab === selected;
+    tab.toggleAttribute("focusgroupstart", tab === selected);
+    if (!Object.hasOwn(HTMLElement.prototype, "focusGroup")) tab.tabIndex = tab === selected ? 0 : -1;
+    document.getElementById(tab.getAttribute("aria-controls")).hidden = tab === selected ? false : "until-found";
+  }
+}
+tablist.addEventListener("click", (e) => { const t = e.target.closest("button"); if (t) select(t); });
+tablist.addEventListener("focusin", (e) => { const t = e.target.closest("button"); if (t) select(t); });
+for (const panel of document.querySelectorAll('[role="tabpanel"]')) {
+  panel.addEventListener("beforematch", () => select(document.getElementById(panel.getAttribute("aria-labelledby"))));
+}
+</script>

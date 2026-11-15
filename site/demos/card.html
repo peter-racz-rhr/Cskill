@@ -1,0 +1,41 @@
+<style>
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 12px; }
+.card { position: relative; display: grid; gap: 6px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.card:has(a.card-link) { position: relative; }
+.card a.card-link { color: inherit; text-decoration: none; }
+.card a.card-link::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.card:has(a.card-link:hover) { border-color: var(--accent); }
+.card:has(a.card-link:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card a.card-link:focus-visible { outline: none; }
+.card h3 { font-size: 17px; }
+.card .swatch { height: 70px; border-radius: 6px; }
+.card .meta { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--muted); }
+.card .save { position: relative; z-index: 1; padding: 4px 9px; font-size: 13px; }
+.card .save[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+</style>
+
+<div class="cards">
+  <article class="card">
+    <div class="swatch" style="background:linear-gradient(135deg,#f6c453,#e8833a)"></div>
+    <h3><a class="card-link" href="#shakshuka">Shakshuka</a></h3>
+    <p class="muted">Eggs poached in a spiced tomato and pepper sauce.</p>
+    <div class="meta"><span>25 min</span><button type="button" class="save" aria-pressed="false" aria-label="Save Shakshuka">Save</button></div>
+  </article>
+  <article class="card">
+    <div class="swatch" style="background:linear-gradient(135deg,#7cc48a,#2f7d5b)"></div>
+    <h3><a class="card-link" href="#pesto">Pea and mint pesto</a></h3>
+    <p class="muted">A bright spring pasta sauce, ready while the water boils.</p>
+    <div class="meta"><span>15 min</span><button type="button" class="save" aria-pressed="false" aria-label="Save Pea and mint pesto">Save</button></div>
+  </article>
+</div>
+<p class="note" style="margin-top:12px">The whole card is clickable through one link: the heading's link stretches over the card with <code>::after</code>. The Save button sits above that layer, so it still works on its own.</p>
+<p class="note" id="card-out" role="status"></p>
+
+<script>
+document.querySelector(".cards").addEventListener("click", (e) => {
+  const save = e.target.closest(".save");
+  if (save) { save.setAttribute("aria-pressed", save.getAttribute("aria-pressed") !== "true"); save.textContent = save.getAttribute("aria-pressed") === "true" ? "Saved" : "Save"; return; }
+  const link = e.target.closest(".card-link");
+  if (link) { e.preventDefault(); document.getElementById("card-out").textContent = "Would open " + link.textContent + "."; }
+});
+</script>

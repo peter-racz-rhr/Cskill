@@ -160,7 +160,8 @@ body.reading .masthead { display: none; }
 #doc-title:focus { outline: none; }
 #doc-desc { color: var(--muted); font-size: var(--step-1); line-height: 1.5; margin: 0; max-width: 70ch; }
 .meta { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); font-size: 0.875rem; align-items: center; }
-.side { align-self: start; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); display: grid; gap: 20px; max-height: calc(100dvh - 32px); overflow-y: auto; }
+.note { color: var(--muted); font-size: 0.875rem; }
+.side { grid-column: 2; grid-row: 3 / span 2; align-self: start; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); display: grid; gap: 20px; max-height: calc(100dvh - 32px); overflow-y: auto; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 10px; }
 .panel h2 { font-size: 1rem; }
 .support { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; font-size: 0.875rem; }
@@ -175,6 +176,19 @@ body.reading .masthead { display: none; }
 .pager a:hover { border-color: var(--accent); }
 .pager .next { text-align: right; grid-column: 2; }
 .pager b { font-family: var(--font-display); overflow-wrap: anywhere; }
+
+/* live demo */
+.chip.demo { color: var(--accent); background: color-mix(in oklab, var(--accent) 13%, transparent); }
+.check { display: flex; align-items: center; gap: 8px; font-size: 0.9375rem; cursor: pointer; padding: 4px 6px; }
+.check input { accent-color: var(--accent); margin: 0; }
+.demo { grid-column: 1; min-width: 0; display: grid; gap: 10px; }
+.demo-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 16px; }
+.demo-head h2 { font-size: var(--step-2); }
+.demo-frame { display: block; width: 100%; height: 320px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.demo details { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.demo summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-size: 0.9375rem; }
+.demo details pre { margin: 0; padding: 14px 16px; border-top: 1px solid var(--line); overflow-x: auto; max-height: 420px; font: 0.8125rem/1.55 var(--font-mono); background: var(--code-bg); border-radius: 0 0 var(--radius) var(--radius); }
+.reader > .prose { grid-column: 1; }
 
 /* rendered markdown */
 .prose { min-width: 0; max-width: 72ch; font-size: 1.0625rem; }
@@ -213,7 +227,8 @@ footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--line);
   .cats-group { display: none; }
   .cat { border: 1px solid var(--line); gap: 8px; }
   .reader { grid-template-columns: minmax(0, 1fr); }
-  .side { position: static; max-height: none; overflow: visible; order: -1; }
+  .side { grid-column: 1; grid-row: auto; position: static; max-height: none; overflow: visible; order: 1; }
+  .demo { order: 2; } .reader > .prose { order: 3; } .pager { order: 4; }
   .toc-panel { display: none; }
 }
 @media (max-width: 560px) {
@@ -281,6 +296,7 @@ footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--line);
               <label><input type="radio" name="status" id="st-limited" value="limited"><span class="dot" style="background:var(--limited)"></span> Uses Limited availability</label>
             </div>
           </fieldset>
+          <label class="check"><input type="checkbox" id="only-demos"> Only guides with a live demo <span class="chip demo" id="demo-count"></span></label>
           <nav class="cats" id="cats" aria-label="Topics"></nav>
         </aside>
 
@@ -306,6 +322,17 @@ footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--line);
         <p id="doc-desc"></p>
         <div class="meta" id="doc-meta"></div>
       </header>
+      <section class="demo" id="demo" aria-labelledby="demo-h" hidden>
+        <div class="demo-head">
+          <h2 id="demo-h">Live demo</h2>
+          <span class="note">Runs in a sandboxed frame. Try it with the mouse and the keyboard.</span>
+        </div>
+        <iframe class="demo-frame" id="demo-frame" title="Live demo" sandbox="allow-scripts" allow="clipboard-write"></iframe>
+        <details>
+          <summary>Demo source</summary>
+          <pre><code id="demo-code"></code></pre>
+        </details>
+      </section>
       <div class="prose" id="doc-body"></div>
       <div class="side">
         <section class="panel" id="support-panel" aria-labelledby="support-h">
@@ -331,7 +358,7 @@ footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--line);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
 <script>
 (() => {
-  const { docs, cats } = JSON.parse(document.getElementById("data").textContent);
+  const { docs, cats, demoBase } = JSON.parse(document.getElementById("data").textContent);
   const byId = new Map(docs.map((d) => [d.id, d]));
   const catName = Object.fromEntries(cats.map((c) => [c.id, c.name]));
   const $ = (id) => document.getElementById(id);
@@ -426,6 +453,7 @@ footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--line);
     const p = document.createElement("p"); p.textContent = d.desc;
     const foot = document.createElement("div"); foot.className = "card-foot";
     const w = document.createElement("span"); w.className = "words"; w.textContent = `${Math.max(1, Math.round(d.words / 230))} min read`;
+    if (d.demo) { const dm = document.createElement("span"); dm.className = "chip demo"; dm.textContent = "Live demo"; foot.append(dm); }
     foot.append(chips(d), w);
     a.append(eb, h, p, foot); li.append(a);
     cardFor.set(d.id, li);
@@ -458,7 +486,7 @@ footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--line);
     const st = document.querySelector('input[name="status"]:checked').value;
     const shown = [];
     for (const d of docs) {
-      const sc = (activeCat === "all" || d.cat === activeCat) && statusOk(d, st) ? score(d, ts) : 0;
+      const sc = (activeCat === "all" || d.cat === activeCat) && statusOk(d, st) && (!$("only-demos").checked || d.demo) ? score(d, ts) : 0;
       cardFor.get(d.id).hidden = !sc;
       if (sc) shown.push([sc, d]);
     }
@@ -474,6 +502,29 @@ footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--line);
   }
   $("q").addEventListener("input", applyFilters);
   $("status").addEventListener("change", applyFilters);
+  $("only-demos").addEventListener("change", applyFilters);
+  $("demo-count").textContent = docs.filter((d) => d.demo).length;
+
+  /* ---------- live demos ---------- */
+  const demoFrame = $("demo-frame");
+  function themeAttr() {
+    const t = document.documentElement.getAttribute("data-theme");
+    return t === "light" || t === "dark" ? ` data-theme="${t}"` : "";
+  }
+  function loadDemo(d) {
+    $("demo").hidden = !d.demo;
+    if (!d.demo) { demoFrame.removeAttribute("srcdoc"); return; }
+    demoFrame.style.height = "320px";
+    demoFrame.title = `Live demo: ${d.title}`;
+    demoFrame.srcdoc = demoBase.replace("__THEME__", themeAttr()).replace("__DEMO__", () => d.demo);
+    $("demo-code").textContent = d.demo;
+  }
+  addEventListener("message", (e) => {
+    if (e.source !== demoFrame.contentWindow || typeof e.data?.demoHeight !== "number") return;
+    demoFrame.style.height = Math.min(1400, Math.max(240, e.data.demoHeight + 2)) + "px";
+  });
+  new MutationObserver(() => { if (current?.demo) loadDemo(current); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
   /* ---------- rendering a guide ---------- */
   let purifyPromise;
@@ -516,6 +567,7 @@ footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--line);
     }
 
     // body: markdown -> sanitized DOM
+    loadDemo(d);
     const body = $("doc-body");
     if (window.marked) await safeSetHTML(body, marked.parse(d.md, { gfm: true }));
     else { const pre = document.createElement("pre"); pre.textContent = d.md; body.replaceChildren(pre); }

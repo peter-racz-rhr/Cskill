@@ -4,6 +4,12 @@ A single-page site that shows every guide in the `modern-web-guidance` and
 `chrome-extensions` skills: search, filter by Baseline browser readiness, and read
 each guide in full.
 
+Guides with a hand-built **live demo** have a file in `site/demos/<guide-id>.html`: an HTML
+fragment (style, markup, script) that runs inside `site/demo-base.html`, a sandboxed frame with
+the site's colours and small fallbacks for Invoker Commands, `closedby`, `focusgroup` and
+`interestfor`. A demo that needs more room for an overlay adds
+`<div data-demo-min-height="400" hidden></div>`.
+
 `index.html` is generated. To rebuild after updating the skills:
 
 ```sh

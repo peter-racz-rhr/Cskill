@@ -1,0 +1,43 @@
+<style>
+.file { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); max-width: 460px; }
+dialog { max-width: min(420px, calc(100vw - 32px)); }
+dialog h2 { font-size: 18px; margin-bottom: 6px; }
+dialog form { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+dialog button[value="delete"] { background: var(--bad); color: var(--bg); border-color: var(--bad); }
+dialog:modal { overscroll-behavior: contain; }
+dialog::backdrop { overflow: hidden; overscroll-behavior: contain; }
+@media (prefers-reduced-motion: no-preference) {
+  dialog { transition: opacity .2s, translate .2s, overlay .2s allow-discrete, display .2s allow-discrete; }
+  dialog:not([open]) { opacity: 0; translate: 0 8px; }
+  @starting-style { dialog[open] { opacity: 0; translate: 0 8px; } }
+}
+#result { min-height: 1.5em; }
+</style>
+
+<div class="stack">
+  <div class="file">
+    <div><strong>Q3-report-final.pdf</strong><div class="note">2.4 MB · edited yesterday</div></div>
+    <button type="button" command="show-modal" commandfor="confirm">Delete…</button>
+  </div>
+  <p id="result" class="note" role="status"></p>
+</div>
+
+<dialog id="confirm" aria-labelledby="confirm-title" closedby="any">
+  <h2 id="confirm-title">Delete “Q3-report-final.pdf”?</h2>
+  <p class="muted">It moves to the bin and is removed for good after 30 days.</p>
+  <form method="dialog">
+    <button value="cancel" autofocus>Cancel</button>
+    <button value="delete">Delete</button>
+  </form>
+</dialog>
+<p class="note">A modal <code>&lt;dialog&gt;</code> opened with <code>command="show-modal"</code>. Escape, a click on the backdrop (<code>closedby="any"</code>) or Cancel closes it, and focus returns to the trigger.</p>
+
+<script>
+const dialog = document.getElementById("confirm");
+dialog.addEventListener("close", () => {
+  document.getElementById("result").textContent =
+    dialog.returnValue === "delete" ? "Deleted. Undo is in the bin for 30 days." : "Nothing deleted.";
+  dialog.returnValue = "";
+});
+</script>
+<div data-demo-min-height="300" hidden></div>

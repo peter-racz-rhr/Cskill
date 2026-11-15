@@ -1,0 +1,50 @@
+<style>
+fieldset { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 16px 14px; max-width: 420px; display: grid; gap: 8px; }
+legend { font-weight: 600; padding: 0 4px; }
+label { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.checkbox-native { accent-color: var(--accent); inline-size: 1.25em; aspect-ratio: 1; margin: 0; cursor: pointer; }
+.custom {
+  appearance: none; margin: 0; inline-size: 1.25em; aspect-ratio: 1; border: 2px solid var(--muted); border-radius: 5px;
+  display: grid; place-content: center; cursor: pointer; background: var(--bg);
+  &::before { content: ""; inline-size: .7em; aspect-ratio: 1; scale: 0; background: var(--accent-ink);
+    clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%); }
+  &:checked, &:indeterminate { background: var(--accent); border-color: var(--accent); }
+  &:checked::before { scale: 1; }
+  &:indeterminate::before { scale: 1; clip-path: inset(40% 0); }
+  @media (prefers-reduced-motion: no-preference) { &::before { transition: scale .12s ease-in; } }
+  @media (forced-colors: active) { &::before { background: CanvasText; } }
+}
+.kids { padding-left: 30px; display: grid; gap: 6px; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+</style>
+
+<div class="cols">
+  <fieldset>
+    <legend>Native, tinted with accent-color</legend>
+    <label><input type="checkbox" class="checkbox-native" checked> Email me receipts</label>
+    <label><input type="checkbox" class="checkbox-native"> Weekly product news</label>
+  </fieldset>
+  <fieldset>
+    <legend>Custom, with an indeterminate parent</legend>
+    <label><input type="checkbox" class="custom" id="select-all"> All toppings</label>
+    <div class="kids">
+      <label><input type="checkbox" class="custom topping" checked> Basil</label>
+      <label><input type="checkbox" class="custom topping"> Chilli oil</label>
+      <label><input type="checkbox" class="custom topping" checked> Parmesan</label>
+    </div>
+  </fieldset>
+</div>
+<p class="note" style="margin-top:12px">Both stay real <code>&lt;input type="checkbox"&gt;</code> elements, so labels, keyboard and form submission all work. Focus rings are never removed.</p>
+
+<script>
+const all = document.getElementById("select-all");
+const toppings = [...document.querySelectorAll(".topping")];
+function sync() {
+  const n = toppings.filter((t) => t.checked).length;
+  all.checked = n === toppings.length;
+  all.indeterminate = n > 0 && n < toppings.length;
+}
+all.addEventListener("change", () => { toppings.forEach((t) => (t.checked = all.checked)); sync(); });
+toppings.forEach((t) => t.addEventListener("change", sync));
+sync();
+</script>

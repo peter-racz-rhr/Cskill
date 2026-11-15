@@ -1,0 +1,41 @@
+<style>
+.preview { --p-bg: light-dark(#ffffff, #10151f); --p-ink: light-dark(#1b2333, #e8ecf4); --p-card: light-dark(#f1f4f9, #1b2232); --p-accent: light-dark(#d1495b, #ff8597);
+  color-scheme: light dark; background: var(--p-bg); color: var(--p-ink); border: 1px solid var(--line); border-radius: 12px; padding: 16px; max-width: 520px; display: grid; gap: 12px; }
+.preview[data-scheme="light"] { color-scheme: light; }
+.preview[data-scheme="dark"] { color-scheme: dark; }
+.preview .bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.preview .card { background: var(--p-card); border-radius: 8px; padding: 12px; }
+.preview .card b { color: var(--p-accent); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; gap: 2px; background: var(--p-card); }
+.seg label { padding: 4px 12px; border-radius: 999px; cursor: pointer; font-size: 14px; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label:has(input:checked) { background: var(--p-accent); color: var(--p-bg); font-weight: 600; }
+.seg label:has(input:focus-visible) { outline: 2px solid var(--p-accent); outline-offset: 2px; }
+</style>
+
+<div class="preview" id="preview" data-scheme="light dark">
+  <div class="bar">
+    <strong>Tidewater Notes</strong>
+    <fieldset class="seg" style="border:1px solid var(--line);margin:0">
+      <legend class="note" style="position:absolute;width:1px;height:1px;overflow:hidden">Colour scheme</legend>
+      <label><input type="radio" name="scheme" value="light"> Light</label>
+      <label><input type="radio" name="scheme" value="light dark" checked> System</label>
+      <label><input type="radio" name="scheme" value="dark"> Dark</label>
+    </fieldset>
+  </div>
+  <div class="card"><b>Tuesday</b> · High tide 06:42, low tide 12:58. The form controls below follow the scheme too.</div>
+  <label class="row">Alert me <select><option>30 min before</option><option>1 hour before</option></select></label>
+</div>
+<p class="note" style="margin-top:12px">Three states, not two: Light, Dark and System. Colours use <code>light-dark()</code>, and the choice only sets <code>color-scheme</code>, so native controls and scrollbars switch too. A real site keeps the choice in <code>localStorage</code> and reads it before first paint.</p>
+
+<script>
+const preview = document.getElementById("preview");
+let saved = null;
+try { saved = localStorage.getItem("demo-color-scheme"); } catch {}
+if (saved) { preview.dataset.scheme = saved; document.querySelector(`input[value="${saved}"]`).checked = true; }
+document.addEventListener("change", (e) => {
+  if (e.target.name !== "scheme") return;
+  preview.dataset.scheme = e.target.value;
+  try { e.target.value === "light dark" ? localStorage.removeItem("demo-color-scheme") : localStorage.setItem("demo-color-scheme", e.target.value); } catch {}
+});
+</script>

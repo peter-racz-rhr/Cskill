@@ -1,0 +1,57 @@
+<style>
+.copyable { display: flex; align-items: start; gap: .5rem; max-width: 520px; }
+.copyable pre { flex: 1; min-width: 0; margin: 0; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow-x: auto; }
+.copyable .copy { flex: none; order: 1; position: relative; }
+@media (hover: hover) {
+  .copyable { display: block; position: relative; }
+  .copyable .copy { position: absolute; inset-block-start: .5rem; inset-inline-end: .5rem; }
+  .copyable .copy-button { opacity: 0; transition: opacity .15s; }
+  .copyable:hover .copy-button, .copyable:focus-within .copy-button { opacity: 1; }
+}
+.copy-button { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; }
+.icon { width: 16px; height: 16px; background: currentColor; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Crect x='9' y='9' width='12' height='12' rx='2'/%3E%3Cpath d='M5 15V5a2 2 0 0 1 2-2h10'/%3E%3C/svg%3E") center / contain no-repeat; }
+.bubble { position: absolute; inset-block-start: calc(100% + 6px); inset-inline-end: 0; white-space: nowrap; font-size: 12px; padding: 3px 8px; border-radius: 6px; background: var(--ink); color: var(--bg); }
+.bubble:empty { display: none; }
+.bubble.fail { background: var(--bad); }
+.field { display: flex; gap: 8px; max-width: 520px; margin-top: 16px; align-items: center; }
+.field input { flex: 1; min-width: 0; font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+</style>
+
+<div class="copyable">
+  <pre id="snippet"><code>dialog::backdrop {
+  overscroll-behavior: contain;
+}</code></pre>
+  <span class="copy">
+    <button type="button" class="copy-button" command="--copy" commandfor="snippet" aria-label="Copy CSS code"><span class="icon" aria-hidden="true"></span></button>
+    <span class="bubble" role="status"></span>
+  </span>
+</div>
+
+<div class="field">
+  <label for="invite">Invite link</label>
+  <input id="invite" value="https://example.com/join/7Q4-ZK2" readonly>
+  <span class="copy">
+    <button type="button" class="copy-button" command="--copy" commandfor="invite" aria-label="Copy invite link"><span class="icon" aria-hidden="true"></span></button>
+    <span class="bubble" role="status"></span>
+  </span>
+</div>
+<p class="note" style="margin-top:28px">Hover or tab to the code block to reveal its copy button (it stays visible on touch screens). The confirmation is a live region, and a refused clipboard shows a failure message instead of failing silently.</p>
+
+<script>
+async function copy(button, target) {
+  const text = target.matches("input, textarea") ? target.value : target.innerText.trim();
+  if (!text) return;
+  try { await navigator.clipboard.writeText(text); report(button, true); }
+  catch { report(button, false); }
+}
+function report(button, ok) {
+  const bubble = button.nextElementSibling;
+  bubble.classList.toggle("fail", !ok);
+  bubble.textContent = ok ? "Copied" : "Copy blocked: select and press Ctrl+C";
+  clearTimeout(bubble.timer);
+  bubble.timer = setTimeout(() => (bubble.textContent = ""), 2000);
+}
+document.addEventListener("command", (e) => {
+  if (e.command === "--copy") copy(e.source, e.target);
+}, { capture: true });
+</script>

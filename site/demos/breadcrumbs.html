@@ -1,0 +1,36 @@
+<style>
+.breadcrumb ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.breadcrumb > ol > li + li::before { content: "/" / ""; color: var(--muted); margin-inline-end: 8px; }
+.breadcrumb a { color: var(--accent); text-decoration: none; }
+.breadcrumb a:hover { text-decoration: underline; }
+.breadcrumb [aria-current="page"] { color: var(--ink); font-weight: 600; }
+.pills ol { gap: 6px; }
+.pills a, .pills [aria-current] { display: inline-block; padding: 3px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); }
+.pills > ol > li + li::before { content: "›" / ""; }
+h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 8px; }
+</style>
+
+<div class="stack" style="gap:24px">
+  <section>
+    <h3>Text links</h3>
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <ol>
+        <li><a href="#home">Home</a></li>
+        <li><a href="#kitchen">Kitchen</a></li>
+        <li><a href="#cookware">Cookware</a></li>
+        <li><span aria-current="page">Cast-iron skillet, 26 cm</span></li>
+      </ol>
+    </nav>
+  </section>
+  <section>
+    <h3>Chip style, still with separators</h3>
+    <nav class="breadcrumb pills" aria-label="Breadcrumb, chip style">
+      <ol>
+        <li><a href="#docs">Docs</a></li>
+        <li><a href="#guides">Guides</a></li>
+        <li><span aria-current="page">Install</span></li>
+      </ol>
+    </nav>
+  </section>
+</div>
+<p class="note" style="margin-top:16px">An ordered list in a labelled <code>&lt;nav&gt;</code>. Separators come from CSS with empty alt text (<code>content: "/" / ""</code>), so screen readers skip them, and the last item is marked <code>aria-current="page"</code>.</p>

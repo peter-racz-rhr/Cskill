@@ -1,0 +1,53 @@
+<style>
+.layout { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; max-width: 620px; }
+nav.spy { scroll-target-group: auto; display: grid; gap: 2px; align-content: start; }
+nav.spy a { color: var(--muted); text-decoration: none; padding: 6px 10px; border-inline-start: 3px solid var(--line); }
+nav.spy a:target-current, nav.spy a.is-current { color: var(--accent); border-inline-start-color: var(--accent); font-weight: 600; }
+.scroller { height: 260px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius); padding: 0 16px; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { .scroller { scroll-behavior: auto; } }
+.scroller section { padding: 16px 0 60px; border-bottom: 1px solid var(--line); }
+.scroller section:focus { outline: none; }
+.scroller h2 { font-size: 18px; margin-bottom: 6px; }
+@media (max-width: 480px) { .layout { grid-template-columns: 1fr; } nav.spy { grid-auto-flow: column; overflow-x: auto; } }
+</style>
+
+<div class="layout">
+  <nav class="spy" aria-label="On this page">
+    <a href="#intro">Introduction</a>
+    <a href="#features">Features</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#faq">FAQ</a>
+  </nav>
+  <main class="scroller">
+    <section id="intro" tabindex="-1"><h2>Introduction</h2><p class="muted">Harbour is a shared calendar for small crews. Scroll this panel and watch the menu follow along.</p></section>
+    <section id="features" tabindex="-1"><h2>Features</h2><p class="muted">Shift swaps, tide-aware reminders, and a read-only link for families.</p></section>
+    <section id="pricing" tabindex="-1"><h2>Pricing</h2><p class="muted">Free for up to 5 people. €4 per person per month after that.</p></section>
+    <section id="faq" tabindex="-1"><h2>FAQ</h2><p class="muted">Yes, it works offline. No, we don't sell your data.</p></section>
+  </main>
+</div>
+<p class="note" style="margin-top:12px">CSS alone marks the current link with <code>scroll-target-group: auto</code> and <code>:target-current</code>; a small script mirrors it into <code>aria-current</code> for screen readers. Browsers without it get an <code>IntersectionObserver</code> fallback.</p>
+
+<script>
+const links = [...document.querySelectorAll("nav.spy a")];
+const scroller = document.querySelector(".scroller");
+const native = CSS.supports("scroll-target-group: auto");
+function mark(current) { links.forEach((l) => { l.setAttribute("aria-current", l === current ? "true" : "false"); l.classList.toggle("is-current", !native && l === current); }); }
+if (native) {
+  const sync = () => mark(document.querySelector("nav.spy a:target-current"));
+  sync(); scroller.addEventListener("scrollend", sync);
+} else {
+  const visible = new Map();
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) visible.set(e.target.id, e.isIntersecting);
+    const first = links.find((l) => visible.get(l.hash.slice(1)));
+    if (first) mark(first);
+  }, { root: scroller, rootMargin: "0px 0px -60% 0px" });
+  links.forEach((l) => io.observe(document.querySelector(l.hash)));
+}
+document.querySelector("nav.spy").addEventListener("click", (e) => {
+  const a = e.target.closest("a"); if (!a) return;
+  e.preventDefault();
+  const s = document.querySelector(a.hash);
+  s.scrollIntoView({ block: "start" }); s.focus({ preventScroll: true });
+});
+</script>

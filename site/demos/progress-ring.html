@@ -1,0 +1,58 @@
+<style>
+@property --value { syntax: "<number>"; inherits: true; initial-value: 0; }
+.rings { display: flex; flex-wrap: wrap; gap: 28px; align-items: center; }
+.progress-ring-wrapper { position: relative; display: grid; place-items: center; }
+progress.progress-ring::-webkit-progress-bar { display: none; background: none; }
+progress.progress-ring::-webkit-progress-value { display: none; background: none; }
+progress.progress-ring::-moz-progress-bar { display: none; background: none; }
+progress.progress-ring {
+  appearance: none;
+  --size: 130px; --thickness: 14px;
+  --track-color: var(--surface); --fill-color: var(--accent);
+  --value: attr(value type(<number>));
+  width: var(--size); height: var(--size);
+  transition: --value 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 50%;
+  background: conic-gradient(var(--fill-color) calc(var(--value) * 1%), var(--track-color) 0);
+  background-clip: border-area;
+  border: var(--thickness) solid transparent;
+  background-origin: border-box;
+  @media (forced-colors: active) { forced-color-adjust: none; --fill-color: CanvasText; --track-color: Canvas; }
+}
+progress.small { --size: 72px; --thickness: 8px; --fill-color: var(--ok); }
+.progress-ring-content { position: absolute; font-weight: 600; font-size: 22px; font-variant-numeric: tabular-nums; }
+.small + .progress-ring-content { font-size: 14px; }
+</style>
+
+<div class="rings">
+  <div class="progress-ring-wrapper">
+    <progress id="upload" value="35" max="100" aria-label="Upload progress" class="progress-ring"></progress>
+    <div class="progress-ring-content" aria-hidden="true">35%</div>
+  </div>
+  <div class="progress-ring-wrapper">
+    <progress value="80" max="100" aria-label="Storage used" class="progress-ring small"></progress>
+    <div class="progress-ring-content" aria-hidden="true">80%</div>
+  </div>
+  <div class="stack">
+    <div class="row"><button type="button" data-step="-15">−15%</button><button type="button" data-step="15">+15%</button></div>
+    <p class="note">Each button changes only the <code>value</code> attribute.</p>
+  </div>
+</div>
+<p class="note" style="margin-top:16px">Still a native <code>&lt;progress&gt;</code>, so screen readers announce the value. The ring is a <code>conic-gradient</code> clipped to the border with <code>background-clip: border-area</code>, and the registered <code>--value</code> property lets it animate.</p>
+
+<script>
+const progress = document.getElementById("upload");
+if (!CSS.supports("width: attr(value type(<number>))")) {
+  for (const p of document.querySelectorAll("progress.progress-ring")) {
+    p.style.setProperty("--value", p.getAttribute("value"));
+    new MutationObserver(() => p.style.setProperty("--value", p.getAttribute("value"))).observe(p, { attributes: true, attributeFilter: ["value"] });
+  }
+}
+document.addEventListener("click", (e) => {
+  const step = Number(e.target.closest("[data-step]")?.dataset.step);
+  if (!step) return;
+  const v = Math.max(0, Math.min(100, Number(progress.getAttribute("value")) + step));
+  progress.setAttribute("value", v);
+  progress.nextElementSibling.textContent = v + "%";
+});
+</script>

@@ -1,0 +1,53 @@
+<style>
+.bars { display: grid; gap: 18px; max-width: 520px; }
+.bar label { display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 6px; }
+.bar label span { color: var(--muted); font-variant-numeric: tabular-nums; }
+progress {
+  appearance: none; border: 0 solid; overflow: clip;
+  inline-size: 100%; block-size: 10px; border-radius: 999px;
+  background: var(--surface); color: var(--accent);
+}
+/* Separate rules per engine: a grouped selector with an unknown pseudo-element would drop the whole rule. */
+progress::-webkit-progress-bar { background: var(--surface); }
+progress::-webkit-progress-value { background: var(--accent); border-radius: 999px; transition: inline-size .3s; }
+progress::-moz-progress-bar { background: var(--accent); border-radius: 999px; }
+progress.ok::-webkit-progress-value { background: var(--ok); }
+progress.ok::-moz-progress-bar { background: var(--ok); }
+progress:indeterminate { background: linear-gradient(90deg, transparent, var(--accent), transparent) var(--surface) no-repeat; background-size: 40% 100%; }
+@media (prefers-reduced-motion: no-preference) { progress:indeterminate { animation: slide 1.2s linear infinite; } }
+progress:indeterminate::-webkit-progress-bar { background: transparent; }
+progress:indeterminate::-moz-progress-bar { background: transparent; }
+@keyframes slide { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+</style>
+
+<div class="bars">
+  <div class="bar">
+    <label for="p-sync">Syncing photos <span id="p-sync-text">0 of 240</span></label>
+    <progress id="p-sync" max="240" value="0"></progress>
+  </div>
+  <div class="bar">
+    <label for="p-done">Profile complete <span>4 of 5 steps</span></label>
+    <progress id="p-done" class="ok" max="5" value="4"></progress>
+  </div>
+  <div class="bar">
+    <label for="p-wait">Preparing your export <span>Waiting for server</span></label>
+    <progress id="p-wait"></progress>
+  </div>
+  <div class="row"><button type="button" id="restart">Restart sync</button></div>
+</div>
+<p class="note" style="margin-top:14px">Native <code>&lt;progress&gt;</code> with <code>appearance: none</code>. The third bar has no <code>value</code>, which makes it indeterminate. Its sweep stops for people who prefer reduced motion.</p>
+
+<script>
+const sync = document.getElementById("p-sync");
+let timer;
+function run() {
+  clearInterval(timer); sync.value = 0;
+  timer = setInterval(() => {
+    sync.value = Math.min(sync.max, sync.value + 12);
+    document.getElementById("p-sync-text").textContent = `${sync.value} of ${sync.max}`;
+    if (sync.value >= sync.max) clearInterval(timer);
+  }, 250);
+}
+document.getElementById("restart").addEventListener("click", run);
+run();
+</script>

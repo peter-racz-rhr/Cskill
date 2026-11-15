@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en"__THEME__>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: light-dark(#ffffff, #151c2d);
+  --surface: light-dark(#f3f5f9, #1b2337);
+  --raised: light-dark(#ffffff, #222b42);
+  --ink: light-dark(#131a2b, #e6eaf3);
+  --muted: light-dark(#566078, #9ba5ba);
+  --line: light-dark(#d6dce7, #2f3a55);
+  --accent: light-dark(#2c49d1, #93a6ff);
+  --accent-ink: light-dark(#ffffff, #0d1220);
+  --ok: light-dark(#17734a, #5fd39a);
+  --bad: light-dark(#b42318, #ff8a80);
+  --shadow: 0 10px 30px light-dark(rgb(19 26 43 / .14), rgb(0 0 0 / .45));
+  --radius: 10px;
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 20px; background: var(--bg); color: var(--ink); font: 400 15px/1.5 "Instrument Sans", system-ui, sans-serif; }
+h1, h2, h3, h4 { line-height: 1.2; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+code, kbd { font: 0.875em "JetBrains Mono", ui-monospace, monospace; }
+button { font: inherit; color: var(--ink); background: var(--raised); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[popover] { color: var(--ink); background: var(--raised); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px; }
+dialog { color: var(--ink); background: var(--raised); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 20px; }
+dialog::backdrop { background: rgb(10 14 26 / .45); }
+.muted { color: var(--muted); }
+.stack { display: grid; gap: 12px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.note { font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+__DEMO__
+<script>
+{ /* Block scope keeps these helpers out of the demos' own global names. */
+/* Shared fallbacks for the demos. Each one runs only where the browser lacks the feature. */
+
+// Invoker Commands (dialog, menu and copy-button guides): minimal stand-in when unsupported.
+if (!("commandForElement" in HTMLButtonElement.prototype)) {
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("button[commandfor][command]");
+    if (!b) return;
+    const t = document.getElementById(b.getAttribute("commandfor"));
+    if (!t) return;
+    const c = b.getAttribute("command");
+    const ev = new Event("command", { cancelable: true });
+    ev.command = c; ev.source = b;
+    if (!t.dispatchEvent(ev)) return;
+    const builtIn = {
+      "show-modal": () => t.showModal(),
+      "close": () => t.close(b.value),
+      "request-close": () => (t.requestClose ? t.requestClose(b.value) : t.close(b.value)),
+      "toggle-popover": () => t.togglePopover(),
+      "show-popover": () => t.showPopover(),
+      "hide-popover": () => t.hidePopover(),
+    };
+    builtIn[c]?.();
+  });
+}
+
+// closedby="any" light dismiss (dialog guide's own fallback).
+if (!("closedBy" in HTMLDialogElement.prototype)) {
+  const outside = (e, d) => { const r = d.getBoundingClientRect(); return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom; };
+  for (const d of document.querySelectorAll('dialog[closedby="any"]')) {
+    let down = false;
+    d.addEventListener("pointerdown", (e) => { down = outside(e, d); });
+    d.addEventListener("pointerup", (e) => { if (down && outside(e, d)) d.close(); });
+  }
+}
+
+// focusgroup: roving tab stop and arrow keys, with the roles focusgroup would imply.
+if (!Object.hasOwn(HTMLElement.prototype, "focusGroup")) {
+  const ROLES = { tablist: ["tablist", "tab"], menu: ["menu", "menuitem"], toolbar: [null, null], menubar: ["menubar", "menuitem"] };
+  const items = (g) => [...g.querySelectorAll("button, a[href], [role=tab], [role=menuitem], [role=menuitemcheckbox], [role=menuitemradio]")]
+    .filter((x) => x.closest("[focusgroup]") === g && !x.disabled && x.checkVisibility());
+  for (const g of document.querySelectorAll("[focusgroup]")) {
+    const tokens = g.getAttribute("focusgroup").split(/\s+/);
+    const [groupRole, itemRole] = ROLES[tokens[0]] || [];
+    if (groupRole && !g.hasAttribute("role")) g.setAttribute("role", groupRole);
+    for (const it of g.querySelectorAll("button, a[href]")) if (itemRole && it.closest("[focusgroup]") === g && !it.hasAttribute("role")) it.setAttribute("role", itemRole);
+    const all = [...g.querySelectorAll("button, a[href]")].filter((x) => x.closest("[focusgroup]") === g);
+    const start = all.find((x) => x.hasAttribute("focusgroupstart")) || all[0];
+    all.forEach((x) => (x.tabIndex = x === start ? 0 : -1));
+    const vertical = tokens[0] === "menu" || g.getAttribute("aria-orientation") === "vertical";
+    const wrap = tokens.includes("wrap") || tokens[0] === "menu" || tokens[0] === "tablist";
+    g.addEventListener("keydown", (e) => {
+      const list = items(g); const i = list.indexOf(document.activeElement);
+      if (i < 0) return;
+      const step = { ArrowRight: !vertical && 1, ArrowLeft: !vertical && -1, ArrowDown: vertical && 1, ArrowUp: vertical && -1 }[e.key];
+      let j;
+      if (step) j = wrap ? (i + step + list.length) % list.length : Math.min(list.length - 1, Math.max(0, i + step));
+      else if (e.key === "Home") j = 0;
+      else if (e.key === "End") j = list.length - 1;
+      else return;
+      e.preventDefault();
+      list.forEach((x) => (x.tabIndex = -1));
+      list[j].tabIndex = 0; list[j].focus();
+    });
+    g.addEventListener("focusin", (e) => {
+      if (e.target.closest("[focusgroup]") !== g || tokens.includes("nomemory")) return;
+      [...g.querySelectorAll("button, a[href]")].filter((x) => x.closest("[focusgroup]") === g).forEach((x) => (x.tabIndex = x === e.target ? 0 : -1));
+    });
+  }
+}
+
+// interestfor (hovercard and toolbar guides): show the hint on hover or focus after a short delay.
+if (!("interestForElement" in HTMLButtonElement.prototype)) {
+  for (const src of document.querySelectorAll("[interestfor]")) {
+    const t = document.getElementById(src.getAttribute("interestfor"));
+    if (!t) continue;
+    let timer;
+    const show = () => { clearTimeout(timer); timer = setTimeout(() => { if (!t.matches(":popover-open")) { try { t.showPopover({ source: src }); } catch { t.showPopover(); } } }, 400); };
+    const hide = () => { clearTimeout(timer); timer = setTimeout(() => { if (!t.matches(":hover") && !src.matches(":hover")) t.hidePopover?.(); }, 250); };
+    src.addEventListener("pointerenter", show); src.addEventListener("focus", show);
+    src.addEventListener("pointerleave", hide); src.addEventListener("blur", hide);
+    t.addEventListener("pointerleave", hide);
+  }
+}
+
+// Tell the Atlas page how tall this demo is so the frame fits it.
+// A demo whose overlay needs more room than its page (a drawer, a modal) sets data-demo-min-height.
+const minHeight = Number(document.querySelector("[data-demo-min-height]")?.dataset.demoMinHeight) || 0;
+const reportHeight = () => parent.postMessage({ demoHeight: Math.max(minHeight, Math.ceil(document.body.offsetHeight)) }, "*");
+new ResizeObserver(reportHeight).observe(document.body);
+addEventListener("load", reportHeight);
+}
+</script>
+</body>
+</html>

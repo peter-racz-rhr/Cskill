@@ -1,0 +1,92 @@
+<style>
+.phone { width: min(340px, 100%); height: 380px; border: 1px solid var(--line); border-radius: 22px; overflow: hidden; background: var(--bg); }
+.Stack {
+  height: 100%; display: grid; grid-auto-flow: column; grid-auto-columns: 100%; grid-template-rows: 100%;
+  overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: none; scrollbar-width: none;
+}
+.Stack::-webkit-scrollbar { display: none; }
+@media (prefers-reduced-motion: no-preference) { .Stack { scroll-behavior: smooth; } }
+.Stack-view { scroll-snap-align: start; scroll-snap-stop: always; }
+.Stack-viewContent { width: 100%; height: 100%; background-color: var(--bg); color: var(--ink); overflow-y: auto; }
+@supports (animation-timeline: view()) {
+  .Stack-viewContent { animation: parallax linear both; animation-timeline: view(inline); animation-range: exit 0% exit 100%; }
+  .Stack-view:not(:first-child) .Stack-viewContent {
+    animation: parallax linear both, shadow-fade linear both;
+    animation-timeline: view(inline), view(inline);
+    animation-range: exit 0% exit 100%, entry 0% exit 100%;
+  }
+  @keyframes parallax { to { transform: translateX(75%); filter: brightness(0.8); } }
+  @keyframes shadow-fade { 0%, 100% { box-shadow: 0 0 1.5rem #0000; } 25%, 75% { box-shadow: 0 0 1.5rem #0004; } }
+}
+.bar { display: flex; align-items: center; gap: 8px; padding: 12px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); }
+.bar h2 { font-size: 17px; }
+.bar h2:focus { outline: none; }
+.list { list-style: none; margin: 0; padding: 0; }
+.list button { width: 100%; text-align: start; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 14px 16px; display: flex; justify-content: space-between; background: none; }
+.list button:hover { background: var(--surface); }
+.detail { padding: 16px; display: grid; gap: 8px; }
+</style>
+
+<div class="phone"><div class="Stack" aria-live="off"></div></div>
+<p class="note" style="margin-top:12px">Tap into a folder, then swipe right (or use Back) to return. Each level is a full-width snap point in one horizontal scroller, so going back is a native scroll gesture. Levels you've left are <code>inert</code> so Tab never reaches them. The real version also syncs each level with browser history; this demo keeps it in memory.</p>
+
+<script>
+const DATA = {
+  title: "Settings",
+  items: [
+    { title: "Notifications", items: [
+      { title: "Messages", text: "Banner, sound and badge are on. Quiet hours 22:00–07:00." },
+      { title: "Calendar", text: "Alert 10 minutes before each event." } ] },
+    { title: "Privacy", items: [
+      { title: "Location", text: "Allowed only while the app is open." },
+      { title: "Camera", text: "Never allowed." } ] },
+    { title: "About", text: "Version 4.2.0 · build 1187" },
+  ],
+};
+const stack = document.querySelector(".Stack");
+const views = [];
+function makeView(node, depth) {
+  const view = document.createElement("section");
+  view.className = "Stack-view";
+  const content = document.createElement("div"); content.className = "Stack-viewContent";
+  const bar = document.createElement("div"); bar.className = "bar";
+  if (depth > 0) { const back = document.createElement("button"); back.type = "button"; back.textContent = "‹ Back"; back.addEventListener("click", () => goTo(depth - 1)); bar.append(back); }
+  const h = document.createElement("h2"); h.textContent = node.title; h.tabIndex = -1; bar.append(h);
+  content.append(bar);
+  if (node.items) {
+    const ul = document.createElement("ul"); ul.className = "list";
+    for (const child of node.items) {
+      const li = document.createElement("li"); const b = document.createElement("button"); b.type = "button";
+      const label = document.createElement("span"); label.textContent = child.title;
+      const chev = document.createElement("span"); chev.textContent = "›"; chev.setAttribute("aria-hidden", "true");
+      b.append(label, chev);
+      b.addEventListener("click", () => drill(child, depth + 1, b));
+      li.append(b); ul.append(li);
+    }
+    content.append(ul);
+  } else {
+    const d = document.createElement("div"); d.className = "detail"; const p = document.createElement("p"); p.textContent = node.text; d.append(p); content.append(d);
+  }
+  view.append(content);
+  return view;
+}
+const returnFocus = new WeakMap();
+function drill(node, depth, from) {
+  views.splice(depth).forEach((v) => v.remove());
+  const v = makeView(node, depth);
+  returnFocus.set(v, from);
+  views.push(v); stack.append(v);
+  goTo(depth);
+}
+function goTo(depth) { stack.scrollTo({ left: depth * stack.clientWidth, behavior: "auto" }); }
+function settle() {
+  const depth = Math.round(stack.scrollLeft / stack.clientWidth);
+  views.forEach((v, i) => (v.inert = i !== depth));
+  const leaving = views.splice(depth + 1);
+  if (leaving.length) { leaving.forEach((v) => v.remove()); returnFocus.get(leaving[0])?.focus({ preventScroll: true }); }
+  else views[depth]?.querySelector("h2").focus({ preventScroll: true });
+}
+if ("onscrollsnapchange" in window) stack.addEventListener("scrollsnapchange", () => setTimeout(settle, 0));
+stack.addEventListener("scrollend", settle);
+const root = makeView(DATA, 0); views.push(root); stack.append(root);
+</script>

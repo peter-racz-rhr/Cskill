@@ -89,11 +89,20 @@ for d in docs:
     if d["cat"] not in [c["id"] for c in cats]:
         cats.append({"id": d["cat"], "name": CATEGORY_NAMES.get(d["cat"], d["cat"]), "group": d["group"]})
 
-payload = json.dumps({"docs": docs, "cats": cats}, ensure_ascii=False, separators=(",", ":"))
+demo_dir = out.parent / "demos"
+demo_base = (out.parent / "demo-base.html").read_text(encoding="utf-8")
+ids = {d["id"] for d in docs}
+for f in sorted(demo_dir.glob("*.html")):
+    assert f.stem in ids, f"demo for unknown guide: {f.stem}"
+for d in docs:
+    f = demo_dir / f"{d['id']}.html"
+    d["demo"] = f.read_text(encoding="utf-8").strip() if f.exists() else None
+
+payload = json.dumps({"docs": docs, "cats": cats, "demoBase": demo_base}, ensure_ascii=False, separators=(",", ":"))
 payload = payload.replace("<", "\\u003c")
 html = template.read_text(encoding="utf-8").replace("/*__DATA__*/", payload)
 out.write_text(html, encoding="utf-8")
 
 feats = [f for d in docs for f in d["features"]]
-print(f"{len(docs)} docs, {len(cats)} categories, {len(feats)} feature statuses, "
+print(f"{sum(1 for d in docs if d['demo'])} demos, {len(docs)} docs, {len(cats)} categories, {len(feats)} feature statuses, "
       f"{sum(d['words'] for d in docs):,} words, {out.stat().st_size/1e6:.2f} MB")

@@ -1,0 +1,55 @@
+<style>
+.doc { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); max-width: 460px; }
+#actions-trigger { anchor-name: --actions; }
+#export-trigger { anchor-name: --export; }
+[popover]:has(> [focusgroup~="menu"]) { padding: 4px; min-width: 180px; inset: auto; margin: 4px 0; }
+#actions-menu { position-anchor: --actions; position-area: block-end span-inline-start; position-try-fallbacks: flip-block, flip-inline; }
+#export-menu { position-anchor: --export; position-area: inline-end span-block-end; position-try-fallbacks: flip-inline, flip-block; margin: 0 4px; }
+[focusgroup~="menu"] { display: grid; }
+[focusgroup~="menu"] button { text-align: start; border: 0; background: none; border-radius: 6px; padding: 7px 10px; display: flex; justify-content: space-between; gap: 16px; }
+[focusgroup~="menu"] button:hover, [focusgroup~="menu"] button:focus-visible { background: var(--surface); outline: none; }
+[focusgroup~="menu"] hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+.danger { color: var(--bad); }
+</style>
+
+<div class="doc">
+  <div><strong>Field notes — March</strong><div class="note">Shared with 3 people</div></div>
+  <button id="actions-trigger" type="button" aria-haspopup="menu" aria-expanded="false" commandfor="actions-menu" command="toggle-popover">Actions ▾</button>
+  <div id="actions-menu" popover="auto">
+    <div focusgroup="menu nomemory" aria-labelledby="actions-trigger">
+      <button type="button" data-action="Duplicated">Duplicate</button>
+      <button type="button" data-action="Renamed">Rename</button>
+      <button id="export-trigger" type="button" aria-haspopup="menu" aria-expanded="false" commandfor="export-menu" command="show-popover">Export as <span aria-hidden="true">›</span></button>
+      <div id="export-menu" popover="auto">
+        <div focusgroup="menu nomemory" aria-labelledby="export-trigger">
+          <button type="button" data-action="Exported PDF">PDF</button>
+          <button type="button" data-action="Exported Markdown">Markdown</button>
+        </div>
+      </div>
+      <hr>
+      <button type="button" class="danger" data-action="Moved to bin">Delete</button>
+    </div>
+  </div>
+</div>
+<p class="note" id="menu-out" role="status" style="margin-top:8px"></p>
+<p class="note" style="margin-top:150px">A popover menu with a submenu. Arrow keys move through items; ArrowRight opens “Export as”, ArrowLeft or Escape closes it, and clicking outside closes everything.</p>
+
+<script>
+for (const [trigger, menu] of [["actions-trigger", "actions-menu"], ["export-trigger", "export-menu"]].map((p) => p.map((id) => document.getElementById(id)))) {
+  menu.addEventListener("toggle", (e) => {
+    trigger.setAttribute("aria-expanded", e.newState === "open");
+    if (e.newState === "open") menu.querySelector("button").focus();
+  });
+}
+const exportTrigger = document.getElementById("export-trigger");
+const exportMenu = document.getElementById("export-menu");
+exportTrigger.addEventListener("keydown", (e) => { if (e.key === "ArrowRight") { e.preventDefault(); exportMenu.showPopover({ source: exportTrigger }); } });
+exportMenu.addEventListener("keydown", (e) => { if (e.key === "ArrowLeft" || e.key === "Escape") { e.preventDefault(); e.stopPropagation(); exportMenu.hidePopover(); exportTrigger.focus(); } });
+document.getElementById("actions-menu").addEventListener("click", (e) => {
+  const item = e.target.closest("[data-action]");
+  if (!item) return;
+  document.getElementById("actions-menu").hidePopover();
+  document.getElementById("actions-trigger").focus();
+  document.getElementById("menu-out").textContent = item.dataset.action + ".";
+});
+</script>

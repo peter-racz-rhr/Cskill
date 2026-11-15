@@ -1,0 +1,58 @@
+<style>
+.app { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 14px; max-width: 560px; display: grid; gap: 12px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; }
+#review-btn { anchor-name: --tour-review; }
+#share-btn { anchor-name: --tour-share; }
+.doc { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px; color: var(--muted); min-height: 70px; }
+.tour-step {
+  inset: auto; margin: 10px; width: min(260px, calc(100vw - 40px)); padding: 14px;
+  position-area: block-end span-inline-end; position-try-fallbacks: flip-block, flip-inline;
+  border-color: var(--accent);
+}
+#tour-1 { position-anchor: --tour-review; }
+#tour-2 { position-anchor: --tour-share; }
+.tour-step h2 { font-size: 16px; margin-bottom: 4px; }
+.tour-step .row { margin-top: 12px; justify-content: space-between; }
+.target-ring { outline: 3px solid var(--accent); outline-offset: 3px; }
+</style>
+
+<button type="button" id="start-tour" class="primary">Start the tour</button>
+<main class="app" id="app" style="margin-top:12px">
+  <div class="toolbar">
+    <button type="button" id="review-btn">Start review</button>
+    <button type="button" id="share-btn">Share</button>
+    <button type="button">Export</button>
+  </div>
+  <div class="doc">Contract draft v3 · 4 pages · last edited by Ana</div>
+</main>
+
+<dialog id="tour-1" class="tour-step" popover="manual" role="dialog" aria-labelledby="t1-title">
+  <h2 id="t1-title">Start a review</h2>
+  <p class="muted">Ask teammates to check the draft. They get a link and can comment line by line.</p>
+  <div class="row"><span class="note">Step 1 of 2</span><button type="button" class="primary" data-next>Next</button></div>
+</dialog>
+<dialog id="tour-2" class="tour-step" popover="manual" role="dialog" aria-labelledby="t2-title">
+  <h2 id="t2-title">Share when it's ready</h2>
+  <p class="muted">Share sends a read-only copy. You can revoke it at any time.</p>
+  <div class="row"><span class="note">Step 2 of 2</span><button type="button" class="primary" data-next>Got it</button></div>
+</dialog>
+<p class="note" style="margin-top:150px">Each step is a <code>popover="manual"</code> panel anchored to the control it explains. While the tour runs, the rest of the app is <code>inert</code>, and focus moves into each step so keyboard users follow along.</p>
+
+<script>
+const steps = ["tour-1", "tour-2"].map((id) => document.getElementById(id));
+const targets = ["review-btn", "share-btn"].map((id) => document.getElementById(id));
+const app = document.getElementById("app");
+const start = document.getElementById("start-tour");
+let i = -1;
+function show(n) {
+  steps.forEach((s, j) => { if (j !== n && s.matches(":popover-open")) s.hidePopover(); });
+  targets.forEach((t, j) => t.classList.toggle("target-ring", j === n));
+  if (n >= steps.length) { app.inert = false; start.inert = false; i = -1; start.focus(); return; }
+  i = n; app.inert = true; start.inert = true;
+  steps[n].showPopover();
+  steps[n].querySelector("[data-next]").focus();
+}
+start.addEventListener("click", () => show(0));
+document.addEventListener("click", (e) => { if (e.target.closest("[data-next]")) show(i + 1); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && i >= 0) show(steps.length); });
+</script>

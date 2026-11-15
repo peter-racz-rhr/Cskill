@@ -1,0 +1,64 @@
+<style>
+.accordion { display: grid; gap: 8px; max-width: 560px; }
+.accordion .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+[command="--toggle-all"][aria-expanded="true"] .expand,
+[command="--toggle-all"][aria-expanded="false"] .collapse { display: none; }
+.accordion details { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+summary {
+  list-style: none; display: flex; align-items: center; gap: 0.75ch; padding: 12px 14px; font-weight: 600; border-radius: var(--radius);
+  &::-webkit-details-marker { display: none; }
+  &::before {
+    content: ""; inline-size: 1em; block-size: 1em; flex-shrink: 0; background-color: currentColor;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 9l6 6 6-6' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center / contain;
+    rotate: -90deg;
+  }
+  &:dir(rtl)::before { rotate: 90deg; }
+  details[open] > &::before { rotate: 0deg; }
+  @media (prefers-reduced-motion: no-preference) { &::before { transition: rotate 0.2s; } }
+}
+summary:where(:not([aria-disabled="true"])) { cursor: pointer; &:hover { background: color-mix(in oklab, var(--accent) 8%, transparent); } }
+details::details-content { interpolate-size: allow-keywords; overflow: clip; contain: layout; }
+details:not([open])::details-content { block-size: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  details::details-content { transition: block-size, content-visibility, display; transition-duration: 0.3s; transition-timing-function: ease-in-out; transition-behavior: allow-discrete; }
+}
+.answer { padding: 0 14px 14px 38px; color: var(--muted); }
+</style>
+
+<section class="accordion" id="shipping-faq" aria-labelledby="faq-heading">
+  <div class="head">
+    <h2 id="faq-heading">Shipping questions</h2>
+    <button type="button" commandfor="shipping-faq" command="--toggle-all" aria-expanded="false">
+      <span class="expand">Expand all</span><span class="collapse">Collapse all</span>
+    </button>
+  </div>
+  <details>
+    <summary>How long does delivery take?</summary>
+    <div class="answer">Orders inside the EU arrive in 2–4 working days. Everywhere else takes 5–9.</div>
+  </details>
+  <details>
+    <summary>Can I change my address after ordering?</summary>
+    <div class="answer">Yes, until the parcel is handed to the courier. Open the order and choose “Edit address”.</div>
+  </details>
+  <details>
+    <summary>Do you ship to PO boxes?</summary>
+    <div class="answer">Only with standard post. Express couriers need a street address.</div>
+  </details>
+</section>
+<p class="note" style="margin-top:12px">Native <code>&lt;details&gt;</code>, animated with <code>::details-content</code> and <code>interpolate-size</code>. Try the browser's find-in-page for “courier”: closed answers open on their own.</p>
+
+<script>
+document.addEventListener("command", (event) => {
+  if (event.command !== "--toggle-all") return;
+  const expand = event.source.getAttribute("aria-expanded") !== "true";
+  for (const details of event.target.querySelectorAll(":scope > details")) details.open = expand;
+}, { capture: true });
+
+document.addEventListener("toggle", (event) => {
+  if (!event.target.matches(".accordion > details")) return;
+  const accordion = event.target.parentElement;
+  const button = accordion.querySelector('[command="--toggle-all"]');
+  const items = accordion.querySelectorAll(":scope > details");
+  button.setAttribute("aria-expanded", Array.prototype.every.call(items, (d) => d.open));
+}, { capture: true });
+</script>

@@ -1,0 +1,55 @@
+<style>
+[role="toolbar"] { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); max-width: 560px; }
+[role="group"] { display: flex; gap: 2px; }
+[role="separator"] { width: 1px; align-self: stretch; background: var(--line); margin: 2px 4px; }
+[role="toolbar"] button { min-width: 34px; height: 34px; padding: 0 8px; border-color: transparent; background: none; }
+[role="toolbar"] button:hover { background: var(--raised); border-color: var(--line); }
+[role="toolbar"] button[aria-pressed="true"] { background: color-mix(in oklab, var(--accent) 16%, transparent); color: var(--accent); border-color: transparent; }
+[interestfor] { interest-delay: 0.5s 0.1s; }
+.tip { inset: auto; margin: 6px 0; padding: 3px 8px; font-size: 12px; background: var(--ink); color: var(--bg); border: 0; position-area: block-end; position-try-fallbacks: flip-block; }
+#b-btn { anchor-name: --b; } #i-btn { anchor-name: --i; } #u-btn { anchor-name: --u; } #copy-btn { anchor-name: --c; }
+#tip-b { position-anchor: --b; } #tip-i { position-anchor: --i; } #tip-u { position-anchor: --u; } #tip-c { position-anchor: --c; }
+#preview { margin-top: 12px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius); max-width: 560px; font-size: 18px; }
+</style>
+
+<div role="toolbar" focusgroup="toolbar wrap" aria-label="Text formatting" aria-controls="preview">
+  <div role="group" aria-label="Style">
+    <button type="button" id="b-btn" aria-pressed="false" aria-label="Bold" interestfor="tip-b" data-style="fontWeight:700"><b>B</b></button>
+    <button type="button" id="i-btn" aria-pressed="false" aria-label="Italic" interestfor="tip-i" data-style="fontStyle:italic"><i>I</i></button>
+    <button type="button" id="u-btn" aria-pressed="false" aria-label="Underline" interestfor="tip-u" data-style="textDecoration:underline"><u>U</u></button>
+  </div>
+  <span role="separator" aria-orientation="vertical"></span>
+  <div role="group" aria-label="Size">
+    <button type="button" data-size="15px">Small</button>
+    <button type="button" data-size="18px" aria-pressed="true">Normal</button>
+    <button type="button" data-size="24px">Large</button>
+  </div>
+  <span role="separator" aria-orientation="vertical"></span>
+  <button type="button" id="copy-btn" aria-label="Copy text" interestfor="tip-c">⧉</button>
+</div>
+<div class="tip" id="tip-b" popover="hint">Bold (Ctrl+B)</div>
+<div class="tip" id="tip-i" popover="hint">Italic (Ctrl+I)</div>
+<div class="tip" id="tip-u" popover="hint">Underline (Ctrl+U)</div>
+<div class="tip" id="tip-c" popover="hint">Copy text</div>
+<div id="preview">Meet at the boathouse at 7:30. Bring a warm layer.</div>
+<p id="status" class="note" role="status" style="margin-top:6px"></p>
+<p class="note">One Tab stop for the whole toolbar; arrow keys move inside it. Toggle buttons use <code>aria-pressed</code>, icon-only buttons get a hint on hover or focus, and Copy reports success or failure.</p>
+
+<script>
+const preview = document.getElementById("preview");
+document.querySelector('[role="toolbar"]').addEventListener("click", async (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.style) {
+    const [prop, val] = b.dataset.style.split(":");
+    const on = b.getAttribute("aria-pressed") !== "true";
+    b.setAttribute("aria-pressed", on); preview.style[prop] = on ? val : "";
+  } else if (b.dataset.size) {
+    b.parentElement.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+    preview.style.fontSize = b.dataset.size;
+  } else if (b.id === "copy-btn") {
+    const status = document.getElementById("status");
+    try { await navigator.clipboard.writeText(preview.textContent); status.textContent = "Text copied"; }
+    catch { status.textContent = "Copy failed: select the text and press Ctrl+C"; }
+  }
+});
+</script>

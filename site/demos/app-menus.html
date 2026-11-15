@@ -1,0 +1,60 @@
+<style>
+.window { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); max-width: 560px; overflow: visible; }
+[role="menubar"] { display: flex; gap: 2px; padding: 4px; border-bottom: 1px solid var(--line); }
+[role="menubar"] > button { border: 0; background: none; padding: 5px 10px; border-radius: 6px; }
+[role="menubar"] > button[aria-expanded="true"], [role="menubar"] > button:hover { background: var(--raised); }
+#file-trigger { anchor-name: --file; } #edit-trigger { anchor-name: --edit; } #view-trigger { anchor-name: --view; }
+[role="menubar"] > [popover] { inset: auto; margin: 2px 0; padding: 4px; min-width: 190px; position-area: block-end span-inline-end; position-try-fallbacks: flip-inline; }
+#file-menu { position-anchor: --file; } #edit-menu { position-anchor: --edit; } #view-menu { position-anchor: --view; }
+@media (prefers-reduced-motion: no-preference) { [role="menubar"]:has(> [popover]:popover-open) > [popover] { transition: none; } }
+[focusgroup~="menu"] { display: grid; }
+[focusgroup~="menu"] button { border: 0; background: none; text-align: start; padding: 6px 10px; border-radius: 6px; display: flex; justify-content: space-between; gap: 24px; }
+[focusgroup~="menu"] button:hover, [focusgroup~="menu"] button:focus-visible { background: var(--surface); outline: none; }
+kbd { color: var(--muted); }
+.page { padding: 18px; min-height: 120px; color: var(--muted); }
+</style>
+
+<div class="window">
+  <div role="menubar" aria-label="Document commands">
+    <button id="file-trigger" type="button" aria-haspopup="menu" aria-expanded="false" commandfor="file-menu" command="toggle-popover">File</button>
+    <div id="file-menu" popover="auto"><div focusgroup="menu nomemory" aria-labelledby="file-trigger">
+      <button type="button">New <kbd>Ctrl+N</kbd></button><button type="button">Open… <kbd>Ctrl+O</kbd></button><button type="button">Save <kbd>Ctrl+S</kbd></button>
+    </div></div>
+    <button id="edit-trigger" type="button" aria-haspopup="menu" aria-expanded="false" commandfor="edit-menu" command="toggle-popover" tabindex="-1">Edit</button>
+    <div id="edit-menu" popover="auto"><div focusgroup="menu nomemory" aria-labelledby="edit-trigger">
+      <button type="button">Undo <kbd>Ctrl+Z</kbd></button><button type="button">Cut <kbd>Ctrl+X</kbd></button><button type="button">Paste <kbd>Ctrl+V</kbd></button>
+    </div></div>
+    <button id="view-trigger" type="button" aria-haspopup="menu" aria-expanded="false" commandfor="view-menu" command="toggle-popover" tabindex="-1">View</button>
+    <div id="view-menu" popover="auto"><div focusgroup="menu nomemory" aria-labelledby="view-trigger">
+      <button type="button">Zoom in <kbd>Ctrl++</kbd></button><button type="button">Zoom out <kbd>Ctrl+−</kbd></button>
+    </div></div>
+  </div>
+  <div class="page">Untitled document. Open a menu, then use ArrowLeft and ArrowRight to move across the bar, ArrowDown to enter a menu, and Escape to close.</div>
+</div>
+
+<script>
+const rootTriggers = [...document.querySelectorAll('[role="menubar"] > [commandfor]')];
+const menuFor = (t) => document.getElementById(t.getAttribute("commandfor"));
+const isOpen = (m) => m.matches(":popover-open");
+function moveToRootTrigger(from, direction) {
+  const next = rootTriggers[(rootTriggers.indexOf(from) + direction + rootTriggers.length) % rootTriggers.length];
+  const wasOpen = rootTriggers.map(menuFor).some(isOpen);
+  rootTriggers.forEach((t) => (t.tabIndex = t === next ? 0 : -1));
+  rootTriggers.map(menuFor).filter(isOpen).forEach((m) => m.hidePopover());
+  next.focus({ preventScroll: true });
+  if (wasOpen) menuFor(next).showPopover({ source: next });
+}
+for (const trigger of rootTriggers) {
+  const menu = menuFor(trigger);
+  menu.addEventListener("toggle", (e) => trigger.setAttribute("aria-expanded", e.newState === "open"));
+  trigger.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft") { e.preventDefault(); moveToRootTrigger(trigger, e.key === "ArrowRight" ? 1 : -1); }
+    if (e.key === "ArrowDown") { e.preventDefault(); if (!isOpen(menu)) menu.showPopover({ source: trigger }); menu.querySelector("button").focus(); }
+  });
+  trigger.addEventListener("pointerenter", () => { if (rootTriggers.map(menuFor).some(isOpen) && !isOpen(menu)) moveToRootTrigger(trigger, 0); });
+  menu.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft") { e.preventDefault(); moveToRootTrigger(trigger, e.key === "ArrowRight" ? 1 : -1); }
+  });
+  menu.addEventListener("click", (e) => { if (e.target.closest("button")) { menu.hidePopover(); trigger.focus(); } });
+}
+</script>

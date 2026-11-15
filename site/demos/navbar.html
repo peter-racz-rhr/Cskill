@@ -1,0 +1,58 @@
+<style>
+.site-header { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); container-type: inline-size; }
+.header-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 14px; }
+.header-inner > * { flex-shrink: 0; white-space: nowrap; }
+.site-logo { font-weight: 700; color: var(--ink); text-decoration: none; }
+.site-menu { list-style: none; margin: 0; padding: 0; }
+.site-menu a { color: var(--ink); text-decoration: none; padding: 6px 10px; border-radius: 6px; display: block; }
+.site-menu a:hover { background: var(--raised); }
+.site-menu a[aria-current="page"] { color: var(--accent); font-weight: 600; box-shadow: inset 0 -2px var(--accent); }
+.menu-button { anchor-name: --menu-button; }
+/* Narrow: the list is a popover under the Menu button */
+.site-header:not(.is-wide) .site-menu {
+  position: fixed; inset: auto; inset-block-start: anchor(--menu-button bottom); inset-inline-end: anchor(--menu-button right);
+  inline-size: min(80dvw, 16rem); margin-block-start: 0.5rem; padding: 6px;
+}
+.site-header:not(.is-wide) .site-menu li + li { border-top: 1px solid var(--line); }
+/* Wide: the same list sits inline and the button is hidden */
+.site-header.is-wide .menu-button { display: none; }
+.site-header.is-wide .site-menu { display: flex; gap: 4px; position: static; padding: 0; border: 0; box-shadow: none; background: none; inset: auto; }
+.frame { resize: horizontal; overflow: auto; min-width: 260px; max-width: 100%; width: 100%; padding-bottom: 170px; }
+</style>
+
+<div class="frame" id="frame">
+  <header class="site-header" id="hdr">
+    <div class="header-inner" id="inner">
+      <a class="site-logo" href="#home">Northwind Bikes</a>
+      <nav class="site-nav" aria-label="Primary">
+        <button class="menu-button" type="button" popovertarget="site-menu" popovertargetaction="toggle" aria-controls="site-menu">☰ Menu</button>
+        <ul id="site-menu" class="site-menu" popover="auto">
+          <li><a href="#home" aria-current="page">Home</a></li>
+          <li><a href="#bikes">Bikes</a></li>
+          <li><a href="#repairs">Repairs</a></li>
+          <li><a href="#rides">Group rides</a></li>
+          <li><a href="#contact">Contact</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+</div>
+<p class="note">Drag the box's bottom-right corner (desktop) or rotate your phone. When the links fit, they show inline; when they don't, the same list becomes a popover under “Menu”. The switch is measured, not guessed from a breakpoint.</p>
+
+<script>
+const hdr = document.getElementById("hdr"), inner = document.getElementById("inner"), menu = document.getElementById("site-menu");
+function layout() {
+  if (menu.matches(":popover-open")) menu.hidePopover();
+  hdr.classList.add("is-wide"); menu.removeAttribute("popover");
+  const wide = inner.scrollWidth <= inner.clientWidth;
+  if (!wide) { hdr.classList.remove("is-wide"); menu.setAttribute("popover", "auto"); }
+}
+new ResizeObserver(layout).observe(document.getElementById("frame"));
+menu.addEventListener("click", (e) => {
+  const a = e.target.closest("a"); if (!a) return;
+  e.preventDefault();
+  menu.querySelectorAll("a").forEach((x) => x.toggleAttribute("aria-current", x === a));
+  menu.querySelector("[aria-current]").setAttribute("aria-current", "page");
+  if (menu.matches(":popover-open")) menu.hidePopover();
+});
+</script>

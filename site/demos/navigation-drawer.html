@@ -1,0 +1,51 @@
+<style>
+.appbar { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); max-width: 520px; }
+.Drawer {
+  margin: 0; inset: 0 auto 0 0; height: 100dvh; max-height: none; width: min(300px, 85vw);
+  border-radius: 0 14px 14px 0; border-inline-start: 0; padding: 16px; display: none; flex-direction: column; gap: 6px;
+}
+.Drawer[open] { display: flex; }
+.Drawer:modal { overscroll-behavior: contain; }
+.Drawer::backdrop { overflow: hidden; overscroll-behavior: contain; background: rgb(10 14 26 / .45); }
+.Drawer .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.Drawer a { color: var(--ink); text-decoration: none; padding: 9px 10px; border-radius: 8px; }
+.Drawer a:hover { background: var(--surface); }
+.Drawer a[aria-current="page"] { background: color-mix(in oklab, var(--accent) 14%, transparent); color: var(--accent); font-weight: 600; }
+@media (prefers-reduced-motion: no-preference) {
+  .Drawer, .Drawer::backdrop { transition: translate .25s ease, opacity .25s ease, overlay .25s allow-discrete, display .25s allow-discrete; }
+  .Drawer:not([open]) { translate: -100% 0; }
+  .Drawer:not([open])::backdrop { opacity: 0; }
+  @starting-style { .Drawer[open] { translate: -100% 0; } .Drawer[open]::backdrop { opacity: 0; } }
+}
+</style>
+
+<div class="appbar">
+  <button type="button" id="drawer-trigger" aria-expanded="false" aria-controls="drawer" command="show-modal" commandfor="drawer" aria-label="Open navigation">☰</button>
+  <strong>Inbox</strong><span class="note">12 unread</span>
+</div>
+
+<dialog class="Drawer" id="drawer" aria-label="Navigation drawer" closedby="any">
+  <div class="top"><strong>Mailbox</strong><button type="button" command="close" commandfor="drawer" autofocus aria-label="Close navigation">✕</button></div>
+  <a href="#inbox" aria-current="page">Inbox</a>
+  <a href="#starred">Starred</a>
+  <a href="#sent">Sent</a>
+  <a href="#drafts">Drafts</a>
+  <a href="#bin">Bin</a>
+</dialog>
+<p class="note" style="margin-top:12px">The drawer is a modal <code>&lt;dialog&gt;</code>: the page behind is inert, focus starts on Close, and Escape or a tap on the backdrop closes it. The guide's full version also follows your finger when you swipe it shut.</p>
+
+<script>
+const drawer = document.getElementById("drawer");
+const trigger = document.getElementById("drawer-trigger");
+drawer.addEventListener("close", () => trigger.setAttribute("aria-expanded", "false"));
+trigger.addEventListener("click", () => trigger.setAttribute("aria-expanded", "true"));
+drawer.addEventListener("click", (e) => {
+  const a = e.target.closest("a"); if (!a) return;
+  e.preventDefault();
+  drawer.querySelectorAll("a").forEach((x) => x.removeAttribute("aria-current"));
+  a.setAttribute("aria-current", "page");
+  document.querySelector(".appbar strong").textContent = a.textContent;
+  drawer.close();
+});
+</script>
+<div data-demo-min-height="420" hidden></div>

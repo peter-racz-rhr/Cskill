@@ -1,0 +1,41 @@
+<style>
+article { max-width: 520px; }
+article a { color: var(--accent); }
+.trigger-1 { anchor-name: --hc-1; }
+.trigger-2 { anchor-name: --hc-2; }
+[popover].hovercard {
+  inset: auto; margin: 6px 0; width: min(300px, calc(100vw - 32px)); padding: 14px;
+  position-area: block-end span-inline-end;
+  position-try-fallbacks: flip-block, flip-inline;
+}
+#card-1 { position-anchor: --hc-1; }
+#card-2 { position-anchor: --hc-2; }
+.hovercard h2 { font-size: 16px; }
+.hovercard .byline { font-size: 13px; color: var(--muted); margin: 2px 0 8px; }
+.hovercard .thumb { height: 64px; border-radius: 6px; margin-bottom: 8px; }
+[interestfor] { interest-delay: 0.4s 0.2s; }
+@media (prefers-reduced-motion: no-preference) {
+  [popover].hovercard { transition: opacity .18s, translate .18s, overlay .18s allow-discrete, display .18s allow-discrete; }
+  [popover].hovercard:not(:popover-open) { opacity: 0; translate: 0 -4px; }
+  @starting-style { [popover].hovercard:popover-open { opacity: 0; translate: 0 -4px; } }
+}
+</style>
+
+<article>
+  <p>This week's picks: <a class="trigger-1" href="#hummingbirds" interestfor="card-1">The buzz on hummingbirds</a>, and a long read on
+  <a class="trigger-2" href="#tides" interestfor="card-2">why some coasts get two tides a day</a>.</p>
+</article>
+
+<div id="card-1" popover="hint" class="hovercard">
+  <div class="thumb" style="background:linear-gradient(135deg,#2bb38a,#1a6fb3)"></div>
+  <h2>The buzz on hummingbirds</h2>
+  <p class="byline">By Delphi Aguilar · 6 min read</p>
+  <p class="muted">How a bird lighter than a coin hovers with wings beating 50 times a second.</p>
+</div>
+<div id="card-2" popover="hint" class="hovercard">
+  <div class="thumb" style="background:linear-gradient(135deg,#3a5bd9,#7a3ad9)"></div>
+  <h2>Why two tides a day?</h2>
+  <p class="byline">By Sam Okafor · 12 min read</p>
+  <p class="muted">The Moon, the Sun and the shape of the seabed all decide the rhythm.</p>
+</div>
+<p class="note" style="margin-top:110px">Hover or keyboard-focus a link. <code>interestfor</code> opens a <code>popover="hint"</code> after a short delay, anchor positioning places it, and focus never jumps into the card.</p>
