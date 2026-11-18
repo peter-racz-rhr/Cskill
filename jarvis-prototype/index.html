@@ -113,6 +113,33 @@
   .note{font-size:11.5px;color:var(--faint);margin-top:10px}
   .thumb{float:right;width:64px;height:64px;border-radius:12px;object-fit:cover;margin:0 0 6px 12px}
 
+  /* music, following the sketch: compact mini player · now playing · playlist with fading track list */
+  .mini{display:flex;align-items:center;gap:12px;height:100%;padding:8px 16px 8px 8px}
+  .mini .art{width:40px;height:40px;border-radius:12px}                     /* 20 outer - 8 padding = 12 (concentric) */
+  .mini .track{flex:1;height:4px;border-radius:2px;background:rgba(235,235,245,.18);overflow:hidden}
+  .mini .track i{display:block;height:100%;width:0;background:var(--fg2);border-radius:2px;transition:width .5s linear}
+  .mini .eq{height:20px;margin:0}
+  .mini .eq i{width:3px}
+  .mini .eq i:nth-child(1){height:9px}.mini .eq i:nth-child(2){height:18px}.mini .eq i:nth-child(3){height:12px}.mini .eq i:nth-child(4){height:16px}
+  .player{display:flex;gap:16px;align-items:center}
+  .player .cover{width:112px;height:112px;border-radius:20px;flex:none;background:var(--art);position:relative;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+  .player .cover::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 30% 22%,rgba(255,255,255,.3),transparent 55%)}
+  .player .side{flex:1;min-width:0;display:flex;flex-direction:column}
+  .player .t{font-size:20px;font-weight:600;letter-spacing:-.02em;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .player .a{font-size:13px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .player .ctrls{justify-content:center;gap:8px;margin:8px 0 4px}
+  .player .ctrls button{width:44px;height:44px}
+  .player .ctrls #mPlay svg{width:26px;height:26px}
+  .player .prog{margin-top:2px}
+  .player .times{margin-top:4px}
+  .tracks{list-style:none;margin-top:16px;max-height:200px;overflow-y:auto;scrollbar-width:none;
+    -webkit-mask-image:linear-gradient(#000 62%,transparent);mask-image:linear-gradient(#000 62%,transparent)}
+  .tracks li{display:grid;grid-template-columns:20px 1fr 1fr;gap:12px;align-items:center;min-height:44px;border-top:.5px solid var(--line);font-size:14px;color:var(--fg2);cursor:pointer;transition:color .15s}
+  .tracks li:hover{color:var(--fg)}
+  .tracks li .n{color:var(--faint);font-size:12px;font-variant-numeric:tabular-nums}
+  .tracks li .ar{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tracks li.now{color:var(--fg)}
+  .tracks li.now .n{color:var(--green)}
   /* now playing */
   .np{display:flex;gap:14px;align-items:center;margin-top:4px}
   .np .cover{width:64px;height:64px;border-radius:14px;flex:none;background:var(--art);position:relative;overflow:hidden}
@@ -150,7 +177,7 @@
   #gallery h2{font-size:13px;font-weight:600;color:#5b6472;text-transform:uppercase;letter-spacing:.08em;margin:36px 0 14px}
   #gallery h2:first-child{margin-top:0}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:18px}
-  .grid.pills{grid-template-columns:repeat(auto-fill,minmax(340px,1fr))}
+  .grid.pills{grid-template-columns:repeat(auto-fill,minmax(360px,1fr))}
   .frame{background:rgba(255,255,255,.45);border:1px solid rgba(255,255,255,.6);border-radius:22px;padding:16px 16px 18px;display:flex;flex-direction:column;align-items:center;gap:14px;cursor:pointer;transition:transform .15s,background .15s}
   .frame:hover{background:rgba(255,255,255,.65);transform:translateY(-2px)}
   .frame .cap{align-self:stretch;display:flex;justify-content:space-between;font-size:12.5px;font-weight:600;color:#1f2937}
@@ -169,7 +196,7 @@
   <div class="layer" id="lTimer"><div class="split"><svg class="ring" viewBox="0 0 24 24"><circle class="bg" cx="12" cy="12" r="9"/><circle class="fg" id="tRing" cx="12" cy="12" r="9" stroke-dasharray="56.5" stroke-dashoffset="0"/></svg><span class="tval" id="tCompact">0:00</span></div></div>
   <div class="layer" id="lHud"><div class="hud"><svg viewBox="0 0 24 24" id="hudIcon"></svg><span class="lvl"><i id="hudLvl"></i></span></div></div>
   <div class="layer" id="lDrop"><div class="drop"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Drop to add to Shelf</div></div>
-  <div class="layer" id="lMusic"><div class="split"><span class="art" id="mArt"></span><span class="eq"><i></i><i></i><i></i><i></i></span></div></div>
+  <div class="layer" id="lMusic"><div class="mini"><span class="art" id="mArt"></span><span class="track"><i id="mMini"></i></span><span class="eq"><i></i><i></i><i></i><i></i></span></div></div>
   <div class="layer" id="lCard"><div class="w-top" id="wTop" hidden><i></i></div><div class="card" id="card"></div></div>
 </div>
 
@@ -219,9 +246,9 @@ function shape() {                               // which size + layer the islan
   if (s === "thinking") return at(240, 42, "lStatus");
   if (hud && performance.now() < hud.until) return at(220, 40, "lHud");
   if (cardOpen) return at(400, contentH(), "lCard", 28);
-  if (timer && music) return at(hover ? 196 : 180, 38, "lMusic");   // two activities: music here, timer in the bubble
+  if (timer && music) return at(hover ? 312 : 300, 56, "lMusic");   // two activities: music here, timer in the bubble
   if (timer) return at(hover ? 196 : 180, 38, "lTimer");
-  if (music) return at(hover ? 196 : 180, 38, "lMusic");
+  if (music) return at(hover ? 312 : 300, 56, "lMusic");
   if (hover) return at(170, 40, "lStatus");
   return at(126, 36, null);
 }
@@ -236,7 +263,7 @@ function frame(now) {
   for (const id of ["lStatus", "lTimer", "lMusic", "lCard", "lHud", "lDrop"]) $(id).classList.toggle("on", id === sh.layer);
   const dual = mode === "dock" && timer && music && !cardOpen && s === "idle" && sh.layer === "lMusic";
   $("bubble").classList.toggle("on", !!dual);
-  if (dual) Object.assign($("bubble").style, { left: box.x + box.w + 8 + "px", top: box.y + "px" });
+  if (dual) Object.assign($("bubble").style, { left: box.x + box.w + 8 + "px", top: box.y + (box.h - 38) / 2 + "px" });
   if (sh.layer === "lStatus" && s === "idle") $("statusText").textContent = "Click to talk";
   requestAnimationFrame(frame);
 }
@@ -307,7 +334,7 @@ addEventListener("keydown", (e) => {
 let lastAnswer = null, closeT = null;
 function cardHTML(a) {
   const parts = [
-    `<div class="kicker"><svg viewBox="0 0 24 24">${ICON[a.icon] || ICON.info}</svg>${esc(a.kicker)}${a.said ? `<span class="said">“${esc(a.said)}”</span>` : ""}</div>`,
+    a.bare ? "" : `<div class="kicker"><svg viewBox="0 0 24 24">${ICON[a.icon] || ICON.info}</svg>${esc(a.kicker)}${a.said ? `<span class="said">“${esc(a.said)}”</span>` : ""}</div>`,
     a.title ? `<div class="title">${esc(a.title)}</div>` : "",
     a.html || "",
     a.body ? `<div class="body">${esc(a.body)}</div>` : "",
@@ -375,10 +402,10 @@ function musicIntent(said, t) {
   }
   if (/playlist/.test(t)) {
     const name = cap((t.match(/(?:play )?(?:my )?(.+?) playlist/)?.[1] || "daily mix").replace(/^the /, ""));
-    const tracks = ["Opening track", "Second wind", "Middle of the night", "Golden hour", "Last one"];
-    music = { title: tracks[0], artist: `${name} playlist`, art: ART[2], dur: 200, pos: 0, playing: true, queue: tracks, q: name + " playlist" };
+    const tracks = [["Blinding Lights", "The Weeknd"], ["Levitating", "Dua Lipa"], ["Titanium", "David Guetta"], ["Stronger", "Kanye West"], ["Lose Yourself", "Eminem"], ["Can't Hold Us", "Macklemore"], ["Till I Collapse", "Eminem"]];
+    music = { title: tracks[0][0], artist: tracks[0][1], playlist: name, art: ART[2], dur: 200, pos: 0, playing: true, queue: tracks, q: name + " playlist" };
     tick();
-    return nowPlaying(said, { list: tracks });
+    return nowPlaying(said);
   }
   const q = t.replace(/^(play|put on)\s+/, "").replace(/\bon spotify\b/, "").replace(/[.?!]$/, "").trim() || "something good";
   return play(q, q, said, true);
@@ -389,21 +416,32 @@ function play(q, title, said, ret) {
   const a = nowPlaying(said || "");
   if (ret) return a; show(a);
 }
-function nowPlaying(said, extra = {}) {
-  const m = music;
-  return { icon: "music", kicker: "Now playing", said, stay: true,
-    html: `<div class="np"><div class="cover" style="--art:${m.art}"></div><div class="meta"><b>${esc(m.title)}</b><span>${esc(m.artist)}</span></div></div>
-      <div class="prog"><i id="mProg"></i></div><div class="times"><span id="mPos">0:00</span><span>${fmt(m.dur)}</span></div>
-      <div class="ctrls"><button id="mPrev" title="Previous"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button><button id="mPlay" title="Play / pause"><svg viewBox="0 0 24 24" id="mPlayIcon"></svg></button><button id="mNext" title="Next"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button></div>
-      ${extra.list ? `<ul class="list">${extra.list.map((x, i) => `<li><span class="k">${i + 1}</span><span class="v">${esc(x)}</span></li>`).join("")}</ul>` : ""}`,
-    chips: [{ label: "Open in Spotify", run: () => spotify(m.q || m.title) }], note: "Preview player. The app controls your real Spotify.",
-    after: () => { $("mPlay").onclick = () => { music.playing = !music.playing; tick(); }; $("mNext").onclick = () => skip(1); $("mPrev").onclick = () => skip(-1); tick(); } };
+const CTRL = { prev: '<path d="M6 5h2v14H6zM20 5v14L9 12z"/>', next: '<path d="M16 5h2v14h-2zM4 5v14l11-7z"/>' };
+function nowPlaying(said) {
+  const m = music, pl = !!m.queue;
+  const idx = pl ? m.queue.findIndex(([t]) => t === m.title) : -1;
+  return { bare: true, said, stay: true,
+    html: `<div class="player"><div class="cover" style="--art:${m.art}"></div><div class="side">
+        <div class="t">${esc(pl ? m.playlist : m.title)}</div>
+        <div class="a">${esc(pl ? `${m.title} · ${m.artist}` : m.artist)}</div>
+        <div class="ctrls"><button id="mPrev" aria-label="Previous"><svg viewBox="0 0 24 24">${CTRL.prev}</svg></button><button id="mPlay" aria-label="Play or pause"><svg viewBox="0 0 24 24" id="mPlayIcon">${m.playing === false ? '<path d="M7 4v16l13-8z"/>' : '<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>'}</svg></button><button id="mNext" aria-label="Next"><svg viewBox="0 0 24 24">${CTRL.next}</svg></button></div>
+        <div class="prog"><i id="mProg"></i></div><div class="times"><span id="mPos">0:00</span><span>${fmt(m.dur)}</span></div>
+      </div></div>
+      ${pl ? `<ul class="tracks">${m.queue.map(([t, a], i) => `<li data-i="${i}" class="${i === idx ? "now" : ""}"><span class="n">${i === idx ? "♪" : i + 1}</span><span>${esc(t)}</span><span class="ar">${esc(a)}</span></li>`).join("")}</ul>` : ""}`,
+    chips: [{ label: "Open in Spotify", run: () => spotify(m.q || m.title) }],
+    after: () => {
+      $("mPlay").onclick = () => { music.playing = !music.playing; tick(); };
+      $("mNext").onclick = () => skip(1); $("mPrev").onclick = () => skip(-1);
+      document.querySelectorAll("#card .tracks li").forEach((li) => (li.onclick = () => jump(+li.dataset.i)));
+      tick();
+    } };
 }
+function jump(i) { const [t, a] = music.queue[i]; music.title = t; music.artist = a; music.pos = 0; music.art = ART[i % 5]; render(nowPlaying(lastAnswer?.said || "")); }
 function skip(d) {
   if (!music) return;
-  if (music.queue) { const i = Math.max(0, Math.min(music.queue.length - 1, music.queue.indexOf(music.title) + d)); music.title = music.queue[i]; }
+  if (music.queue) { const i = Math.max(0, Math.min(music.queue.length - 1, music.queue.findIndex(([t]) => t === music.title) + d)); return jump(i); }
   music.pos = 0; music.art = ART[(ART.indexOf(music.art) + 1) % 5];
-  render(nowPlaying(lastAnswer?.said || "", music.queue ? { list: music.queue } : {}));
+  render(nowPlaying(lastAnswer?.said || ""));
 }
 let musicInt = null;
 function tick() {
@@ -413,6 +451,7 @@ function tick() {
     if (music.playing) music.pos = Math.min(music.dur, music.pos + .5);
     if (music.pos >= music.dur) skip(1);
     const p = $("mProg"); if (p) p.style.width = (100 * music.pos / music.dur) + "%";
+    $("mMini").style.width = (100 * music.pos / music.dur) + "%";
     const t = $("mPos"); if (t) t.textContent = fmt(music.pos);
     const ic = $("mPlayIcon"); if (ic) ic.innerHTML = music.playing ? '<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>' : '<path d="M7 4v16l13-8z"/>';
     $("mArt").style.setProperty("--art", music.art);
@@ -576,13 +615,15 @@ const PILLS = [
   ["Drop target", "drag files onto the island", 260, 48, "idle", `<div class="layer"><div class="drop"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Drop to add to Shelf</div></div>`],
   ["Next meeting", "live activity", 230, 38, "idle", `<div class="layer"><div class="split"><span style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--fg2)"><span style="width:8px;height:8px;border-radius:50%;background:#0a84ff"></span>Design review</span><span class="tval" style="color:#0a84ff">in 12m</span></div></div>`],
   ["Charging", "live activity", 180, 38, "idle", `<div class="layer"><div class="split"><span style="font-size:12.5px;color:var(--fg2);margin-left:6px">Charging</span><span class="tval" style="color:var(--green)">84%</span></div></div>`],
-  ["Music playing", "mini player", 180, 38, "idle", `<div class="layer"><div class="split"><span class="art" style="--art:${ART[0]}"></span><span class="eq"><i></i><i></i><i></i><i></i></span></div></div>`],
+  ["Music playing", "mini player", 300, 56, "idle", `<div class="layer"><div class="mini"><span class="art" style="--art:${ART[0]}"></span><span class="track"><i style="width:35%"></i></span><span class="eq"><i></i><i></i><i></i><i></i></span></div></div>`],
 ];
 const sampleMusic = { title: "Blinding Lights", artist: "The Weeknd", art: ART[0], dur: 200, pos: 0, q: "Blinding Lights" };
+const samplePlaylist = { title: "Levitating", artist: "Dua Lipa", playlist: "Workout", art: ART[2], dur: 203, pos: 0, q: "workout playlist",
+  queue: [["Blinding Lights", "The Weeknd"], ["Levitating", "Dua Lipa"], ["Titanium", "David Guetta"], ["Stronger", "Kanye West"], ["Lose Yourself", "Eminem"], ["Can't Hold Us", "Macklemore"]] };
 const CARDS = [
   ["Music", "Now playing", "play blinding lights", () => { const m = music; music = sampleMusic; const a = nowPlaying("play blinding lights"); music = m; return a; }],
   ["Music", "Songs like…", "songs like fejezz", () => musicIntent("songs like fejezz", "songs like fejezz")],
-  ["Music", "Playlist", "play my workout playlist", () => { const m = music; const a = musicIntent("play my workout playlist", "play my workout playlist"); music = m; return a; }],
+  ["Music", "Playlist", "play my workout playlist", () => { const m = music; music = samplePlaylist; const a = nowPlaying("play my workout playlist"); music = m; return a; }],
   ["Web", "Answer from the web", "who is ada lovelace", () => ({ icon: "web", kicker: "From the web", said: "who is ada lovelace", title: "Ada Lovelace", body: "Augusta Ada King, Countess of Lovelace, was an English mathematician and writer chiefly known for her work on Charles Babbage's proposed mechanical general-purpose computer, the Analytical Engine.", chips: [{ label: "Read more" }, { label: "Search the web" }], note: "Source: Wikipedia" })],
   ["Weather", "Weather + next hours", "weather in budapest", () => ({ icon: "weather", kicker: "Weather · Budapest", said: "weather in budapest", html: `<div class="big">9°</div><div class="tiles"><div class="tile"><small>Feels like</small><b>6°</b></div><div class="tile"><small>High / low</small><b>12° / 4°</b></div><div class="tile"><small>Rain</small><b>10%</b></div></div>${hoursHTML([[21, 9], [22, 8], [23, 7], [0, 6], [1, 6], [2, 5]])}` })],
   ["Timer", "Timer set", "5 minute timer", () => ({ icon: "timer", kicker: "Timer", said: "5 minute timer", html: timerHTML("3:12", 0.36), chips: [{ label: "Cancel" }] })],
@@ -602,7 +643,7 @@ const CARDS = [
 function buildGallery() {
   const g = $("gallery");
   let html = `<h2>Island states</h2><div class="grid pills">`;
-  const dual = `<div class="frame" data-pill="dual"><div class="cap">Two at once<span>music + timer bubble</span></div><div style="display:flex;gap:8px"><div class="isl" style="width:180px;height:38px;border-radius:19px"><div class="layer"><div class="split"><span class="art" style="--art:${ART[0]}"></span><span class="eq"><i></i><i></i><i></i><i></i></span></div></div></div><div class="isl" style="width:38px;height:38px;border-radius:19px;display:grid;place-items:center"><svg class="ring" viewBox="0 0 24 24"><circle class="bg" cx="12" cy="12" r="9"/><circle class="fg" cx="12" cy="12" r="9" stroke-dasharray="56.5" stroke-dashoffset="20"/></svg></div></div></div>`;
+  const dual = `<div class="frame" data-pill="dual"><div class="cap">Two at once<span>music + timer bubble</span></div><div style="display:flex;gap:8px"><div class="isl" style="width:270px;height:56px;border-radius:28px"><div class="layer"><div class="mini"><span class="art" style="--art:${ART[0]}"></span><span class="track"><i style="width:35%"></i></span><span class="eq"><i></i><i></i><i></i><i></i></span></div></div></div><div class="isl" style="width:38px;height:38px;border-radius:19px;display:grid;place-items:center;align-self:center"><svg class="ring" viewBox="0 0 24 24"><circle class="bg" cx="12" cy="12" r="9"/><circle class="fg" cx="12" cy="12" r="9" stroke-dasharray="56.5" stroke-dashoffset="20"/></svg></div></div></div>`;
   PILLS.forEach(([name, sub, w, h, st, inner], i) => {
     html += `<div class="frame" data-pill="${i}"><div class="cap">${name}<span>${sub}</span></div><div class="isl" data-s="${st}" style="width:${w}px;height:${h}px;border-radius:${h / 2}px">${inner}</div></div>`;
   });
