@@ -59,7 +59,8 @@
   @keyframes eq2{50%{transform:scaleY(.35)}}
   .ring{width:22px;height:22px;flex:none;rotate:-90deg}
   .ring circle{fill:none;stroke-width:3}
-  .ring .bg{stroke:rgba(255,159,10,.25)}.ring .fg{stroke:var(--orange);stroke-linecap:round;transition:stroke-dashoffset .25s linear}
+  .ring .bg{stroke:rgba(255,159,10,.25)}.ring .fg{stroke:var(--orange);stroke-linecap:round}
+  .ring .head{fill:#fff}
   .bigring{width:84px;height:84px}
   .bigring circle{stroke-width:2.4}
   .timerrow{display:flex;align-items:center;gap:18px;margin-top:2px}
@@ -229,7 +230,7 @@
 
 <div id="island" data-s="idle" role="button" tabindex="0" aria-label="Assistant. Press Enter to talk, T to type.">
   <div class="layer" id="lStatus"><div class="status"><span class="light"></span><span class="text" id="statusText"></span><span class="bars"><i></i><i></i><i></i><i></i><i></i></span></div></div>
-  <div class="layer" id="lTimer"><div class="split"><svg class="ring" viewBox="0 0 24 24"><circle class="bg" cx="12" cy="12" r="9"/><circle class="fg" id="tRing" cx="12" cy="12" r="9" stroke-dasharray="56.5" stroke-dashoffset="0"/></svg><span class="tval" id="tCompact">0:00</span></div></div>
+  <div class="layer" id="lTimer"><div class="split"><svg class="ring" viewBox="0 0 24 24"><circle class="bg" cx="12" cy="12" r="9"/><circle class="fg" id="tRing" cx="12" cy="12" r="9" stroke-dasharray="56.5" stroke-dashoffset="0"/><circle class="head" id="tHead" cx="21" cy="12" r="1.6"/></svg><span class="tval" id="tCompact">0:00</span></div></div>
   <div class="layer" id="lHud"><div class="hud"><svg viewBox="0 0 24 24" id="hudIcon"></svg><span class="lvl"><i id="hudLvl"></i></span></div></div>
   <div class="layer" id="lTask"><div class="task" id="taskRow"></div></div>
   <div class="layer" id="lNotif"><div class="notif" id="notifRow"></div></div>
@@ -239,7 +240,7 @@
   <div class="layer" id="lCard"><div class="w-top" id="wTop" hidden><i></i></div><div class="card" id="card"></div></div>
 </div>
 
-<div id="bubble" aria-hidden="true"><svg class="ring" viewBox="0 0 24 24"><circle class="bg" cx="12" cy="12" r="9"/><circle class="fg" id="bRing" cx="12" cy="12" r="9" stroke-dasharray="56.5" stroke-dashoffset="0"/></svg></div>
+<div id="bubble" aria-hidden="true"><svg class="ring" viewBox="0 0 24 24"><circle class="bg" cx="12" cy="12" r="9"/><circle class="fg" id="bRing" cx="12" cy="12" r="9" stroke-dasharray="56.5" stroke-dashoffset="0"/><circle class="head" id="bHead" cx="21" cy="12" r="1.6"/></svg></div>
 <div class="sr" aria-live="polite" id="live"></div>
 <form id="typed"><input id="typedIn" placeholder="Type what you'd say…" autocomplete="off"></form>
 
@@ -271,7 +272,7 @@ const ICON = {
 // ---------------- state ----------------
 let s = "idle", hover = false, cardOpen = false, mode = "dock", pulling = null, widgetPos = null;
 let timer = null, music = null, hud = null, dragOver = false, shelf = [];
-let task = null, flashTask = 0, notifs = [], unread = 0, notifShow = 0;
+let task = null, flashTask = 0, notifs = [], unread = 0, notifShow = 0, taskPinned = false;
 function setS(v, text) { s = v; island.dataset.s = v; if (text !== undefined) $("statusText").textContent = text; }
 
 // ---------------- geometry: one black shape that springs between sizes ----------------
@@ -289,7 +290,7 @@ function shape() {                               // which size + layer the islan
   if (performance.now() < notifShow) return at(360, 60, "lNotif");                 // a notification drops in
   if (task && performance.now() < flashTask) return at(240, 44, "lTask");          // "Ready" / "Needs your OK" moment
   if (cardOpen) return at(400, contentH(), "lCard", 28);
-  if (task && task.status !== "done") return hover ? at(400, contentTaskH(), "lCard", 28) : at(330, 44, "lTask");   // Claude working
+  if (task && task.status !== "done") return hover || taskPinned ? at(400, contentTaskH(), "lCard", 28) : at(330, 44, "lTask");   // Claude working
   if (timer && music) return at(hover ? 312 : 300, 56, "lMusic");   // two activities: music here, timer in the bubble
   if (timer) return at(hover ? 196 : 180, 38, "lTimer");
   if (music) return at(hover ? 312 : 300, 56, "lMusic");
@@ -297,8 +298,20 @@ function shape() {                               // which size + layer the islan
   return at(126, 36, null);
 }
 let last = performance.now();
+function drawRings(now) {   // smooth every frame; draws in when the timer starts; a white head shows it moving
+  if (!timer) return;
+  const left = Math.max(0, (timer.end - Date.now()) / (timer.secs * 1000));
+  const intro = Math.min(1, (now - timer.t0) / 700), ease = 1 - Math.pow(1 - intro, 3);
+  const frac = left * ease, a = 2 * Math.PI * frac;
+  for (const [ring, head] of [["tRing", "tHead"], ["bRing", "bHead"], ["tBigRing", "tBigHead"]]) {
+    const r = $(ring), h = $(head); if (!r) continue;
+    r.style.strokeDashoffset = 56.5 * (1 - frac);
+    if (h) { h.setAttribute("cx", (12 + 9 * Math.cos(a)).toFixed(2)); h.setAttribute("cy", (12 + 9 * Math.sin(a)).toFixed(2)); }
+  }
+}
 function frame(now) {
   const dt = Math.min(.033, (now - last) / 1000); last = now;
+  drawRings(now);
   const sh = shape();
   if (!pulling || !pulling.moved) target = sh;
   const k = pulling ? 520 : 290, c = pulling ? 34 : 23;
@@ -306,7 +319,7 @@ function frame(now) {
   Object.assign(island.style, { left: box.x + "px", top: box.y + "px", width: box.w + "px", height: box.h + "px", borderRadius: Math.min(sh.r, box.h / 2) + "px" });
   for (const id of ["lStatus", "lTimer", "lMusic", "lCard", "lHud", "lDrop", "lTask", "lNotif"]) $(id).classList.toggle("on", id === sh.layer);
   $("count").textContent = unread; $("count").classList.toggle("on", unread > 0 && !sh.layer);
-  if (task && task.status !== "done" && hover && sh.layer === "lCard" && !cardOpen && $("card").dataset.task !== "1") renderTaskCard();
+  if (task && task.status !== "done" && (hover || taskPinned) && sh.layer === "lCard" && !cardOpen && $("card").dataset.task !== "1") renderTaskCard();
   const dual = mode === "dock" && timer && music && !cardOpen && s === "idle" && sh.layer === "lMusic";
   $("bubble").classList.toggle("on", !!dual);
   if (dual) Object.assign($("bubble").style, { left: box.x + box.w + 8 + "px", top: box.y + (box.h - 38) / 2 + "px" });
@@ -347,6 +360,7 @@ addEventListener("pointerup", () => {
   if (!pulling) return;
   const p = pulling; pulling = null;
   if (!p.moved) {
+    if (mode === "dock" && task && task.status !== "done") { taskPinned = !taskPinned; if (!taskPinned) $("card").dataset.task = ""; return; }
     if (mode === "dock" && unread && !cardOpen && s === "idle" && !task) { show(notifCenter()); unread = 0; return; }
     if (mode === "dock" || p.mic) talk();
     return;
@@ -356,6 +370,12 @@ addEventListener("pointerup", () => {
     $("card").querySelectorAll(".w-mic,.w-hint").forEach((el) => el.remove());
     cardOpen = !!$("card").innerHTML; hover = true;
   }
+});
+
+// click anywhere outside the island → it collapses back to the small pill
+addEventListener("pointerdown", (e) => {
+  if (mode !== "dock" || island.contains(e.target) || e.target.closest("#typed")) return;
+  if (cardOpen || taskPinned) { cardOpen = false; taskPinned = false; $("card").dataset.task = ""; hover = false; }
 });
 
 // ---------------- listening (Web Speech) ----------------
@@ -541,16 +561,12 @@ async function weather(said, t) {
 function startTimer(said, t) {
   const n = parseFloat(t.match(/(\d+(\.\d+)?)/)?.[1] || "5"), secs = Math.round(/second/.test(t) ? n : /hour/.test(t) ? n * 3600 : n * 60);
   if (timer) clearInterval(timer.int);
-  timer = { end: Date.now() + secs * 1000, secs };
+  timer = { end: Date.now() + secs * 1000, secs, t0: performance.now() };
   timer.int = setInterval(() => {
     if (!timer) return;
     const left = Math.max(0, Math.ceil((timer.end - Date.now()) / 1000));
     $("tCompact").textContent = fmt(left);
-    const off = 56.5 * (1 - left / timer.secs);
-    $("tRing").style.strokeDashoffset = off; $("bRing").style.strokeDashoffset = off;
-    const big = $("tBig"), br = $("tBigRing");
-    if (big) big.textContent = fmt(left);
-    if (br) br.style.strokeDashoffset = 56.5 * (1 - left / timer.secs);
+    const big = $("tBig"); if (big) big.textContent = fmt(left);
     if (!left) { clearInterval(timer.int); timer = null; show({ icon: "timer", kicker: "Timer", title: "Time's up" }); }
   }, 250);
   $("tCompact").textContent = fmt(secs);
@@ -607,7 +623,7 @@ function schedule(said) {
 
 // ---------------- new building blocks ----------------
 function timerHTML(text, frac) {
-  return `<div class="timerrow"><svg class="ring bigring" viewBox="0 0 24 24"><circle class="bg" cx="12" cy="12" r="9"/><circle class="fg" id="tBigRing" cx="12" cy="12" r="9" stroke-dasharray="56.5" stroke-dashoffset="${(56.5 * frac).toFixed(1)}"/></svg><div class="big" id="tBig">${text}</div></div>`;
+  return `<div class="timerrow"><svg class="ring bigring" viewBox="0 0 24 24"><circle class="bg" cx="12" cy="12" r="9"/><circle class="fg" id="tBigRing" cx="12" cy="12" r="9" stroke-dasharray="56.5" stroke-dashoffset="${(56.5 * frac).toFixed(1)}"/><circle class="head" id="tBigHead" cx="${(12 + 9 * Math.cos(2 * Math.PI * (1 - frac))).toFixed(2)}" cy="${(12 + 9 * Math.sin(2 * Math.PI * (1 - frac))).toFixed(2)}" r="1.4"/></svg><div class="big" id="tBig">${text}</div></div>`;
 }
 function hoursHTML(hrs) {
   const lo = Math.min(...hrs.map((h) => h[1])), hi = Math.max(...hrs.map((h) => h[1]));
@@ -664,7 +680,7 @@ function startTask(said) {
   const next = () => {
     if (!task || task.status !== "working") return;
     task.i++;
-    if (task.i === 2 && /buy|order|delete|send|book/i.test(said)) { task.status = "approval"; flashTask = performance.now() + 4000; renderTaskRow(); notifyTask("Needs your OK", task.what); return; }
+    if (task.i === 2 && /buy|order|delete|send|book/i.test(said)) { task.status = "approval"; taskPinned = true; renderTaskRow(); renderTaskCard(); notifyTask("Needs your OK", task.what); return; }
     if (task.i >= task.steps.length) return finishTask();
     renderTaskRow(); if ($("card").dataset.task === "1") renderTaskCard();
     setTimeout(next, 1700);
@@ -681,15 +697,15 @@ function renderTaskRow() {
 }
 function taskAnswer() {
   const t = task;
-  return { icon: "info", kicker: t.status === "done" ? "Claude · done" : "Claude is working", said: t.said, title: t.what,
+  return { icon: "info", kicker: t.status === "done" ? "Claude · done" : t.status === "approval" ? "Claude needs your OK to book" : "Claude is working", said: t.said, title: t.what,
     html: `<ul class="steps2">${t.steps.map((x, i) => { const st = t.status === "done" || i < t.i ? "done" : i === t.i ? "cur" : ""; return `<li class="${st}"><span class="ic">${st === "done" ? "✓" : st === "cur" ? SPIN : "○"}</span>${esc(x)}</li>`; }).join("")}</ul><div class="prog"><i style="width:${t.status === "done" ? 100 : (100 * t.i / t.steps.length)}%;background:#d97757;transition:width .4s"></i></div>`,
-    chips: t.status === "approval" ? [{ label: "Allow", run: () => { task.status = "working"; renderTaskRow(); renderTaskCard(); setTimeout(() => { task.i++; finishTask(); }, 1500); } }, { label: "Stop", run: cancelTask }] : [{ label: "Cancel", run: cancelTask }] };
+    chips: t.status === "approval" ? [{ label: "Allow", run: () => { task.status = "working"; taskPinned = false; renderTaskRow(); renderTaskCard(); setTimeout(() => { task.i++; finishTask(); }, 1500); } }, { label: "Stop", run: cancelTask }] : [{ label: "Cancel", run: cancelTask }] };
 }
 function renderTaskCard() { render(taskAnswer()); $("card").dataset.task = "1"; }
 function contentTaskH() { return $("card").dataset.task === "1" ? contentH() : 200; }
-function cancelTask() { clearInterval(task?.int); task = null; $("card").dataset.task = ""; cardOpen = false; }
+function cancelTask() { clearInterval(task?.int); task = null; taskPinned = false; $("card").dataset.task = ""; cardOpen = false; }
 function finishTask() {
-  task.status = "done"; task.i = task.steps.length; clearInterval(task.int);
+  task.status = "done"; task.i = task.steps.length; clearInterval(task.int); taskPinned = false;
   renderTaskRow(); flashTask = performance.now() + 2200; $("card").dataset.task = "";
   notifyTask("Ready", task.what);
   setTimeout(() => {
