@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Jarvis Prototype</title>
+<title>Island Prototype</title>
 <style>
   :root{--ink:#000;--fg:#f5f5f7;--muted:#9a9aa2;--line:#26262b;--blue:#408cff}
   *{box-sizing:border-box;margin:0;padding:0}
@@ -56,7 +56,12 @@
   .list{list-style:none}
   .list li{display:flex;gap:12px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}
   .list li:last-child{border:0}
-  .list li span{color:var(--muted);width:46px;flex:none;font-variant-numeric:tabular-nums}
+  .list li span{color:var(--muted);width:58px;flex:none;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .demo{color:#6e6e76;font-size:11.5px;margin-top:10px}
+  .steps li{color:#8e8e96;transition:color .2s}
+  .steps li.ok{color:#ececf0}
+  .steps li span{color:#5c5c63}
+  .steps li.ok span{color:#30d158}
   .bar2{height:4px;background:#222;border-radius:3px;overflow:hidden;margin-top:12px}
   .bar2 i{display:block;height:100%;background:var(--blue);border-radius:3px}
 
@@ -93,7 +98,7 @@
 <form id="typed"><input id="typedIn" placeholder="Type what you'd say…" autocomplete="off"><button>Ask</button></form>
 
 <div class="hint">
-  <b>Hover</b> the black island at the top · <b>click</b> it and talk (“weather in Budapest”, “set a 5 minute timer”, “what's on today”)<br>
+  <b>Hover</b> the black island at the top · <b>click</b> it and talk (“weather in Budapest”, “5 minute timer”, “what's on today”, “open Spotify”, “biggest files in Downloads”)<br>
   <b>Pull it down hard</b> to snap it off into a widget · drag the widget back to the top to merge · no mic? press <kbd>T</kbd> to type
 </div>
 
@@ -192,7 +197,7 @@ function snapOff(e) {
   ui.classList.add("widget"); ui.classList.remove("data");
   pulling.moved = true; pulling.by = widgetPos.y; pulling.bx = widgetPos.x; pulling.x0 = e.clientX; pulling.y0 = e.clientY;
   box.vy -= 300; // little recoil
-  renderCard(lastCard || { said: "", answer: "Hi. Click the dot and talk to me.", html: "" });
+  renderCard(lastCard || { said: "", answer: "Click the dot and ask anything.", html: "" });
 }
 addEventListener("pointerup", () => {
   if (!pulling) return;
@@ -212,8 +217,7 @@ let rec = null, convo = false;
 function setS(v, text) { s = v; ui.dataset.s = v; if (text !== undefined) $("label").textContent = text; }
 function talk() {
   if (s === "listening") { rec?.stop(); return; }
-  if (s === "speaking") { speechSynthesis.cancel(); convo = false; setS("idle", "Click to talk"); return; }
-  convo = true; listen();
+  listen();
 }
 function listen() {
   if (!SR) { $("typed").classList.add("on"); $("typedIn").focus(); setS("listening", "Type below (no speech support)"); return; }
@@ -224,22 +228,18 @@ function listen() {
     $("label").textContent = "“" + t + "”";
   };
   rec.onerror = (e) => { if (e.error === "not-allowed") { $("typed").classList.add("on"); setS("idle", "Mic blocked: press T to type"); convo = false; } };
-  rec.onend = () => { if (final.trim()) handle(final.trim()); else { convo = false; setS("idle", "Click to talk"); } };
+  rec.onend = () => { if (final.trim()) handle(final.trim()); else setS("idle", "Click to talk"); };
   setS("listening", "Listening…");
   rec.start();
 }
 $("typed").onsubmit = (e) => { e.preventDefault(); const t = $("typedIn").value.trim(); $("typedIn").value = ""; $("typed").classList.remove("on"); if (t) handle(t); };
 addEventListener("keydown", (e) => {
   if (e.key.toLowerCase() === "t" && document.activeElement !== $("typedIn")) { e.preventDefault(); $("typed").classList.add("on"); $("typedIn").focus(); }
-  if (e.key === "Escape") { $("typed").classList.remove("on"); speechSynthesis.cancel(); convo = false; setS("idle", "Click to talk"); closeData(); }
+  if (e.key === "Escape") { $("typed").classList.remove("on"); rec?.abort(); setS("idle", "Click to talk"); closeData(); }
 });
-function say(text, then) {
-  setS("speaking", "Jarvis");
-  const u = new SpeechSynthesisUtterance(text);
-  const v = speechSynthesis.getVoices().find((v) => /en-GB/i.test(v.lang) && /male|george|daniel|ryan/i.test(v.name)) || speechSynthesis.getVoices().find((v) => /en-GB/i.test(v.lang));
-  if (v) u.voice = v; u.rate = 1.05;
-  u.onend = () => { setS("idle", "Click to talk"); then?.(); if (convo) setTimeout(listen, 250); };
-  speechSynthesis.speak(u);
+function show() {            // no voice: the answer appears as text in the island
+  setS("idle", "Click to talk");
+  convo = false;
 }
 
 // ---------------- answers (prototype: local intents, real weather) ----------------
@@ -261,10 +261,14 @@ async function handle(text) {
   else if (/today|schedule|calendar|agenda/.test(t)) card = { said: text, answer: "Three things today. The big one is design review at three.",
       html: `<ul class="list"><li><span>10:00</span>Stand-up</li><li><span>13:00</span>Lunch with Anna</li><li><span>15:00</span>Design review</li></ul>` };
   else if (/time/.test(t)) card = { said: text, answer: `It's ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`, html: `<div class="big">${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>` };
-  else card = { said: text, answer: "In the real app I'd ask Claude that. This prototype only knows weather, timers, time and your schedule." };
+  else if (/\bopen\b|\blaunch\b|\bstart\b/.test(t)) card = action(text, (t.match(/(?:open|launch|start)\s+(.+)/)?.[1] || "app").replace(/[.?!]$/, ""));
+  else if (/file|download|folder|disk/.test(t)) card = { said: text, answer: "Your 4 biggest files in Downloads:",
+      html: `<ul class="list"><li><span>4.2 GB</span>ubuntu-24.04.iso</li><li><span>1.1 GB</span>project-render.mp4</li><li><span>620 MB</span>photos-backup.zip</li><li><span>310 MB</span>setup-installer.exe</li></ul><p class="demo">Demo data. The app reads your real files.</p>` };
+  else if (/screen|this page|this error/.test(t)) card = { said: text, answer: "In the app I'd take a screenshot and answer about what's on it. The prototype can't see your screen." };
+  else card = { said: text, answer: "In the app this goes to Claude. The prototype knows weather, timers, time, your schedule, opening apps and files." };
   renderCard(card);
-  if (card.html || mode === "widget") openData();
-  say(card.answer);
+  openData();
+  show();
 }
 async function weather(city, said) {
   try {
@@ -275,6 +279,12 @@ async function weather(city, said) {
     return { said, answer: `It's ${now} degrees in ${p.name}, with a high of ${hi}.`,
       html: `<div class="tiles"><div class="tile"><small>Now</small><b>${now}°</b></div><div class="tile"><small>High / low</small><b>${hi}°/${lo}°</b></div><div class="tile"><small>Rain</small><b>${rain}%</b></div></div>` };
   } catch { return { said, answer: `I couldn't reach the weather service for ${city}.` }; }
+}
+function action(said, app) {   // how a PC action looks: steps tick off, then done (simulated in the prototype)
+  const name = app.replace(/^the /, "").replace(/\b\w/g, (c) => c.toUpperCase());
+  const steps = [`Finding ${name}`, `Opening ${name}`, "Done"];
+  setTimeout(() => document.querySelectorAll("#steps li").forEach((li, i) => setTimeout(() => { li.classList.add("ok"); li.firstElementChild.textContent = "✓"; }, 450 * (i + 1))), 50);
+  return { said, answer: `Opening ${name}.`, html: `<ul class="list steps" id="steps">${steps.map((x) => `<li><span>○</span>${esc(x)}</li>`).join("")}</ul><p class="demo">Simulated. The app really does this on your PC.</p>` };
 }
 let timerInt = null, timerEnd = 0;
 function timer(t, said) {
@@ -287,7 +297,7 @@ function timer(t, said) {
     if (el) el.textContent = txt;
     $("splitTime").textContent = txt;
     if (bar) bar.style.width = (100 * left / secs) + "%";
-    if (!left) { clearInterval(timerInt); timerEnd = 0; renderCard({ said: "", answer: "Time's up." }); openData(); say("Pardon me, your timer is done."); }
+    if (!left) { clearInterval(timerInt); timerEnd = 0; renderCard({ said: "", answer: "⏱ Time's up." }); openData(); }
   }, 250);
   return { said, answer: `Timer set for ${secs >= 60 ? Math.round(secs / 60) + " minutes" : secs + " seconds"}.`, html: `<div class="big" id="tLeft"></div><div class="bar2"><i id="tBar" style="width:100%"></i></div>` };
 }
