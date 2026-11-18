@@ -1,5 +1,5 @@
-// Safe bridge between Jarvis's windows (blob, brain, panel, cursor) and the main process.
-const { contextBridge, ipcRenderer } = require("electron");
+// Safe bridge between Jarvis's windows (island, panel, cursor) and the main process.
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 const on = (channel) => (fn) => {
   const h = (_e, data) => fn(data);
@@ -8,28 +8,31 @@ const on = (channel) => (fn) => {
 };
 
 contextBridge.exposeInMainWorld("jarvis", {
-  // conversation (brain)
+  // conversation
   send: (text, withScreen) => ipcRenderer.invoke("chat:send", { text, withScreen }),
   stop: () => ipcRenderer.send("chat:stop"),
   reset: () => ipcRenderer.send("chat:reset"),
   transcribe: (samples) => ipcRenderer.invoke("stt:transcribe", samples),
   tts: (text) => ipcRenderer.invoke("tts:speak", text),
   warmup: () => ipcRenderer.invoke("stt:warmup"),
-  state: (st) => ipcRenderer.send("brain:state", st),
   notify: (title, body) => ipcRenderer.send("notify", { title, body }),
   onAgent: on("agent"),
-  onTalk: on("brain:talk"),
 
-  // blob windows
-  hover: (on) => ipcRenderer.send("blob:hover", on),
-  click: () => ipcRenderer.send("blob:click"),
-  menu: () => ipcRenderer.send("blob:menu"),
-  tear: () => ipcRenderer.send("blob:tear"),
-  dragStart: () => ipcRenderer.send("blob:dragStart"),
-  dragEnd: () => ipcRenderer.send("blob:dragEnd"),
-  dockMode: () => ipcRenderer.invoke("blob:dockMode"),
-  onBlobState: on("blob:state"),
-  onDock: on("blob:dock"),
+  // island window
+  hover: (on) => ipcRenderer.send("island:hover", on),
+  menu: () => ipcRenderer.send("island:menu"),
+  tear: () => ipcRenderer.send("island:tear"),
+  dragStart: () => ipcRenderer.send("island:dragStart"),
+  dragEnd: () => ipcRenderer.send("island:dragEnd"),
+  islandMode: () => ipcRenderer.invoke("island:mode"),
+  focusIsland: () => ipcRenderer.send("island:focus"),
+  onIslandMode: on("island:mode"),
+  onTalk: on("island:talk"),
+  mediaKey: (action) => ipcRenderer.send("pc:mediaKey", action),
+  openExternal: (url) => ipcRenderer.send("pc:openExternal", url),
+  openPath: (p) => ipcRenderer.invoke("pc:openPath", p),
+  filePath: (file) => webUtils.getPathForFile(file),
+  onMedia: on("media:now"),
 
   // panel: setup, settings, memory, approvals
   openPanel: (view) => ipcRenderer.send("panel:open", view),

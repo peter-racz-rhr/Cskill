@@ -1,21 +1,19 @@
 # Jarvis
 
-A voice assistant for Windows that lives at the top of your screen as a small black liquid drop. Click it and talk. It answers out loud, keeps listening so you can just keep talking, and can look at your screen and do things for you. It runs on your own Claude account, so there's no API key.
+A black island at the top of your Windows screen, powered by your own Claude account. Click it (or press **Alt+J**) and ask anything by voice. You can also press **T** to type. Answers drop down as clean cards. It shows what Claude is doing while it works, plays nicely with your music, and can do things on your PC when you allow it.
 
-## The ball
+## The island
 
-- **Docked:** a black drop hanging from the top edge of your screen, like a notch. Hover over it and it droops a little.
-- **Click it** and talk. When you stop, Jarvis answers out loud, then listens again. Stay quiet for a few seconds and the conversation ends.
-- **Pull it down:** it stretches on a liquid neck and **snaps off** into a floating ball you can put anywhere. Drag it back into the top edge to merge it in again.
-- **What the light inside shows** (the drop itself is always black):
-  - a blue light that follows your voice while it's listening
-  - a thin white arc circling while it's thinking
-  - a soft white pulse while it's speaking
-  - violet while it's using your mouse and keyboard
-  - amber while it's waiting for your OK
-- **Right-click** it for Settings, Memory, Float/Dock and Quit.
+- **Idle:** a small black pill. **Hover** and it grows; **click** and it listens (red light, bars follow your voice).
+- **Answers** drop down as cards. Click anywhere outside to shrink it back.
+- **Claude working:** a spinner with the current step and a timer. Click it for the step list. **Needs your OK** opens a card with the exact command and **Run it / Don't**. **Ready** shows a green tick, then the answer.
+- **Music:** whatever plays on Windows (Spotify, YouTube in the browser…) shows as a mini player: art, progress, equaliser. Click it for the player with ⏮ ⏯ ⏭ (real media keys).
+- **Timers:** an orange ring that drains. With music playing, the timer sits in its own little bubble.
+- **Shelf:** drag files onto the island; click one later to open it.
+- **Notifications:** Claude finishing, timers and approvals drop in from the island; the unread count stays as a red badge. Click the island to see them all.
+- **Pull it down hard** to tear it off into a floating widget; drag it back to the top edge to dock. Right-click for Settings, Memory, Float/Dock and Quit.
 
-There are no text panels and no buttons, apart from setup, settings, and the permission card when Jarvis wants to act on your PC.
+Quick things run instantly on your PC without using Claude: weather (with the next hours), timers, maths, currency, notes, translation, play/pause/next, volume. Everything else goes to Claude.
 
 ## Install
 

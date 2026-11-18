@@ -57,7 +57,7 @@ async function getTts() {
 
 const handlers = {
   init: async ({ dir }) => { cacheDir = dir; return true; },
-  warmup: async ({ speechModel }) => { await Promise.all([getAsr(speechModel), getTts()]); return true; },
+  warmup: async ({ speechModel, tts = true }) => { await Promise.all([getAsr(speechModel), ...(tts ? [getTts()] : [])]); return true; },
   transcribe: async ({ audio, speechModel, language }) => {
     const t = await getAsr(speechModel);
     const opts = { chunk_length_s: 30 };

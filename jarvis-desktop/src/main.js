@@ -1,8 +1,8 @@
 // Jarvis desktop — main process.
-// Windows:  dock  – the liquid blob hanging from the top edge of the screen
-//           float – the same blob torn off into a ball you can put anywhere
-//           brain – hidden; listens, speaks and runs the conversation
-//           panel – small card for setup, settings, memory and approvals
+// Windows:  island – the black island at the top of the screen (pull it down to tear it off
+//                    into a floating widget); it listens, shows answers, live activities
+//           panel  – small card for setup, settings and memory
+//           cursor – Jarvis's own pointer when it shows or does things on screen
 // This process owns the Claude connection and every tool that touches the computer.
 // Speech models run in a separate utility process (ml-worker.js) so nothing here stutters.
 
@@ -86,8 +86,8 @@ async function loadMemory() { try { return JSON.parse(await fs.readFile(MEM(), "
 async function saveMemory(m) { await fs.writeFile(MEM(), JSON.stringify(m, null, 2)); }
 
 // ---------------------------------------------------------------- windows
-let dockWin, floatWin, brainWin, panelWin, tray;
-const DOCK = { w: 240, h: 300 }, FLOAT = { w: 150, h: 150 }, PANEL_W = 440;
+let islandWin, panelWin, tray;
+const DOCK = { w: 560, h: 760 }, WIDGET = { w: 440, h: 720 }, PANEL_W = 440;
 let dock = "top";
 
 const prefs = (extra = {}) => ({
@@ -100,98 +100,138 @@ function dockBounds() {
   const { workArea } = screen.getPrimaryDisplay();
   return { x: Math.round(workArea.x + (workArea.width - DOCK.w) / 2), y: workArea.y, width: DOCK.w, height: DOCK.h };
 }
-function makeOverlay(file, bounds, query) {
-  const w = new BrowserWindow({ ...overlay, ...bounds, focusable: true, webPreferences: prefs() });
-  w.setAlwaysOnTop(true, "screen-saver");
-  w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  w.setContentProtection(true);                   // never in Jarvis's own screenshots
-  w.setIgnoreMouseEvents(true, { forward: true }); // click-through except over the blob
-  w.loadFile(path.join(here, "renderer", file), { query });
-  return w;
-}
-
 function createWindows() {
-  brainWin = new BrowserWindow({ show: false, width: 200, height: 200, skipTaskbar: true, webPreferences: prefs() });
-  brainWin.loadFile(path.join(here, "renderer", "brain.html"));
-
-  dockWin = makeOverlay("blob.html", dockBounds(), { mode: "dock" });
-  dockWin.once("ready-to-show", () => dockWin.showInactive());
-
-  floatWin = makeOverlay("blob.html", { x: 0, y: 0, width: FLOAT.w, height: FLOAT.h }, { mode: "float" });
-  floatWin.once("ready-to-show", () => { if (settings.dock === "float") toFloat(settings.floatX, settings.floatY, false); });
+  islandWin = new BrowserWindow({ ...overlay, ...dockBounds(), focusable: true, webPreferences: prefs() });
+  islandWin.setAlwaysOnTop(true, "screen-saver");
+  islandWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  islandWin.setContentProtection(true);                   // never in Jarvis's own screenshots
+  islandWin.setIgnoreMouseEvents(true, { forward: true }); // click-through except over the island
+  islandWin.loadFile(path.join(here, "renderer", "island.html"));
+  islandWin.once("ready-to-show", () => {
+    islandWin.showInactive();
+    if (settings.dock === "float") toWidget(settings.floatX, settings.floatY, false);
+  });
 }
 
 // broadcast to every Jarvis window; each one ignores what it doesn't need
 const send = (channel, payload) => {
-  for (const w of [brainWin, dockWin, floatWin, panelWin]) if (w && !w.isDestroyed()) w.webContents.send(channel, payload);
+  for (const w of [islandWin, panelWin]) if (w && !w.isDestroyed()) w.webContents.send(channel, payload);
 };
 
-// ---- dock ↔ float
-function clampFloat(x, y) {
-  const d = screen.getDisplayNearestPoint({ x: x + FLOAT.w / 2, y: y + FLOAT.h / 2 }).workArea;
-  return { x: Math.round(Math.min(Math.max(x, d.x - 40), d.x + d.width - FLOAT.w + 40)), y: Math.round(Math.min(Math.max(y, d.y - 20), d.y + d.height - FLOAT.h + 40)) };
+// ---- dock ↔ widget (one window: docked at the top edge, or torn off anywhere)
+function clampWidget(x, y) {
+  const d = screen.getDisplayNearestPoint({ x: x + 200, y: y + 40 }).workArea;
+  return { x: Math.round(Math.min(Math.max(x, d.x - 20), d.x + d.width - 420)), y: Math.round(Math.min(Math.max(y, d.y - 10), d.y + d.height - 160)) };
 }
-function toFloat(x, y, save = true) {
+function toWidget(x, y, save = true) {
   const b = dockBounds();
-  const p = clampFloat(x ?? b.x + b.width / 2 - FLOAT.w / 2, y ?? b.y + 160);
-  floatWin.setBounds({ ...p, width: FLOAT.w, height: FLOAT.h });
-  floatWin.showInactive();
+  const p = clampWidget(x ?? b.x + 60, y ?? b.y + 120);
+  islandWin.setBounds({ ...p, width: WIDGET.w, height: WIDGET.h });
   dock = "float"; settings.dock = "float"; settings.floatX = p.x; settings.floatY = p.y;
-  send("blob:dock", "float");
+  send("island:mode", "widget");
   if (save) saveSettings().catch(() => {});
 }
 function toDock(save = true) {
   stopFollow();
-  floatWin.hide();
+  islandWin.setBounds(dockBounds());
   dock = "top"; settings.dock = "top";
-  send("blob:dock", "top");
+  send("island:mode", "dock");
   if (save) saveSettings().catch(() => {});
 }
-// While the mouse button is held, the floating ball follows the cursor (driven from here,
-// which is much smoother than relaying every mouse move from the page).
+// While the mouse button is held the widget follows the cursor (driven from here: smooth).
 let follow = null;
-function startFollow() {
+function startFollow(offX, offY) {
   stopFollow();
-  const c = screen.getCursorScreenPoint();
   follow = setInterval(() => {
-    const p = screen.getCursorScreenPoint();
-    floatWin.setPosition(Math.round(p.x - FLOAT.w / 2), Math.round(p.y - FLOAT.h / 2));
+    const c = screen.getCursorScreenPoint();
+    islandWin.setPosition(Math.round(c.x - offX), Math.round(c.y - offY));
   }, 8);
-  floatWin.setPosition(Math.round(c.x - FLOAT.w / 2), Math.round(c.y - FLOAT.h / 2));
 }
 function stopFollow() { if (follow) clearInterval(follow); follow = null; }
 
-ipcMain.on("blob:hover", (e, on) => BrowserWindow.fromWebContents(e.sender)?.setIgnoreMouseEvents(!on, { forward: true }));
-ipcMain.on("blob:click", () => send("brain:talk"));
-ipcMain.on("blob:menu", () => {
+ipcMain.on("island:hover", (_e, on) => islandWin?.setIgnoreMouseEvents(!on, { forward: true }));
+ipcMain.on("island:menu", () => {
   Menu.buildFromTemplate([
     { label: "Settings", click: () => openPanel("settings") },
     { label: "Memory", click: () => openPanel("memory") },
-    { label: dock === "top" ? "Float" : "Dock to top", click: () => (dock === "top" ? toFloat() : toDock()) },
+    { label: dock === "top" ? "Float as widget" : "Dock to top", click: () => (dock === "top" ? toWidget() : toDock()) },
     { type: "separator" },
     { label: "Quit Jarvis", click: () => app.quit() },
   ]).popup();
 });
-ipcMain.on("blob:tear", () => {                       // pulled hard enough: the ball snaps off and follows the mouse
+ipcMain.on("island:tear", () => {        // pulled hard enough: tear off and follow the mouse
   const c = screen.getCursorScreenPoint();
-  toFloat(c.x - FLOAT.w / 2, c.y - FLOAT.h / 2, false);
-  floatWin.setIgnoreMouseEvents(false);
-  startFollow();
+  toWidget(c.x - 220, c.y - 30, false);
+  islandWin.setIgnoreMouseEvents(false);
+  startFollow(220, 30);
 });
-ipcMain.on("blob:dragStart", () => { if (dock === "float") { floatWin.setIgnoreMouseEvents(false); startFollow(); } });
-ipcMain.on("blob:dragEnd", () => {
+ipcMain.on("island:dragStart", () => {
+  if (dock !== "float") return;
+  const c = screen.getCursorScreenPoint(), [x, y] = islandWin.getPosition();
+  islandWin.setIgnoreMouseEvents(false);
+  startFollow(c.x - x, c.y - y);
+});
+ipcMain.on("island:dragEnd", () => {
   if (!follow) return;
   stopFollow();
-  const [x, y] = floatWin.getPosition();
-  const top = screen.getDisplayNearestPoint({ x, y }).workArea.y;
-  if (y + FLOAT.h / 2 < top + 40) return toDock();   // dropped on the top edge → merge back in
-  const p = clampFloat(x, y);
-  floatWin.setPosition(p.x, p.y);
+  const [x, y] = islandWin.getPosition();
+  const top = screen.getDisplayNearestPoint({ x: x + 200, y }).workArea.y;
+  if (y < top + 24) return toDock();     // dropped on the top edge → dock
+  const p = clampWidget(x, y);
+  islandWin.setPosition(p.x, p.y);
   settings.floatX = p.x; settings.floatY = p.y; saveSettings().catch(() => {});
-  floatWin.setIgnoreMouseEvents(true, { forward: true });
+  islandWin.setIgnoreMouseEvents(true, { forward: true });
 });
-ipcMain.handle("blob:dockMode", () => dock);
-ipcMain.on("brain:state", (_e, st) => { for (const w of [dockWin, floatWin]) if (w && !w.isDestroyed()) w.webContents.send("blob:state", st); });
+ipcMain.handle("island:mode", () => (dock === "top" ? "dock" : "widget"));
+ipcMain.on("island:focus", () => islandWin?.focus());
+
+// ---- things the island does directly on the PC (no Claude needed)
+ipcMain.on("pc:mediaKey", (_e, action) => { if (MEDIA_VK[action]) pressMediaKey(action, action.startsWith("volume") ? 2 : 1); });
+ipcMain.on("pc:openExternal", (_e, url) => { if (/^(https?:|spotify:)/i.test(url)) shell.openExternal(url); });
+ipcMain.handle("pc:openPath", async (_e, p) => {
+  try { await fs.access(p); } catch { return "That file isn't there any more."; }
+  return shell.openPath(p);
+});
+
+// ---- now playing: read the current Windows media session (Spotify, YouTube in a browser, …)
+const MEDIA_PS = `
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+$asTask = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1' })[0]
+function Await($op, [Type]$t) { $task = $asTask.MakeGenericMethod($t).Invoke($null, @($op)); $task.Wait(-1) | Out-Null; $task.Result }
+[Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime] | Out-Null
+$mgr = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
+while ($true) {
+  try {
+    $s = $mgr.GetCurrentSession()
+    if ($s) {
+      $p = Await ($s.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
+      $pb = $s.GetPlaybackInfo(); $tl = $s.GetTimelineProperties()
+      $o = @{ title = $p.Title; artist = $p.Artist; app = $s.SourceAppUserModelId; playing = ($pb.PlaybackStatus.ToString() -eq 'Playing'); pos = $tl.Position.TotalSeconds; dur = $tl.EndTime.TotalSeconds }
+      [Console]::Out.WriteLine(($o | ConvertTo-Json -Compress))
+    } else { [Console]::Out.WriteLine('{}') }
+  } catch { [Console]::Out.WriteLine('{}') }
+  [Console]::Out.Flush()
+  Start-Sleep -Milliseconds 1500
+}`;
+let mediaProc = null, lastMedia = "";
+function startMediaWatch() {
+  if (!IS_WIN || mediaProc) return;
+  const encoded = Buffer.from(MEDIA_PS, "utf16le").toString("base64");
+  mediaProc = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded], { windowsHide: true });
+  let buf = "";
+  mediaProc.stdout.setEncoding("utf8");
+  mediaProc.stdout.on("data", (d) => {
+    buf += d; let i;
+    while ((i = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+      if (!line.startsWith("{") || line === lastMedia) continue;
+      lastMedia = line;
+      try { send("media:now", JSON.parse(line)); } catch {}
+    }
+  });
+  mediaProc.on("exit", () => { mediaProc = null; });   // not supported on this Windows build: no music pill, nothing else breaks
+}
 
 // ---- panel: setup, settings, memory, approvals
 let panelView = null;
@@ -205,7 +245,7 @@ function openPanel(view, data) {
     panelWin.on("closed", () => (panelWin = null));
   }
   panelView = view;
-  const anchor = dock === "float" ? floatWin.getBounds() : dockBounds();
+  const anchor = dock === "float" ? islandWin.getBounds() : { ...dockBounds(), height: 60 };
   const x = Math.round(Math.min(Math.max(anchor.x + anchor.width / 2 - PANEL_W / 2, workArea.x + 8), workArea.x + workArea.width - PANEL_W - 8));
   const y = dock === "float" ? Math.min(anchor.y + anchor.height - 10, workArea.y + workArea.height - 420) : workArea.y + 56;
   panelWin.setPosition(x, Math.round(y));
@@ -222,23 +262,23 @@ function createTray() {
   tray = new Tray(img);
   tray.setToolTip("Jarvis");
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: "Talk", click: () => send("brain:talk") },
+    { label: "Talk", click: () => send("island:talk") },
     { label: "Settings", click: () => openPanel("settings") },
     { label: "Memory", click: () => openPanel("memory") },
     { label: "Run setup again", click: () => openPanel("setup") },
-    { label: "Float / dock", click: () => (dock === "top" ? toFloat() : toDock()) },
+    { label: "Float / dock", click: () => (dock === "top" ? toWidget() : toDock()) },
     { type: "separator" },
     { label: "Start with Windows", type: "checkbox", checked: app.getLoginItemSettings().openAtLogin,
       click: (i) => app.setLoginItemSettings({ openAtLogin: i.checked }) },
     { label: "Quit Jarvis", click: () => app.quit() },
   ]));
-  tray.on("click", () => send("brain:talk"));
+  tray.on("click", () => send("island:talk"));
 }
 
 function registerHotkeys() {
   globalShortcut.unregisterAll();
   const ok = [];
-  try { ok.push(globalShortcut.register(settings.hotkeyTalk, () => send("brain:talk")) ? settings.hotkeyTalk : `${settings.hotkeyTalk} (in use)`); }
+  try { ok.push(globalShortcut.register(settings.hotkeyTalk, () => send("island:talk")) ? settings.hotkeyTalk : `${settings.hotkeyTalk} (in use)`); }
   catch { ok.push(`${settings.hotkeyTalk} (invalid)`); }
   return ok;
 }
@@ -381,7 +421,7 @@ function askApproval(command, reason, kind = "command") {
     const id = Math.random().toString(36).slice(2);
     pendingApprovals.set(id, resolve);
     send("agent", { type: "approval", id, command, reason, kind });
-    openPanel("approval", { id, command, reason, kind });
+    islandWin?.showInactive();
   });
 }
 ipcMain.on("approval:respond", (_e, { id, approved }) => {
@@ -528,11 +568,12 @@ async function runTool(name, input) {
 }
 
 // ---------------------------------------------------------------- agent
-const systemPrompt = () => `You are Jarvis, a personal AI assistant: a small liquid blob at the top of the user's computer screen that they talk to. You have a calm, dry, understated British wit, and you are genuinely useful. Address the user as "${settings.name}".
+const systemPrompt = () => `You are Jarvis, a personal AI assistant living in a small black island at the top of the user's computer screen. You have a calm, dry, understated British wit, and you are genuinely useful. Address the user as "${settings.name}".
 
-The user talks to you by voice and every word you write is spoken aloud; nothing is shown on screen. So:
-- Answer like a person in conversation: 1–3 short, natural sentences. No markdown, lists, emoji, URLs or code in your reply.
-- When something is long (a list, steps, code, research with sources), give the gist out loud and offer to copy the details to the clipboard or open the page.
+The user asks by voice or text, and your reply is shown as text in a small card that drops down from the island. So:
+- Lead with the answer in one or two short sentences. Then, only if it helps, up to 6 short lines starting with "- ".
+- Plain text: no headings, tables, bold or code blocks. Keep the whole reply under about 90 words unless the user asks for more.
+- When something is long (code, a full article, research with many sources), give the gist and offer to copy the details to the clipboard or open the page.
 
 You can act on this computer:
 - look_at_screen when the user refers to what they're looking at, or when seeing it would help. Describe only what matters.
@@ -680,7 +721,7 @@ function mlCall(type, args = {}) {
 }
 ipcMain.handle("stt:transcribe", (_e, audio) => mlCall("transcribe", { audio, speechModel: settings.speechModel, language: settings.language }));
 ipcMain.handle("tts:speak", (_e, text) => mlCall("speak", { text, voice: settings.voiceName }));
-ipcMain.handle("stt:warmup", () => mlCall("warmup", { speechModel: settings.speechModel }).then(() => true).catch((e) => { send("stt:progress", { error: e.message }); return false; }));
+ipcMain.handle("stt:warmup", () => mlCall("warmup", { speechModel: settings.speechModel, tts: false }).then(() => true).catch((e) => { send("stt:progress", { error: e.message }); return false; }));
 
 // ---------------------------------------------------------------- ipc
 ipcMain.handle("chat:send", (_e, payload) => chat(payload));
@@ -710,7 +751,7 @@ ipcMain.on("app:quit", () => app.quit());
 // ---------------------------------------------------------------- lifecycle
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
-  app.on("second-instance", () => send("brain:talk"));
+  app.on("second-instance", () => send("island:talk"));
   app.whenReady().then(async () => {
     if (IS_WIN) app.setAppUserModelId("com.jarvis.desktop");
     session.defaultSession.setPermissionRequestHandler((_wc, perm, cb) => cb(["media", "notifications"].includes(perm)));
@@ -722,11 +763,12 @@ else {
     if ((settings.setupDone || 0) < SETUP_VERSION) {
       setTimeout(() => openPanel("setup"), 900);      // first launch of this version: walk through setup
     } else {
-      mlCall("warmup", { speechModel: settings.speechModel }).catch(() => {}); // voice ready before the first click
+      mlCall("warmup", { speechModel: settings.speechModel, tts: false }).catch(() => {}); // hearing ready before the first click
       if (settings.backend === "claude") claudeSession().then((s) => s.proc || s.start()).catch(() => {});
     }
-    screen.on("display-metrics-changed", () => dockWin?.setBounds(dockBounds()));
+    startMediaWatch();
+    screen.on("display-metrics-changed", () => { if (dock === "top") islandWin?.setBounds(dockBounds()); });
   });
-  app.on("will-quit", () => { globalShortcut.unregisterAll(); cc?.kill(); mcp?.close(); input.stop(); ml?.kill(); });
+  app.on("will-quit", () => { globalShortcut.unregisterAll(); cc?.kill(); mcp?.close(); input.stop(); ml?.kill(); mediaProc?.kill(); });
   app.on("window-all-closed", () => app.quit());
 }
