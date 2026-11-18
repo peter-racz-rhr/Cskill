@@ -114,8 +114,8 @@
   .thumb{float:right;width:64px;height:64px;border-radius:12px;object-fit:cover;margin:0 0 6px 12px}
 
   /* music, following the sketch: compact mini player · now playing · playlist with fading track list */
-  .mini{display:flex;align-items:center;gap:12px;height:100%;padding:8px 16px 8px 8px}
-  .mini .art{width:40px;height:40px;border-radius:12px}                     /* 20 outer - 8 padding = 12 (concentric) */
+  .mini{display:flex;align-items:center;gap:14px;height:100%;padding:0 22px 0 14px}
+  .mini .art{width:32px;height:32px;border-radius:9px}                      /* sits inside the pill's curve with even space around it */
   .mini .track{flex:1;height:4px;border-radius:2px;background:rgba(235,235,245,.18);overflow:hidden}
   .mini .track i{display:block;height:100%;width:0;background:var(--fg2);border-radius:2px;transition:width .5s linear}
   .mini .eq{height:20px;margin:0}
@@ -387,7 +387,7 @@ async function handle(text) {
   show(a);
 }
 
-// --- music: now-playing card + mini player in the island; "Open in Spotify" is real
+// --- music: now-playing card, playlist card and the mini player in the island
 const ART = ["linear-gradient(135deg,#ff2d55,#5856d6)", "linear-gradient(135deg,#ff9f0a,#ff375f)", "linear-gradient(135deg,#30d158,#0a84ff)", "linear-gradient(135deg,#bf5af2,#5e5ce6)", "linear-gradient(135deg,#64d2ff,#5856d6)"];
 const spotify = (q) => window.open("https://open.spotify.com/search/" + encodeURIComponent(q), "_blank", "noopener");
 function musicIntent(said, t) {
@@ -397,7 +397,7 @@ function musicIntent(said, t) {
     const recs = [[`${artist} radio`, "Similar artists, mixed"], ["Late night drive", `For fans of ${artist}`], ["Fresh finds", "New and close to your taste"], [`This is ${artist}`, "The essentials"]];
     return { icon: "music", kicker: "Music", said, title: `More like ${artist}`, stay: true,
       html: `<ul class="list">${recs.map(([a, b], i) => `<li class="play" data-q="${esc(a)}"><span class="art" style="--art:${ART[i % 5]}"></span><span class="v"><b style="color:var(--fg);font-weight:500">${esc(a)}</b> · ${esc(b)}</span><span>▶</span></li>`).join("")}</ul>`,
-      chips: [{ label: "Open in Spotify", run: () => spotify(artist + " radio") }], note: "Preview picks. The app uses your real Spotify history.",
+      note: "Preview picks. The app uses your real Spotify history.",
       after: () => document.querySelectorAll("#card .play").forEach((li) => (li.onclick = () => play(li.dataset.q, li.dataset.q))) };
   }
   if (/playlist/.test(t)) {
@@ -428,7 +428,6 @@ function nowPlaying(said) {
         <div class="prog"><i id="mProg"></i></div><div class="times"><span id="mPos">0:00</span><span>${fmt(m.dur)}</span></div>
       </div></div>
       ${pl ? `<ul class="tracks">${m.queue.map(([t, a], i) => `<li data-i="${i}" class="${i === idx ? "now" : ""}"><span class="n">${i === idx ? "♪" : i + 1}</span><span>${esc(t)}</span><span class="ar">${esc(a)}</span></li>`).join("")}</ul>` : ""}`,
-    chips: [{ label: "Open in Spotify", run: () => spotify(m.q || m.title) }],
     after: () => {
       $("mPlay").onclick = () => { music.playing = !music.playing; tick(); };
       $("mNext").onclick = () => skip(1); $("mPrev").onclick = () => skip(-1);
