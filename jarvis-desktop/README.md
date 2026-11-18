@@ -30,6 +30,8 @@ If you prefer an API key instead, choose **Brain → Anthropic API key** in Sett
 | Click while it's working or talking | Stop |
 | `Esc` | Stop listening, stop talking, or stop controlling your PC |
 | Right-click the pill / tray icon | Settings, Memory, Run setup again, Quit |
+| Pull the blob down hard | It stretches and **tears off into a floating widget**: talk button, clock, weather, music controls, quick actions, timers and the last answer |
+| Drag the widget into the top edge (or press ↑) | It melts back into the notch |
 
 Hotkeys, model, voice and speech language can be changed in **Settings**.
 

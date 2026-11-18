@@ -1,7 +1,7 @@
 {
   "name": "jarvis-desktop",
   "productName": "Jarvis",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Jarvis: a Dynamic Island style desktop assistant powered by Claude. Talk to it, show it your screen, let it do things.",
   "main": "src/main.js",
   "type": "module",

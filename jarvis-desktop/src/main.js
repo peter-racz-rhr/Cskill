@@ -27,6 +27,9 @@ const DEFAULTS = {
   effort: "low",
   voiceName: "bm_george",     // Kokoro neural voice (British male)
   settingsVersion: 2,
+  dock: "top",          // "top" = island in the screen edge · "float" = torn-off widget
+  floatX: null, floatY: null,
+  city: "",             // home city for the widget's weather
   name: "sir",
   speechModel: "onnx-community/whisper-base",
   language: "auto",
@@ -102,9 +105,57 @@ function createWindow() {
   win.setIgnoreMouseEvents(true, { forward: true }); // click-through until the pointer is over the island
   win.setContentProtection(true);                     // keep the island out of its own screenshots
   win.loadFile(path.join(here, "renderer", "index.html"));
-  win.once("ready-to-show", () => win.showInactive());
+  win.once("ready-to-show", () => { win.showInactive(); if (settings.dock === "float") setDock("float", settings.floatX, settings.floatY, false); });
   win.on("blur", () => send("ui:blurred"));
 }
+
+// ---------------------------------------------------------------- dock ↔ float
+// One window plays both roles: a wide transparent strip at the top edge (island), or a
+// small always-on-top widget anywhere on screen (after the blob is torn off).
+const ISLAND = { w: 600, h: 720 }, WIDGET = { w: 380, h: 640 };
+let dock = "top";
+function islandBounds() {
+  const { workArea } = screen.getPrimaryDisplay();
+  return { x: Math.round(workArea.x + (workArea.width - ISLAND.w) / 2), y: workArea.y, width: ISLAND.w, height: ISLAND.h };
+}
+function clampToScreen(x, y) {
+  const d = screen.getDisplayNearestPoint({ x, y }).workArea;
+  return { x: Math.round(Math.min(Math.max(x, d.x - 20), d.x + d.width - WIDGET.w + 20)), y: Math.round(Math.min(Math.max(y, d.y), d.y + d.height - 160)) };
+}
+function setDock(mode, x, y, save = true) {
+  dock = mode;
+  if (mode === "float") {
+    const fallback = { x: islandBounds().x + 110, y: 140 };
+    const p = clampToScreen(x ?? fallback.x, y ?? fallback.y);
+    win.setBounds({ ...p, width: WIDGET.w, height: WIDGET.h });
+    settings.floatX = p.x; settings.floatY = p.y;
+  } else win.setBounds(islandBounds());
+  win.setIgnoreMouseEvents(true, { forward: true });
+  settings.dock = mode;
+  if (save) saveSettings().catch(() => {});
+  send("ui:dock", mode);
+}
+ipcMain.on("ui:tear", (_e, { x, y }) => setDock("float", x - WIDGET.w / 2, y - 40));
+ipcMain.on("ui:dockTop", () => setDock("top"));
+let dragOffset = null;
+ipcMain.on("ui:dragStart", (_e, { offX, offY }) => { dragOffset = { offX, offY }; });
+ipcMain.on("ui:dragMove", (_e, { x, y }) => {
+  if (!dragOffset || dock !== "float") return;
+  win.setPosition(Math.round(x - dragOffset.offX), Math.round(y - dragOffset.offY));
+});
+ipcMain.on("ui:dragEnd", () => {
+  dragOffset = null;
+  if (dock !== "float") return;
+  const [x, y] = win.getPosition();
+  const top = screen.getDisplayNearestPoint({ x, y }).workArea.y;
+  if (y <= top + 6) return setDock("top");   // pushed into the top edge → melt back in
+  const p = clampToScreen(x, y);
+  win.setPosition(p.x, p.y);
+  settings.floatX = p.x; settings.floatY = p.y; saveSettings().catch(() => {});
+});
+ipcMain.handle("ui:dockMode", () => dock);
+ipcMain.handle("weather:get", async () => (settings.city ? getWeather(settings.city) : null));
+ipcMain.on("media:key", (_e, action) => { if (MEDIA_VK[action]) pressMediaKey(action, action.startsWith("volume") ? 3 : 1); });
 
 const send = (channel, payload) => { if (win && !win.isDestroyed()) win.webContents.send(channel, payload); };
 
@@ -117,6 +168,7 @@ function createTray() {
     { label: "Settings", click: () => send("ui:view", "settings") },
     { label: "Memory", click: () => send("ui:view", "memory") },
     { label: "Run setup again", click: () => send("ui:view", "onboarding") },
+    { label: "Float / dock", click: () => (dock === "top" ? setDock("float") : setDock("top")) },
     { type: "separator" },
     { label: "Start with Windows", type: "checkbox", checked: app.getLoginItemSettings().openAtLogin,
       click: (i) => app.setLoginItemSettings({ openAtLogin: i.checked }) },
@@ -636,6 +688,7 @@ ipcMain.on("ui:menu", () => {
     { label: "Settings", click: () => send("ui:view", "settings") },
     { label: "Memory", click: () => send("ui:view", "memory") },
     { label: "Stop", click: () => { stopAll(); send("ui:view", "stop"); } },
+    { label: dock === "top" ? "Float as widget" : "Dock to top", click: () => (dock === "top" ? setDock("float") : setDock("top")) },
     { type: "separator" },
     { label: "Quit Jarvis", click: () => app.quit() },
   ]).popup({ window: win });
@@ -673,10 +726,7 @@ else {
     if (settings.onboarded && settings.backend === "claude")
       claudeSession().then((s) => s.proc || s.start()).catch(() => {});
     // keep the island centred if displays change
-    screen.on("display-metrics-changed", () => {
-      const { workArea } = screen.getPrimaryDisplay(); const [w] = win.getSize();
-      win.setPosition(Math.round(workArea.x + (workArea.width - w) / 2), workArea.y);
-    });
+    screen.on("display-metrics-changed", () => { if (dock === "top") win.setBounds(islandBounds()); });
   });
   app.on("will-quit", () => { globalShortcut.unregisterAll(); cc?.kill(); mcp?.close(); input.stop(); });
   app.on("window-all-closed", () => app.quit());

@@ -58,6 +58,9 @@
           <label>Call me<input name="name"></label>
         </div>
         <div class="row">
+          <label>Home city (widget weather)<input name="city" placeholder="e.g. Budapest"></label>
+        </div>
+        <div class="row">
           <label>Talk hotkey<input name="hotkeyTalk"></label>
           <label>Spare hotkey<input name="hotkeyPanel"></label>
         </div>
@@ -119,6 +122,39 @@
     </section>
   </div>
 </div></div>
+<!-- floating widget (after the blob is torn off the top edge) -->
+<div id="widget" hidden>
+  <div class="w-head" id="wHead" title="Drag me anywhere. Push me into the top edge to dock.">
+    <span class="orb" aria-hidden="true"></span>
+    <b>Jarvis</b><span class="w-status" id="wStatus">Ready</span>
+    <span class="spacer"></span>
+    <button class="ib" id="wDock" title="Dock to the top edge"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button>
+  </div>
+  <div class="w-main" id="wMain">
+    <button class="talk" id="wTalk" aria-label="Talk"><span class="core"></span><span class="ring"></span></button>
+    <div class="w-glance">
+      <div class="w-time" id="wTime">--:--</div>
+      <div class="w-date" id="wDate"></div>
+      <div class="w-weather" id="wWeather"></div>
+    </div>
+  </div>
+  <div class="w-media">
+    <button class="ib" data-media="previous" title="Previous"><svg viewBox="0 0 24 24"><path d="M19 20 9 12l10-8v16zM5 19V5"/></svg></button>
+    <button class="ib" data-media="play_pause" title="Play / pause"><svg viewBox="0 0 24 24"><path d="M7 4v16M17 4v16"/></svg></button>
+    <button class="ib" data-media="next" title="Next"><svg viewBox="0 0 24 24"><path d="m5 4 10 8-10 8V4zM19 5v14"/></svg></button>
+    <span class="spacer"></span>
+    <button class="ib" data-media="volume_down" title="Volume down"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5zM16 12h5"/></svg></button>
+    <button class="ib" data-media="volume_up" title="Volume up"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5zM16 12h5M18.5 9.5v5"/></svg></button>
+  </div>
+  <div class="w-actions">
+    <button class="chip" data-ask="What's on my screen?">👁 What's on my screen?</button>
+    <button class="chip" data-ask="Open my email and tell me what's unread and important.">✉ Unread email</button>
+    <button class="chip" data-ask="Summarise what's on my clipboard.">📋 Summarise clipboard</button>
+    <button class="chip" data-ask="Start a 25 minute focus timer.">⏱ Focus 25 min</button>
+  </div>
+  <div class="w-timers" id="wTimers"></div>
+  <div class="w-body" id="wBody"></div>
+</div>
 <script src="island.js" defer></script>
 </body>
 </html>

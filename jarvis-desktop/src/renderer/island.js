@@ -9,6 +9,9 @@ let view = "answer";            // answer | settings | memory | setup
 let hover = false, listening = false, busy = false, speaking = 0, control = false;
 let answerShown = false, pendingApprovals = 0, flash = "", flashTimer = null, dismissTimer = null, label = "";
 let dl = { active: false, pct: 0, waiting: false };
+let floating = false;            // torn off the top edge into a widget
+let pull = 0;                    // how far the blob is being pulled down (px)
+const TEAR_AT = 150;
 
 // ------------------------------------------------------------- labels
 const RUN = { web_search: "Searching the web", web_fetch: "Reading a page", look_at_screen: "Looking at your screen", point_at: "Pointing it out", computer: "Using your PC", run_powershell: "Running a command", open: "Opening", clipboard: "Using the clipboard", media_control: "Controlling media", system_status: "Checking your PC", get_weather: "Checking the weather", set_timer: "Setting a timer", remember: "Remembering", forget: "Forgetting", show_card: "Preparing details" };
@@ -28,6 +31,7 @@ const clock = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute:
 
 // ------------------------------------------------------------- mode + geometry
 function currentMode() {
+  if (pull > 0) return "peek";
   if (view !== "answer") return "panel";
   if (answerShown || pendingApprovals) return "panel";
   if (listening || busy || speaking || control || flash || dl.waiting) return "active";
@@ -35,6 +39,7 @@ function currentMode() {
   return "hidden";
 }
 function render() {
+  if (floating) return renderWidget();
   const mode = currentMode();
   island.dataset.mode = mode;
     for (const [id, v] of [["answerView", "answer"], ["setView", "settings"], ["memView", "memory"], ["setupView", "setup"]]) $(id).hidden = view !== v;
@@ -48,6 +53,10 @@ function render() {
     w = view === "answer" ? ($("extras").children.length ? 480 : 420) : 480;
     pad = 8; h = Math.min(pad + 38 + $(sec).offsetHeight, 690); r = 28; sh = 18;
   }
+  if (pull > 0) {                 // stretch: longer, thinner, rounder, like pulling honey
+    const t = Math.min(1, pull / TEAR_AT);
+    h += pull; w = Math.max(90, w * (1 - 0.42 * t)); r = Math.min(w / 2, r + pull * 0.35); sh = sh + 10 * t;
+  }
   for (const [k, v] of [["--w", w], ["--h", h], ["--r", r], ["--s", sh], ["--pad", pad]]) root.style.setProperty(k, v + "px");
   renderBar(mode);
 }
@@ -57,20 +66,22 @@ new ResizeObserver(() => render()).observe($("body"));
 function renderBar(mode) {
   const t = timers.find((x) => !x.done);
   let text = label, right = "";
-  if (flash) text = flash;
+  if (pull > 0) text = pull >= TEAR_AT ? "Let go to float" : "Pull…";
+  else if (flash) text = flash;
   else if (dl.waiting) text = `Getting my voice ready · ${dl.pct}%`;
   else if (control) text = label || "Using your PC · Esc to stop";
   else if (mode === "peek") text = settings.ready === false ? "Click to set me up" : "Click to talk";
   else if (mode === "panel" && view !== "answer") text = { settings: "Settings", memory: "Memory", setup: "Setup" }[view];
   else if (!text) text = "Jarvis";
-  if (mode === "peek" || mode === "active") right = t ? fmt(remaining(t)) : mode === "peek" ? clock() : "";
+  if ((mode === "peek" || mode === "active") && !pull) right = t ? fmt(remaining(t)) : mode === "peek" ? clock() : "";
   $("barLabel").textContent = text;
+  if (floating) $("wStatus").textContent = text === "Jarvis" ? "Ready" : text;
   $("barRight").textContent = right;
   $("barRight").classList.toggle("timer", !!t);
   $("progress").classList.toggle("on", dl.active && mode !== "hidden");
 }
 
-function setState(s, text = "") { island.dataset.state = s; label = text; render(); }
+function setState(s, text = "") { island.dataset.state = s; $("widget").dataset.state = s; label = text; render(); }
 function settle() {
   if (control) return setState("control", "Using your PC · Esc to stop");
   if (listening) return setState("listening", "Listening…");
@@ -79,7 +90,7 @@ function settle() {
   setState("idle", "");
 }
 function flashBar(text, ms = 2200, state = "alert") {
-  clearTimeout(flashTimer); flash = text; island.dataset.state = state; render();
+  clearTimeout(flashTimer); flash = text; island.dataset.state = state; $("widget").dataset.state = state; render();
   flashTimer = setTimeout(() => { flash = ""; settle(); }, ms);
 }
 
@@ -92,13 +103,18 @@ function leave() {
   leaveTimer = setTimeout(() => { if (inside) return; hover = false; J.interactive(false); render(); resumeDismiss(); }, 300);
 }
 for (const el of [$("hotzone"), island]) { el.addEventListener("mouseenter", enter); el.addEventListener("mouseleave", leave); }
+let suppressClick = false;
 island.querySelector(".bar").addEventListener("click", () => {
+  if (suppressClick) { suppressClick = false; return; }
+  talkClick();
+});
+function talkClick() {
   if (view === "setup") return;
   if (settings.ready === false) return openView("setup");
   if (busy) { endConversation(); J.stop(); hush(); return; }
   if (speaking) { endConversation(); hush(); settle(); return; }
   listening ? stopListening(!rec?.speechAt) : startListening();
-});
+}
 island.addEventListener("contextmenu", (e) => { e.preventDefault(); J.menu(); });
 
 function openView(v) { view = v; if (v === "memory") loadMemory(); if (v === "settings") fillSettings(); if (v === "setup") startSetup(); J.focus(); render(); }
@@ -107,7 +123,7 @@ document.querySelectorAll("[data-close]").forEach((b) => (b.onclick = closeView)
 
 // answer panel lifecycle: stays while you read it, folds away after
 function showAnswer() { answerShown = true; clearTimeout(dismissTimer); render(); }
-function scheduleDismiss(ms) { clearTimeout(dismissTimer); if (!hover && !pendingApprovals) dismissTimer = setTimeout(dismissAnswer, ms); }
+function scheduleDismiss(ms) { clearTimeout(dismissTimer); if (floating) return; if (!hover && !pendingApprovals) dismissTimer = setTimeout(dismissAnswer, ms); }
 function pauseDismiss() { clearTimeout(dismissTimer); }
 function resumeDismiss() { if (answerShown && !busy && !speaking) scheduleDismiss($("extras").children.length ? 2500 : 1500); }
 function dismissAnswer() { if (pendingApprovals || busy) return; answerShown = false; render(); }
@@ -337,7 +353,7 @@ setInterval(() => {
     flashBar(`⏱  ${t.label}: time's up`, 9000);
   }
   for (let i = timers.length - 1; i >= 0; i--) if (timers[i].done) timers.splice(i, 1);
-  if (island.dataset.mode !== "hidden") renderBar(island.dataset.mode);
+  if (floating) renderWidget(); else if (island.dataset.mode !== "hidden") renderBar(island.dataset.mode);
 }, 500);
 
 // ------------------------------------------------------------- memory
@@ -386,6 +402,7 @@ form.onsubmit = async (e) => {
   $("setMsg").textContent = bad.length ? `Hotkey problem: ${bad.join(", ")}` : "Saved";
   $("setMsg").style.color = bad.length ? "var(--warn)" : "";
   if (patch.speechModel) J.warmup();
+  if (floating) refreshWeather();
 };
 $("btnQuit").onclick = () => J.quit();
 function applySettings(s) { settings = s; $("kTalk").textContent = s.hotkeyTalk; if (!s.voice) hush(); render(); }
@@ -467,6 +484,100 @@ $("btnFinish").onclick = async () => {
   flashBar(`Ready · click me or press ${settings.hotkeyTalk}`, 4000, "speaking");
 };
 
+// ------------------------------------------------------------- pull the blob down → tear it off
+let drag = null;
+island.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0 || floating || view === "setup" || e.target.closest(".body")) return;
+  drag = { y0: e.screenY, moved: false, id: e.pointerId };
+  island.setPointerCapture(e.pointerId);
+});
+island.addEventListener("pointermove", (e) => {
+  if (!drag) return;
+  const dy = e.screenY - drag.y0;
+  if (!drag.moved && dy < 6) return;
+  drag.moved = true;
+  pull = Math.max(0, dy < TEAR_AT ? dy : TEAR_AT + (dy - TEAR_AT) * 0.5); // a bit of resistance past the tear point
+  island.classList.add("pulling");
+  island.classList.toggle("ready", dy >= TEAR_AT);
+  render();
+});
+function endPull(e) {
+  if (!drag) return;
+  const d = drag; drag = null;
+  try { island.releasePointerCapture(d.id); } catch {}
+  island.classList.remove("pulling", "ready");
+  if (!d.moved) return;                       // it was a click → the click handler talks
+  suppressClick = true; setTimeout(() => (suppressClick = false), 50);
+  const torn = e.screenY - d.y0 >= TEAR_AT;
+  pull = 0;
+  if (torn) {                                 // snap: the blob shoots back into the edge, the widget pops out
+    island.classList.add("tearing"); hover = false; J.interactive(false);
+    render();
+    J.tear(e.screenX, e.screenY);
+    setTimeout(() => island.classList.remove("tearing"), 400);
+  } else render();                            // springs back up
+}
+island.addEventListener("pointerup", endPull);
+island.addEventListener("pointercancel", endPull);
+
+// ------------------------------------------------------------- floating widget
+const widget = $("widget");
+function applyDock(mode) {
+  floating = mode === "float";
+  document.body.classList.toggle("float", floating);
+  widget.hidden = !floating;
+  widget.classList.remove("leaving");
+  (floating ? $("wBody") : $("island").querySelector(".inner")).appendChild($("body"));
+  if (floating) { answerShown = true; widget.style.animation = "none"; void widget.offsetWidth; widget.style.animation = ""; refreshWeather(); }
+  else { answerShown = false; hover = false; }
+  J.interactive(false);
+  render();
+}
+function renderWidget() {
+  for (const [id, v] of [["answerView", "answer"], ["setView", "settings"], ["memView", "memory"], ["setupView", "setup"]]) $(id).hidden = view !== v;
+  renderBar("active");
+  $("wTimers").innerHTML = timers.filter((t) => !t.done).map((t) => `<span class="w-timer">${esc(t.label)}<b>${fmt(remaining(t))}</b></span>`).join("");
+}
+widget.addEventListener("mouseenter", () => J.interactive(true));
+widget.addEventListener("mouseleave", () => { if (!wdrag) J.interactive(false); });
+widget.addEventListener("contextmenu", (e) => { e.preventDefault(); J.menu(); });
+$("wTalk").onclick = () => talkClick();
+$("wDock").onclick = () => { widget.classList.add("leaving"); setTimeout(() => J.dockTop(), 260); };
+document.querySelectorAll("[data-media]").forEach((b) => (b.onclick = () => J.media(b.dataset.media)));
+document.querySelectorAll("[data-ask]").forEach((b) => (b.onclick = () => { endConversation(); ask(b.dataset.ask); }));
+
+// drag the widget by its header; push it into the top edge to dock
+let wdrag = null;
+$("wHead").addEventListener("pointerdown", (e) => {
+  if (e.button !== 0 || e.target.closest("button")) return;
+  wdrag = { id: e.pointerId };
+  $("wHead").setPointerCapture(e.pointerId);
+  J.dragStart(e.screenX - window.screenX, e.screenY - window.screenY);
+});
+$("wHead").addEventListener("pointermove", (e) => { if (wdrag) J.dragMove(e.screenX, e.screenY); });
+const endWDrag = () => { if (!wdrag) return; try { $("wHead").releasePointerCapture(wdrag.id); } catch {} wdrag = null; J.dragEnd(); };
+$("wHead").addEventListener("pointerup", endWDrag);
+$("wHead").addEventListener("pointercancel", endWDrag);
+
+function tickWidget() {
+  if (!floating) return;
+  const d = new Date();
+  $("wTime").textContent = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  $("wDate").textContent = d.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" });
+}
+setInterval(tickWidget, 1000);
+async function refreshWeather() {
+  tickWidget();
+  try {
+    const w = await J.weather();
+    if (!w) { $("wWeather").textContent = settings.city ? "" : "Set your city in Settings for weather"; return; }
+    const o = JSON.parse(w);
+    $("wWeather").textContent = o.now ? `${o.now.replace(/\s*\(feels[^)]*\)/, "")} · ${o.place.split(",")[0]}` : "";
+  } catch { $("wWeather").textContent = ""; }
+}
+setInterval(() => floating && refreshWeather(), 15 * 60000);
+J.onDock(applyDock);
+
 // ------------------------------------------------------------- global events
 J.onHotkeyTalk(() => {
   if (settings.ready === false || !settings.onboarded) return openView("setup");
@@ -494,6 +605,7 @@ addEventListener("keydown", (e) => {
 (async () => {
   applySettings(await J.getSettings());
   settle();
+  if ((await J.dockMode()) === "float") applyDock("float");
   if (!settings.onboarded) setTimeout(() => openView("setup"), 600);
   else J.warmup(); // make sure the voice model is ready before the first click
 })();
