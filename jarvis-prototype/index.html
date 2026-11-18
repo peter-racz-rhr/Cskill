@@ -10,25 +10,29 @@
 <style>
   :root{
     --font:"Inter";
-    --ink:#000; --fg:#f5f5f7; --fg2:#c9c9cf; --muted:#8a8a92; --faint:#55555c; --line:rgba(255,255,255,.08); --tile:#121214;
+    --ink:#000; --fg:#f5f5f7; --fg2:rgba(235,235,245,.78); --muted:rgba(235,235,245,.6); --faint:rgba(235,235,245,.3); --line:rgba(84,84,88,.45); --tile:#1c1c1e; --tile2:#2c2c2e;
     --red:#ff3b30; --green:#30d158; --orange:#ff9f0a; --blue:#0a84ff;
     --ease:cubic-bezier(.2,.8,.2,1);
+    --spring:linear(0, 0.45 15%, 1.08 35%, 0.97 55%, 1.01 75%, 1);
   }
   *{box-sizing:border-box;margin:0;padding:0}
   [hidden]{display:none!important}
   html{background:#c4cdd8}
   body{min-height:100%}
-  body{font:400 14px/1.45 var(--font),system-ui,sans-serif;color:#1d1d1f;overflow-x:hidden;-webkit-font-smoothing:antialiased;
+  body{font:400 14px/1.45 var(--font),system-ui,sans-serif;font-feature-settings:"cv11","ss01","ss03";color:#1d1d1f;overflow-x:hidden;-webkit-font-smoothing:antialiased;
     background:radial-gradient(1200px 600px at 50% -10%,#f1f4f8,#d7dee7 55%,#c4cdd8)}
   button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 
   /* ---------- island ---------- */
   #island{position:fixed;z-index:2;background:var(--ink);color:var(--fg);overflow:hidden;cursor:pointer;user-select:none;touch-action:none;
-    box-shadow:0 12px 32px rgba(0,0,0,.16),0 2px 6px rgba(0,0,0,.08)}
+    box-shadow:0 12px 32px rgba(0,0,0,.18),0 2px 6px rgba(0,0,0,.1),inset 0 0 0 .5px rgba(255,255,255,.07)}
+  #island:focus-visible{outline:2px solid #0a84ff;outline-offset:3px}
   #island.widget{cursor:default}
-  .layer{position:absolute;left:0;right:0;top:0;opacity:0;transition:opacity .22s var(--ease);pointer-events:none}
+  .layer{position:absolute;left:0;right:0;top:0;opacity:0;transition:opacity .2s var(--ease);pointer-events:none}
+  @media (prefers-reduced-motion:no-preference){.layer{filter:blur(6px);scale:.94;transition:opacity .22s var(--ease),filter .28s var(--ease),scale .4s linear(0, 0.45 15%, 1.08 35%, 0.97 55%, 1.01 75%, 1)}.layer.on{filter:none;scale:1}}
   #lStatus,#lTimer,#lMusic{bottom:0}
-  .layer.on{opacity:1;pointer-events:auto;transition-delay:.06s}
+  .layer.on{opacity:1;pointer-events:auto;transition-delay:.05s}
+  #lHud{bottom:0}
 
   /* status row (listening / thinking / hover) */
   .status{display:flex;align-items:center;gap:10px;padding:0 18px;height:100%}
@@ -53,24 +57,46 @@
   .eq i:nth-child(1){height:6px}.eq i:nth-child(2){height:12px;animation-delay:.2s}.eq i:nth-child(3){height:8px;animation-delay:.4s}.eq i:nth-child(4){height:11px;animation-delay:.1s}
   .paused .eq i{animation-play-state:paused}
   @keyframes eq2{50%{transform:scaleY(.35)}}
+  .ring{width:22px;height:22px;flex:none;rotate:-90deg}
+  .ring circle{fill:none;stroke-width:3}
+  .ring .bg{stroke:rgba(255,159,10,.25)}.ring .fg{stroke:var(--orange);stroke-linecap:round;transition:stroke-dashoffset .25s linear}
+  .bigring{width:84px;height:84px}
+  .bigring circle{stroke-width:2.4}
+  .timerrow{display:flex;align-items:center;gap:18px;margin-top:2px}
+  #bubble{position:fixed;z-index:2;width:38px;height:38px;border-radius:50%;background:#000;display:grid;place-items:center;opacity:0;scale:.4;pointer-events:none;box-shadow:0 8px 20px rgba(0,0,0,.18),inset 0 0 0 .5px rgba(255,255,255,.07);transition:opacity .2s,scale .45s linear(0, 0.45 15%, 1.08 35%, 0.97 55%, 1.01 75%, 1)}
+  #bubble.on{opacity:1;scale:1}
+  .hud{display:flex;align-items:center;gap:12px;height:100%;padding:0 16px}
+  .hud svg{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .hud .lvl{flex:1;height:6px;border-radius:3px;background:var(--tile2);overflow:hidden}
+  .hud .lvl i{display:block;height:100%;background:#fff;border-radius:3px;transition:width .15s var(--ease)}
+  .hours{display:flex;gap:6px;margin-top:12px;align-items:flex-end;height:70px}
+  .hours div{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;color:var(--muted)}
+  .hours i{width:100%;border-radius:6px;background:linear-gradient(#ffd60a,#ff9f0a)}
+  .hours b{color:var(--fg);font-weight:500;font-size:12px}
+  .drop{display:flex;align-items:center;justify-content:center;gap:10px;height:100%;font-size:13.5px;font-weight:500;color:var(--fg)}
+  .drop svg{width:18px;height:18px;stroke:#0a84ff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .warn{display:flex;gap:10px;align-items:flex-start;background:rgba(255,69,58,.12);border-radius:14px;padding:10px 12px;margin-top:10px;font-size:13px;color:#ffb4ae}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
   .tval{color:var(--orange);font-weight:600;font-size:14px;font-variant-numeric:tabular-nums;margin-right:6px}
 
   /* ---------- cards (one layout for every feature) ---------- */
   .card{padding:18px 20px 18px}
-  .card>*{animation:up .34s var(--ease) both;animation-delay:calc(var(--i,0) * 45ms)}
-  @keyframes up{from{opacity:0;transform:translateY(6px)}}
-  .kicker{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);margin-bottom:6px}
+  @media (prefers-reduced-motion:no-preference){.card>*{animation:up .5s linear(0, 0.45 15%, 1.08 35%, 0.97 55%, 1.01 75%, 1) both,fade .25s ease-out both;animation-delay:calc(var(--i,0) * 40ms)}}
+  @keyframes fade{from{opacity:0}}
+  @keyframes up{from{translate:0 8px}}
+  .kicker{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:500;color:var(--muted);margin-bottom:6px}
   .kicker svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
   .said{margin-left:auto;max-width:60%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--faint)}
-  .title{font-size:17px;font-weight:600;letter-spacing:-.01em;color:var(--fg);line-height:1.3}
+  .title{font-size:17px;font-weight:600;letter-spacing:-.015em;color:var(--fg);line-height:1.3}
   .body{font-size:13.5px;color:var(--fg2);margin-top:4px;line-height:1.5}
-  .big{font-size:40px;font-weight:600;letter-spacing:-.03em;line-height:1.05;font-variant-numeric:tabular-nums;color:var(--fg)}
+  .big{font-size:44px;font-weight:600;letter-spacing:-.035em;line-height:1.05;font-variant-numeric:tabular-nums;color:var(--fg)}
   .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
   .tile{background:var(--tile);border-radius:14px;padding:10px 12px}
   .tile small{display:block;color:var(--muted);font-size:11.5px}
   .tile b{font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
   .list{list-style:none;margin-top:10px}
-  .list li{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--line);font-size:13.5px;color:var(--fg2);animation:up .3s var(--ease) both;animation-delay:calc(var(--j,0) * 50ms + 80ms);transition:color .2s}
+  .list li{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--line);font-size:13.5px;color:var(--fg2);transition:color .2s}
+  @media (prefers-reduced-motion:no-preference){.list li{animation:up .5s linear(0, 0.45 15%, 1.08 35%, 0.97 55%, 1.01 75%, 1) both,fade .25s ease-out both;animation-delay:calc(var(--j,0) * 45ms + 80ms)}}
   .list li .k{color:var(--muted);min-width:52px;white-space:nowrap;font-variant-numeric:tabular-nums}
   .list li .v{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .list li .ok{color:var(--green)}
@@ -81,6 +107,8 @@
   .chip{height:30px;padding:0 13px;border-radius:15px;background:var(--tile);color:var(--fg);font-size:12.5px;font-weight:500;transition:background .15s,transform .1s}
   .chip:hover{background:#1e1e22}
   .chip:active{transform:scale(.96)}
+  .chip:focus-visible,.ctrls button:focus-visible,.w-mic:focus-visible{outline:2px solid #0a84ff;outline-offset:2px}
+  .chip.danger{background:var(--red);color:#fff}
   .chip.primary{background:var(--fg);color:#000}
   .note{font-size:11.5px;color:var(--faint);margin-top:10px}
   .thumb{float:right;width:64px;height:64px;border-radius:12px;object-fit:cover;margin:0 0 6px 12px}
@@ -128,7 +156,7 @@
   .frame .cap{align-self:stretch;display:flex;justify-content:space-between;font-size:12.5px;font-weight:600;color:#1f2937}
   .frame .cap span{font-weight:400;color:#6b7280}
   .isl{position:relative;background:var(--ink);color:var(--fg);overflow:hidden;box-shadow:0 12px 32px rgba(0,0,0,.16),0 2px 6px rgba(0,0,0,.08)}
-  .isl .layer{position:absolute;inset:0;opacity:1;pointer-events:none}
+  .isl .layer{position:absolute;inset:0;opacity:1;pointer-events:none;filter:none!important;scale:1!important}
   .isl.cardy .layer{position:relative;inset:auto}
   .isl .w-top{display:flex}
 </style>
@@ -136,18 +164,23 @@
 <body>
 
 
-<div id="island" data-s="idle">
+<div id="island" data-s="idle" role="button" tabindex="0" aria-label="Assistant. Press Enter to talk, T to type.">
   <div class="layer" id="lStatus"><div class="status"><span class="light"></span><span class="text" id="statusText"></span><span class="bars"><i></i><i></i><i></i><i></i><i></i></span></div></div>
-  <div class="layer" id="lTimer"><div class="split"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#ff9f0a" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg><span class="tval" id="tCompact">0:00</span></div></div>
+  <div class="layer" id="lTimer"><div class="split"><svg class="ring" viewBox="0 0 24 24"><circle class="bg" cx="12" cy="12" r="9"/><circle class="fg" id="tRing" cx="12" cy="12" r="9" stroke-dasharray="56.5" stroke-dashoffset="0"/></svg><span class="tval" id="tCompact">0:00</span></div></div>
+  <div class="layer" id="lHud"><div class="hud"><svg viewBox="0 0 24 24" id="hudIcon"></svg><span class="lvl"><i id="hudLvl"></i></span></div></div>
+  <div class="layer" id="lDrop"><div class="drop"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Drop to add to Shelf</div></div>
   <div class="layer" id="lMusic"><div class="split"><span class="art" id="mArt"></span><span class="eq"><i></i><i></i><i></i><i></i></span></div></div>
   <div class="layer" id="lCard"><div class="w-top" id="wTop" hidden><i></i></div><div class="card" id="card"></div></div>
 </div>
 
+<div id="bubble" aria-hidden="true"><svg class="ring" viewBox="0 0 24 24"><circle class="bg" cx="12" cy="12" r="9"/><circle class="fg" id="bRing" cx="12" cy="12" r="9" stroke-dasharray="56.5" stroke-dashoffset="0"/></svg></div>
+<div class="sr" aria-live="polite" id="live"></div>
 <form id="typed"><input id="typedIn" placeholder="Type what you'd say…" autocomplete="off"></form>
 
 <div class="hint" id="hint">
-  <b>Click</b> the island and talk · try “play Blinding Lights”, “songs like Fejezz”, “play my workout playlist”, “who is Ada Lovelace”, “weather in Budapest”, “100 euro to forint”, “15% of 80”, “note buy milk”, “5 minute timer”, “open Spotify”<br>
-  <b>Pull it down</b> to snap it into a widget · drag it back to the top to dock · <b>T</b> to type · <b>Esc</b> to close
+  <b>Click</b> the island and talk · try “play Blinding Lights”, “songs like Fejezz”, “play my workout playlist”, “who is Ada Lovelace”, “weather in Budapest”, “100 euro to forint”, “15% of 80”, “note buy milk”, “5 minute timer”, “translate good morning to Hungarian”, “delete my old downloads”, “open Spotify”<br>
+  <b>Drag files</b> onto the page for the Shelf · <b>↑ ↓</b> for the volume HUD · 
+<b>Pull it down</b> to snap it into a widget · drag it back to the top to dock · <b>T</b> to type · <b>Esc</b> to close
 </div>
 
 <main id="gallery"></main>
@@ -170,7 +203,7 @@ const ICON = {
 
 // ---------------- state ----------------
 let s = "idle", hover = false, cardOpen = false, mode = "dock", pulling = null, widgetPos = null;
-let timer = null, music = null;
+let timer = null, music = null, hud = null, dragOver = false, shelf = [];
 function setS(v, text) { s = v; island.dataset.s = v; if (text !== undefined) $("statusText").textContent = text; }
 
 // ---------------- geometry: one black shape that springs between sizes ----------------
@@ -181,9 +214,12 @@ function contentH() { return $("lCard").scrollHeight; }
 function shape() {                               // which size + layer the island shows right now
   const cx = innerWidth / 2, at = (w, h, layer, r) => ({ x: cx - w / 2, y: 10, w, h, layer, r: r ?? h / 2 });
   if (mode === "widget") return { x: widgetPos.x, y: widgetPos.y, w: 360, h: Math.max(160, contentH()), layer: "lCard", r: 28 };
+  if (dragOver) return at(260, 48, "lDrop");
   if (s === "listening") return at(300, 48, "lStatus");
   if (s === "thinking") return at(240, 42, "lStatus");
+  if (hud && performance.now() < hud.until) return at(220, 40, "lHud");
   if (cardOpen) return at(400, contentH(), "lCard", 28);
+  if (timer && music) return at(hover ? 196 : 180, 38, "lMusic");   // two activities: music here, timer in the bubble
   if (timer) return at(hover ? 196 : 180, 38, "lTimer");
   if (music) return at(hover ? 196 : 180, 38, "lMusic");
   if (hover) return at(170, 40, "lStatus");
@@ -197,7 +233,10 @@ function frame(now) {
   const k = pulling ? 520 : 290, c = pulling ? 34 : 23;
   for (const [p, v] of [["x", "vx"], ["y", "vy"], ["w", "vw"], ["h", "vh"]]) { box[v] += (k * (target[p] - box[p]) - c * box[v]) * dt; box[p] += box[v] * dt; }
   Object.assign(island.style, { left: box.x + "px", top: box.y + "px", width: box.w + "px", height: box.h + "px", borderRadius: Math.min(sh.r, box.h / 2) + "px" });
-  for (const id of ["lStatus", "lTimer", "lMusic", "lCard"]) $(id).classList.toggle("on", id === sh.layer);
+  for (const id of ["lStatus", "lTimer", "lMusic", "lCard", "lHud", "lDrop"]) $(id).classList.toggle("on", id === sh.layer);
+  const dual = mode === "dock" && timer && music && !cardOpen && s === "idle" && sh.layer === "lMusic";
+  $("bubble").classList.toggle("on", !!dual);
+  if (dual) Object.assign($("bubble").style, { left: box.x + box.w + 8 + "px", top: box.y + "px" });
   if (sh.layer === "lStatus" && s === "idle") $("statusText").textContent = "Click to talk";
   requestAnimationFrame(frame);
 }
@@ -260,6 +299,8 @@ $("typed").onsubmit = (e) => { e.preventDefault(); const t = $("typedIn").value.
 addEventListener("keydown", (e) => {
   if (e.key.toLowerCase() === "t" && document.activeElement !== $("typedIn")) { e.preventDefault(); openTyped(); }
   if (e.key === "Escape") { $("typed").classList.remove("on"); rec?.abort(); setS("idle"); cardOpen = false; }
+  if ((e.key === "Enter" || e.key === " ") && document.activeElement === island) { e.preventDefault(); talk(); }
+  if ((e.key === "ArrowUp" || e.key === "ArrowDown") && document.activeElement !== $("typedIn")) { e.preventDefault(); showHud(e.key === "ArrowUp" ? 1 : -1); }
 });
 
 // ---------------- one card layout for every answer ----------------
@@ -289,6 +330,7 @@ function addWidgetBits() {
 }
 function show(a) {
   render(a); setS("idle");
+  $("live").textContent = [a.title, a.body].filter(Boolean).join(". ") || a.kicker;
   if (mode === "dock") { cardOpen = true; clearTimeout(closeT); closeT = setTimeout(autoClose, a.stay ? 30000 : 12000); }
 }
 function autoClose() { if (hover) return (closeT = setTimeout(autoClose, 3000)); cardOpen = false; }
@@ -306,6 +348,9 @@ async function handle(text) {
     else if (/^[\d\s.+\-*/x×()%]+$|% of|percent of|\bplus\b|\bminus\b|\btimes\b|divided by/.test(t)) a = calc(text, t);
     else if (/^(note|remember|write down)\b/.test(t)) a = note(text);
     else if (/\b(today|schedule|calendar|agenda)\b/.test(t)) a = schedule(text);
+    else if (/^translate\b/.test(t)) a = await translate(text, t);
+    else if (/\b(delete|remove|empty|clean up|wipe|uninstall)\b/.test(t)) a = confirmRisky(text, t);
+    else if (/\bshelf\b/.test(t)) a = shelfCard(text);
     else if (/\b(open|launch|start)\b/.test(t)) a = openApp(text, t);
     else if (/\b(files?|downloads?|folder|disk)\b/.test(t)) a = files(text);
     else if (/\b(time is it|what time)\b/.test(t)) a = { icon: "timer", kicker: "Time", said: text, html: `<div class="big">${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>` };
@@ -395,9 +440,11 @@ async function weather(said, t) {
   const city = t.match(/\bin ([a-zà-ž .'-]+)/i)?.[1]?.replace(/\b(today|tomorrow|now)\b/g, "").trim() || "Budapest";
   const g = await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=1&name=${encodeURIComponent(city)}`).then((r) => r.json());
   const p = g.results?.[0]; if (!p) return { icon: "weather", kicker: "Weather", said, title: `I couldn't find ${city}` };
-  const w = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${p.latitude}&longitude=${p.longitude}&current=temperature_2m,apparent_temperature&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=1`).then((r) => r.json());
+  const w = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${p.latitude}&longitude=${p.longitude}&current=temperature_2m,apparent_temperature&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&hourly=temperature_2m&timezone=auto&forecast_days=2`).then((r) => r.json());
   const r = Math.round;
-  return { icon: "weather", kicker: `Weather · ${p.name}`, said, html: `<div class="big">${r(w.current.temperature_2m)}°</div><div class="tiles"><div class="tile"><small>Feels like</small><b>${r(w.current.apparent_temperature)}°</b></div><div class="tile"><small>High / low</small><b>${r(w.daily.temperature_2m_max[0])}° / ${r(w.daily.temperature_2m_min[0])}°</b></div><div class="tile"><small>Rain</small><b>${w.daily.precipitation_probability_max[0]}%</b></div></div>` };
+  const nowIdx = w.hourly.time.findIndex((x) => new Date(x) >= new Date(Date.now() - 3600e3));
+  const hrs = w.hourly.time.slice(nowIdx, nowIdx + 6).map((x, i) => [new Date(x).getHours(), w.hourly.temperature_2m[nowIdx + i]]);
+  return { icon: "weather", kicker: `Weather · ${p.name}`, said, html: `<div class="big">${r(w.current.temperature_2m)}°</div><div class="tiles"><div class="tile"><small>Feels like</small><b>${r(w.current.apparent_temperature)}°</b></div><div class="tile"><small>High / low</small><b>${r(w.daily.temperature_2m_max[0])}° / ${r(w.daily.temperature_2m_min[0])}°</b></div><div class="tile"><small>Rain</small><b>${w.daily.precipitation_probability_max[0]}%</b></div></div>${hoursHTML(hrs)}` };
 }
 
 // --- timer: split pill while running
@@ -409,13 +456,15 @@ function startTimer(said, t) {
     if (!timer) return;
     const left = Math.max(0, Math.ceil((timer.end - Date.now()) / 1000));
     $("tCompact").textContent = fmt(left);
-    const big = $("tBig"), bar = $("tBar");
+    const off = 56.5 * (1 - left / timer.secs);
+    $("tRing").style.strokeDashoffset = off; $("bRing").style.strokeDashoffset = off;
+    const big = $("tBig"), br = $("tBigRing");
     if (big) big.textContent = fmt(left);
-    if (bar) bar.style.width = (100 * left / timer.secs) + "%";
+    if (br) br.style.strokeDashoffset = 56.5 * (1 - left / timer.secs);
     if (!left) { clearInterval(timer.int); timer = null; show({ icon: "timer", kicker: "Timer", title: "Time's up" }); }
   }, 250);
   $("tCompact").textContent = fmt(secs);
-  return { icon: "timer", kicker: "Timer", said, html: `<div class="big" id="tBig">${fmt(secs)}</div><div class="prog"><i id="tBar" style="width:100%;background:var(--orange)"></i></div>`,
+  return { icon: "timer", kicker: "Timer", said, html: timerHTML(fmt(secs), 0),
     chips: [{ label: "Cancel", run: () => { clearInterval(timer?.int); timer = null; cardOpen = false; } }] };
 }
 
@@ -466,6 +515,55 @@ function schedule(said) {
   return { icon: "cal", kicker: "Today", said, title: "3 events", html: `<ul class="list">${ev.map(([a, b]) => `<li><span class="k">${a}</span><span class="v">${b}</span></li>`).join("")}</ul>`, note: "Preview data. The app connects to your calendar." };
 }
 
+// ---------------- new building blocks ----------------
+function timerHTML(text, frac) {
+  return `<div class="timerrow"><svg class="ring bigring" viewBox="0 0 24 24"><circle class="bg" cx="12" cy="12" r="9"/><circle class="fg" id="tBigRing" cx="12" cy="12" r="9" stroke-dasharray="56.5" stroke-dashoffset="${(56.5 * frac).toFixed(1)}"/></svg><div class="big" id="tBig">${text}</div></div>`;
+}
+function hoursHTML(hrs) {
+  const lo = Math.min(...hrs.map((h) => h[1])), hi = Math.max(...hrs.map((h) => h[1]));
+  return `<div class="hours">${hrs.map(([h, t], i) => `<div><b>${Math.round(t)}°</b><i style="height:${8 + 34 * ((t - lo) / (hi - lo || 1))}px"></i>${i ? String(h).padStart(2, "0") : "Now"}</div>`).join("")}</div>`;
+}
+const VOL = { up: '<path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>', low: '<path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/>', mute: '<path d="M11 5 6 9H2v6h4l5 4V5zM22 9l-6 6M16 9l6 6"/>' };
+let volume = 0.6;
+function showHud(d) {   // system volume HUD lives in the island instead of a separate overlay
+  volume = Math.min(1, Math.max(0, volume + d * 0.0625));
+  $("hudLvl").style.width = volume * 100 + "%";
+  $("hudIcon").innerHTML = volume === 0 ? VOL.mute : volume < 0.5 ? VOL.low : VOL.up;
+  hud = { until: performance.now() + 1400 };
+}
+async function translate(said, t) {
+  const m = said.match(/^translate\s+(.+?)\s+(?:to|into)\s+([a-zA-Z]+)\s*[.?!]?$/i);
+  if (!m) throw new Error("Say it like “translate good morning to Hungarian”.");
+  const LANG = { hungarian: "hu", german: "de", french: "fr", spanish: "es", italian: "it", english: "en", japanese: "ja", portuguese: "pt", dutch: "nl", polish: "pl" };
+  const to = LANG[m[2].toLowerCase()] || m[2].slice(0, 2).toLowerCase();
+  const d = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(m[1])}&langpair=en|${to}`).then((r) => r.json());
+  return { icon: "web", kicker: `Translate → ${cap(m[2])}`, said, title: d.responseData.translatedText, body: m[1], chips: [{ label: "Copy", run: () => navigator.clipboard?.writeText(d.responseData.translatedText) }] };
+}
+function confirmRisky(said, t) {   // anything destructive asks first, with the exact consequence spelled out
+  const what = (t.match(/(?:delete|remove|empty|clean up|wipe|uninstall)\s+(.+)/)?.[1] || "these files").replace(/[.?!]$/, "").replace(/^my /, "your ");
+  const a = { icon: "pc", kicker: "Needs your OK", said, title: `Delete ${what}?`,
+    html: `<div class="warn"><span>⚠</span><span>23 items · 6.2 GB will move to the Recycle Bin. You can restore them from there.</span></div>`,
+    chips: [{ label: "Cancel", run: () => { cardOpen = false; } }, { label: "Delete", run: () => show({ icon: "pc", kicker: "On your PC", title: "Moved to Recycle Bin", body: "23 items · 6.2 GB freed", note: "Preview. The app does this for real, only after you confirm." }) }], stay: true,
+    after: () => { const b = $("card").querySelectorAll(".chip"); b[0].classList.remove("primary"); b[1]?.classList.add("danger"); } };
+  return a;
+}
+function shelfCard(said) {
+  return { icon: "pc", kicker: "Shelf", said, title: shelf.length ? `${shelf.length} item${shelf.length > 1 ? "s" : ""} on the shelf` : "Shelf is empty",
+    html: shelf.length ? `<ul class="list">${shelf.map((f) => `<li><span class="k">${f.size}</span><span class="v">${esc(f.name)}</span></li>`).join("")}</ul>` : "",
+    body: shelf.length ? "" : "Drag files onto the island to keep them here for later.",
+    chips: shelf.length ? [{ label: "Clear", run: () => { shelf = []; show(shelfCard("")); } }] : [], stay: true };
+}
+const size = (b) => b > 1e9 ? (b / 1e9).toFixed(1) + " GB" : b > 1e6 ? (b / 1e6).toFixed(1) + " MB" : Math.max(1, Math.round(b / 1e3)) + " KB";
+// file shelf: drag files from your desktop onto the page; the island becomes a drop target
+addEventListener("dragover", (e) => { if ([...(e.dataTransfer?.types || [])].includes("Files")) { e.preventDefault(); dragOver = true; cardOpen = false; } });
+addEventListener("dragleave", (e) => { if (!e.relatedTarget) dragOver = false; });
+addEventListener("drop", (e) => {
+  e.preventDefault(); dragOver = false;
+  for (const f of e.dataTransfer.files) shelf.unshift({ name: f.name, size: size(f.size) });
+  shelf = shelf.slice(0, 8);
+  show(shelfCard(""));
+});
+
 // ---------------- gallery ----------------
 const STATUS = (st, text, extra = "") => `<div class="layer"><div class="status"><span class="light"></span><span class="text">${esc(text)}</span>${extra}<span class="bars"><i></i><i></i><i></i><i></i><i></i></span></div></div>`;
 const PILLS = [
@@ -473,7 +571,11 @@ const PILLS = [
   ["Hover", "move the mouse near it", 170, 40, "idle", STATUS("idle", "Click to talk")],
   ["Listening", "red · your words appear live", 300, 48, "listening", STATUS("listening", "play blinding lights")],
   ["Thinking", "shimmer", 240, 42, "thinking", STATUS("thinking", "Thinking")],
-  ["Timer running", "split pill", 180, 38, "idle", `<div class="layer"><div class="split"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#ff9f0a" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg><span class="tval">4:59</span></div></div>`],
+  ["Timer running", "ring fills as time passes", 180, 38, "idle", `<div class="layer"><div class="split"><svg class="ring" viewBox="0 0 24 24"><circle class="bg" cx="12" cy="12" r="9"/><circle class="fg" cx="12" cy="12" r="9" stroke-dasharray="56.5" stroke-dashoffset="20"/></svg><span class="tval">3:12</span></div></div>`],
+  ["Volume", "replaces the system HUD · ↑ ↓ keys", 220, 40, "idle", `<div class="layer"><div class="hud"><svg viewBox="0 0 24 24">${'<path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>'}</svg><span class="lvl"><i style="width:62%"></i></span></div></div>`],
+  ["Drop target", "drag files onto the island", 260, 48, "idle", `<div class="layer"><div class="drop"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Drop to add to Shelf</div></div>`],
+  ["Next meeting", "live activity", 230, 38, "idle", `<div class="layer"><div class="split"><span style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--fg2)"><span style="width:8px;height:8px;border-radius:50%;background:#0a84ff"></span>Design review</span><span class="tval" style="color:#0a84ff">in 12m</span></div></div>`],
+  ["Charging", "live activity", 180, 38, "idle", `<div class="layer"><div class="split"><span style="font-size:12.5px;color:var(--fg2);margin-left:6px">Charging</span><span class="tval" style="color:var(--green)">84%</span></div></div>`],
   ["Music playing", "mini player", 180, 38, "idle", `<div class="layer"><div class="split"><span class="art" style="--art:${ART[0]}"></span><span class="eq"><i></i><i></i><i></i><i></i></span></div></div>`],
 ];
 const sampleMusic = { title: "Blinding Lights", artist: "The Weeknd", art: ART[0], dur: 200, pos: 0, q: "Blinding Lights" };
@@ -482,8 +584,12 @@ const CARDS = [
   ["Music", "Songs like…", "songs like fejezz", () => musicIntent("songs like fejezz", "songs like fejezz")],
   ["Music", "Playlist", "play my workout playlist", () => { const m = music; const a = musicIntent("play my workout playlist", "play my workout playlist"); music = m; return a; }],
   ["Web", "Answer from the web", "who is ada lovelace", () => ({ icon: "web", kicker: "From the web", said: "who is ada lovelace", title: "Ada Lovelace", body: "Augusta Ada King, Countess of Lovelace, was an English mathematician and writer chiefly known for her work on Charles Babbage's proposed mechanical general-purpose computer, the Analytical Engine.", chips: [{ label: "Read more" }, { label: "Search the web" }], note: "Source: Wikipedia" })],
-  ["Weather", "Weather", "weather in budapest", () => ({ icon: "weather", kicker: "Weather · Budapest", said: "weather in budapest", html: `<div class="big">9°</div><div class="tiles"><div class="tile"><small>Feels like</small><b>6°</b></div><div class="tile"><small>High / low</small><b>12° / 4°</b></div><div class="tile"><small>Rain</small><b>10%</b></div></div>` })],
-  ["Timer", "Timer set", "5 minute timer", () => ({ icon: "timer", kicker: "Timer", said: "5 minute timer", html: `<div class="big">4:59</div><div class="prog"><i style="width:98%;background:var(--orange)"></i></div>`, chips: [{ label: "Cancel" }] })],
+  ["Weather", "Weather + next hours", "weather in budapest", () => ({ icon: "weather", kicker: "Weather · Budapest", said: "weather in budapest", html: `<div class="big">9°</div><div class="tiles"><div class="tile"><small>Feels like</small><b>6°</b></div><div class="tile"><small>High / low</small><b>12° / 4°</b></div><div class="tile"><small>Rain</small><b>10%</b></div></div>${hoursHTML([[21, 9], [22, 8], [23, 7], [0, 6], [1, 6], [2, 5]])}` })],
+  ["Timer", "Timer set", "5 minute timer", () => ({ icon: "timer", kicker: "Timer", said: "5 minute timer", html: timerHTML("3:12", 0.36), chips: [{ label: "Cancel" }] })],
+  ["Translate", "Translation", "translate good morning to hungarian", () => ({ icon: "web", kicker: "Translate → Hungarian", said: "translate good morning to hungarian", title: "Jó reggelt", body: "good morning", chips: [{ label: "Copy" }] })],
+  ["Safety", "Asks before anything risky", "delete my old downloads", () => { const a = confirmRisky("delete my old downloads", "delete my old downloads"); a.chips = [{ label: "Cancel" }, { label: "Delete" }]; return a; }],
+  ["Shelf", "File shelf", "drag files onto the page", () => { const keep = shelf; shelf = [{ name: "contract-final.pdf", size: "1.2 MB" }, { name: "IMG_2041.jpg", size: "3.4 MB" }]; const a = shelfCard(""); shelf = keep; return a; }],
+  ["Errors", "When something fails", "", () => ({ icon: "info", kicker: "Couldn't finish", title: "No internet connection", body: "I'll try again when you're back online.", chips: [{ label: "Retry" }] })],
   ["Timer", "Time's up", "", () => ({ icon: "timer", kicker: "Timer", title: "Time's up" })],
   ["Money", "Currency", "100 euro to forint", () => ({ icon: "calc", kicker: "Currency", said: "100 euro to forint", html: `<div class="big">39,412 HUF</div>`, body: "100 EUR · rate 394.12 · today" })],
   ["Math", "Calculator", "15% of 80", () => calc("15% of 80", "15% of 80")],
@@ -496,10 +602,11 @@ const CARDS = [
 function buildGallery() {
   const g = $("gallery");
   let html = `<h2>Island states</h2><div class="grid pills">`;
+  const dual = `<div class="frame" data-pill="dual"><div class="cap">Two at once<span>music + timer bubble</span></div><div style="display:flex;gap:8px"><div class="isl" style="width:180px;height:38px;border-radius:19px"><div class="layer"><div class="split"><span class="art" style="--art:${ART[0]}"></span><span class="eq"><i></i><i></i><i></i><i></i></span></div></div></div><div class="isl" style="width:38px;height:38px;border-radius:19px;display:grid;place-items:center"><svg class="ring" viewBox="0 0 24 24"><circle class="bg" cx="12" cy="12" r="9"/><circle class="fg" cx="12" cy="12" r="9" stroke-dasharray="56.5" stroke-dashoffset="20"/></svg></div></div></div>`;
   PILLS.forEach(([name, sub, w, h, st, inner], i) => {
     html += `<div class="frame" data-pill="${i}"><div class="cap">${name}<span>${sub}</span></div><div class="isl" data-s="${st}" style="width:${w}px;height:${h}px;border-radius:${h / 2}px">${inner}</div></div>`;
   });
-  html += `</div><h2>Answers</h2><div class="grid">`;
+  html += dual + `</div><h2>Answers</h2><div class="grid">`;
   CARDS.forEach(([group, name, said, make], i) => {
     const a = make();
     html += `<div class="frame" data-card="${i}"><div class="cap">${name}<span>${said ? "“" + esc(said) + "” · click to try" : group}</span></div><div class="isl cardy" style="width:400px;max-width:100%;border-radius:28px"><div class="layer"><div class="card">${cardHTML(a)}</div></div></div></div>`;
@@ -507,14 +614,17 @@ function buildGallery() {
   const w = { icon: "info", kicker: "Ready", title: "Ask anything", body: "Press the button below and talk." };
   html += `</div><h2>Widget</h2><div class="grid"><div class="frame" data-widget><div class="cap">Pulled-off widget<span>drag by the handle · drop on the top edge to dock</span></div><div class="isl cardy" style="width:360px;border-radius:28px"><div class="layer"><div class="w-top"><i></i></div><div class="card">${cardHTML(w)}<button class="w-mic"></button><p class="w-hint">Drag the handle · drop on the top edge to dock</p></div></div></div></div></div>`;
   g.innerHTML = html;
+  g.querySelectorAll('[data-card] .chip').forEach((b) => { if (b.textContent === "Delete") { b.classList.remove("primary"); b.classList.add("danger"); } if (b.textContent === "Cancel" && b.nextElementSibling?.textContent === "Delete") b.classList.remove("primary"); });
   g.querySelectorAll("[data-card]").forEach((f) => (f.onclick = () => { const said = CARDS[+f.dataset.card][2]; if (said) { scrollTo({ top: 0, behavior: "smooth" }); handle(said); } }));
   g.querySelectorAll("[data-pill]").forEach((f) => (f.onclick = () => {
     scrollTo({ top: 0, behavior: "smooth" });
-    const i = +f.dataset.pill;
+    const i = f.dataset.pill === "dual" ? -1 : +f.dataset.pill;
     if (i === 2) { cardOpen = false; setS("listening", "play blinding lights"); setTimeout(() => setS("idle"), 2500); }
     if (i === 3) { cardOpen = false; setS("thinking", "Thinking"); setTimeout(() => setS("idle"), 2500); }
     if (i === 4) { startTimer("", "5 minute timer"); cardOpen = false; }
     if (i === 5) { music = { ...sampleMusic, playing: true }; tick(); cardOpen = false; }
+    if (i === 6) { showHud(0); island.focus(); }
+    if (f.dataset.pill === "dual") { music = { ...sampleMusic, playing: true }; tick(); startTimer("", "3 minute timer"); cardOpen = false; }
   }));
 }
 
