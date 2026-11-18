@@ -1,0 +1,42 @@
+{
+  "name": "jarvis-desktop",
+  "productName": "Jarvis",
+  "version": "1.0.0",
+  "description": "Jarvis: a Dynamic Island style desktop assistant powered by Claude. Talk to it, show it your screen, let it do things.",
+  "main": "src/main.js",
+  "type": "module",
+  "author": "Jarvis",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --x64 --publish never"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.10.0",
+    "@huggingface/transformers": "4.3.2"
+  },
+  "devDependencies": {
+    "electron": "45.2.2",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "com.jarvis.desktop",
+    "productName": "Jarvis",
+    "directories": { "output": "dist", "buildResources": "assets" },
+    "files": ["src/**", "assets/**", "package.json"],
+    "asarUnpack": ["node_modules/onnxruntime-node/**", "node_modules/sharp/**", "node_modules/@img/**"],
+    "win": {
+      "icon": "assets/icon.png",
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "artifactName": "Jarvis-Setup-${version}.exe",
+      "shortcutName": "Jarvis"
+    },
+    "portable": { "artifactName": "Jarvis-${version}-portable.exe" }
+  }
+}
