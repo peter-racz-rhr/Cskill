@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld("jarvis", {
   release: () => ipcRenderer.send("ui:release"),
   notify: (title, body) => ipcRenderer.send("notify", { title, body }),
   quit: () => ipcRenderer.send("app:quit"),
+  claudeSignIn: () => ipcRenderer.invoke("claude:signin"),
   onAgent: on("agent"),
   onMemory: on("memory"),
   onHotkeyTalk: on("hotkey:talk"),

@@ -64,7 +64,7 @@ function setState(s, label) {
 function updateBar() {
   const t = timers.find((x) => !x.done) || timers[0];
   if (mode === "compact") {
-    $("barLabel").textContent = settings.hasKey === false ? "Set up Jarvis" : (t ? t.label : clock());
+    $("barLabel").textContent = settings.ready === false ? "Set up Jarvis" : (t ? t.label : clock());
     $("barRight").textContent = t ? (t.done ? "Done" : fmt(remaining(t))) : "";
   } else if (mode === "activity") {
     $("barLabel").textContent = activityLabel || "Jarvis";
@@ -103,7 +103,7 @@ island.addEventListener("mouseenter", () => { hover = true; J.interactive(true);
 island.addEventListener("mouseleave", () => { hover = false; J.interactive(false); if (mode === "compact") layout(); });
 island.addEventListener("click", (e) => {
   if (mode === "expanded" || e.composedPath().includes(panel)) return; // clicks inside the panel never re-open it
-  expand(settings.hasKey === false ? "settings" : "chat");
+  expand(settings.ready === false ? "settings" : "chat");
 });
 
 function showView(v) {
@@ -210,7 +210,7 @@ J.onAgent((ev) => {
     case "error":
       stopTyping(); cur.el.classList.add("error");
       cur.out += (cur.out ? "\n" : "") + ev.message; cur.text.textContent = cur.out;
-      if (ev.code === "NO_KEY") { busy = false; expand("settings"); }
+      if (ev.code === "SETUP") expand("settings");
       if (ev.detail) console.warn(ev.detail);
       break;
   }
@@ -367,6 +367,7 @@ function fillSettings() {
     if (el.type === "checkbox") el.checked = !!settings[el.name]; else el.value = settings[el.name] ?? "";
   }
   form.apiKey.value = "";
+  syncBackend();
   form.apiKey.placeholder = settings.hasKey ? `Saved (${settings.keyHint}). Paste a new key to replace it` : "sk-ant-…";
   $("setMsg").textContent = "";
 }
@@ -384,6 +385,19 @@ form.onsubmit = async (e) => {
   if (patch.speechModel) J.warmup(); // start downloading the voice model in the background
 };
 $("btnQuit").onclick = () => J.quit();
+function syncBackend() {
+  const acct = form.backend.value === "claude";
+  $("acctBox").hidden = !acct; $("keyRow").hidden = acct; $("effortRow").hidden = acct;
+  $("acctStatus").innerHTML = settings.claudePath
+    ? `<b>Claude Code found.</b> If you haven't signed in yet, press Connect and log in with your Claude account.`
+    : `<b>Claude Code isn't installed.</b> Press Connect: a window opens that installs it, then asks you to sign in.`;
+  $("btnSignIn").textContent = settings.claudePath ? "Sign in" : "Connect Claude account";
+}
+form.backend.onchange = syncBackend;
+$("btnSignIn").onclick = async () => {
+  await J.claudeSignIn();
+  $("setMsg").textContent = "Finish signing in in the window that opened, then press Save.";
+};
 function applySettings(s) {
   settings = s;
   $("kTalk").textContent = s.hotkeyTalk;
@@ -409,6 +423,6 @@ addEventListener("keydown", (e) => {
   $("hello").textContent = `Good ${hr < 5 ? "evening" : hr < 12 ? "morning" : hr < 18 ? "afternoon" : "evening"}.`;
   applySettings(await J.getSettings());
   setState("idle"); setMode("compact");
-  if (!settings.hasKey) setTimeout(() => toast("Welcome. Click here to add your API key.", "", 9000), 800);
+  if (!settings.ready) setTimeout(() => toast("Welcome. Click here to connect your Claude account.", "", 9000), 800);
   else J.warmup(); // preload the voice model so the first "Alt+J" is quick
 })();

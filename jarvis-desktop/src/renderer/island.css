@@ -141,6 +141,9 @@ kbd{font:600 11px/1 inherit;background:var(--raise2);border:1px solid var(--line
 .settings input:focus,.settings select:focus{border-color:var(--think)}
 .settings .tg{flex-direction:row;align-items:center;gap:8px;color:var(--fg);font-size:13px}
 .settings .tg input{accent-color:var(--think);width:15px;height:15px}
+.acct{display:flex;align-items:center;gap:10px;background:var(--raise);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.acct p{flex:1;font-size:12.5px;color:var(--muted);line-height:1.4}
+.acct p b{color:var(--fg);font-weight:600}
 .actions{display:flex;gap:8px;align-items:center;justify-content:flex-end;padding:4px 0 2px}
 .actions span{flex:1;font-size:12px;color:var(--speak)}
 

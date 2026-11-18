@@ -13,6 +13,7 @@ import fs from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
+import { ClaudeCodeSession, startMcpServer, findClaude, openSignInTerminal } from "./claude-code.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const IS_WIN = process.platform === "win32";
@@ -20,6 +21,7 @@ const USER_DIR = () => app.getPath("userData");
 
 // ---------------------------------------------------------------- settings
 const DEFAULTS = {
+  backend: "claude", // "claude" = your Claude account via Claude Code · "api" = Anthropic API key
   model: "claude-opus-5-5",
   effort: "low",
   name: "sir",
@@ -51,13 +53,18 @@ async function saveSettings() {
   await fs.writeFile(path.join(USER_DIR(), "settings.json"),
     JSON.stringify({ settings, apiKey: stored, encrypted: enc }, null, 2));
 }
-const publicSettings = () => ({
+const publicSettings = async () => {
+  const claudePath = await findClaude();
+  return {
   ...settings,
+  claudePath,
+  ready: settings.backend === "claude" ? !!claudePath : !!apiKey,
   hasKey: !!apiKey,
   keyHint: apiKey ? "…" + apiKey.slice(-4) : "",
   openAtLogin: app.getLoginItemSettings().openAtLogin,
   platform: process.platform,
-});
+  };
+};
 
 // ---------------------------------------------------------------- memory
 const MEM = () => path.join(USER_DIR(), "memory.json");
@@ -307,7 +314,7 @@ You can act on this computer:
 - look_at_screen when the user refers to what they're looking at, or when seeing it would help. Describe only what matters.
 - run_powershell to do things: find files, launch or close apps, check settings, automate tasks. Explain in "reason" what it does. Prefer read-only commands. Never delete, overwrite or send anything unless the user clearly asked for exactly that.
 - open for URLs, files, folders and apps; clipboard to read or hand over text; media_control for music and volume; set_timer for timers and reminders; remember for lasting preferences.
-- web_search and web_fetch for research and anything current. For research, search several angles, then summarise in a card with sources.
+- web search and web fetch for research and anything current. For research, search several angles, then summarise in a card with sources.
 
 Do the task rather than describing how the user could do it. Never claim to have done something you didn't do with a tool. If a request is ambiguous and acting wrongly would cost something, ask one short question.`;
 
@@ -321,6 +328,30 @@ function getClient() {
 let messages = [];
 let abort = null;
 
+// ---- Claude account backend (Claude Code CLI + local MCP server for Jarvis's tools)
+let mcp = null, cc = null;
+async function claudeSession() {
+  mcp ||= await startMcpServer({ tools: TOOLS, runTool });
+  cc ||= new ClaudeCodeSession({ send, mcpUrl: mcp.url, systemPrompt: systemPrompt(), model: settings.model, userDir: USER_DIR() });
+  return cc;
+}
+function resetClaudeSession() { cc?.kill(); cc = null; }
+
+async function chatViaClaudeCode(content) {
+  try {
+    await (await claudeSession()).ask(content);
+  } catch (err) {
+    const msg = {
+      NO_CLAUDE: "To use your Claude account I need Claude Code. Open settings and press “Connect Claude account”.",
+      NO_LOGIN: "Claude Code isn't signed in. Open settings and press “Connect Claude account”.",
+      LIMIT: "You've hit your Claude plan's usage limit for now. " + err.message,
+    }[err.code];
+    send("agent", { type: "error", code: err.code === "NO_CLAUDE" || err.code === "NO_LOGIN" ? "SETUP" : undefined, message: msg || "Claude Code ran into a problem.", detail: err.message });
+  } finally {
+    send("agent", { type: "end" });
+  }
+}
+
 async function chat({ text, withScreen }) {
   const mem = await loadMemory();
   const context = `Context (not to be read aloud): local time ${new Date().toString()}; OS ${os.type()} ${os.release()}; user home ${os.homedir()}.\nThings you remember about the user:\n${mem.notes.map((n) => "- " + n.note).join("\n") || "(none yet)"}`;
@@ -333,6 +364,7 @@ async function chat({ text, withScreen }) {
     } catch (e) { content.push({ type: "text", text: `(Screen capture failed: ${e.message})` }); }
   }
   content.push({ type: "text", text });
+  if (settings.backend === "claude") return chatViaClaudeCode(content);
   messages.push({ role: "user", content });
 
   abort = new AbortController();
@@ -378,7 +410,7 @@ async function chat({ text, withScreen }) {
     }
   } catch (err) {
     while (messages.length && messages.at(-1).role === "user") messages.pop(); // keep history valid
-    if (err.code === "NO_KEY") return send("agent", { type: "error", code: "NO_KEY", message: "I need an Anthropic API key first. Open settings to add it." });
+    if (err.code === "NO_KEY") return send("agent", { type: "error", code: "SETUP", message: "I need an Anthropic API key first, or switch to your Claude account in settings." });
     if (err.name === "AbortError" || err instanceof Anthropic.APIUserAbortError) return send("agent", { type: "error", message: "Stopped." });
     let message = "Something went wrong reaching my core.";
     if (err instanceof Anthropic.AuthenticationError) message = "That API key was rejected. Check it in settings.";
@@ -424,16 +456,18 @@ ipcMain.handle("stt:warmup", () => getAsr().then(() => true).catch((e) => { send
 
 // ---------------------------------------------------------------- ipc
 ipcMain.handle("chat:send", (_e, payload) => chat(payload));
-ipcMain.on("chat:stop", () => abort?.abort());
-ipcMain.on("chat:reset", () => { messages = []; });
+ipcMain.on("chat:stop", () => { abort?.abort(); cc?.interrupt(); });
+ipcMain.on("chat:reset", () => { messages = []; resetClaudeSession(); });
 ipcMain.handle("settings:get", () => publicSettings());
+ipcMain.handle("claude:signin", async () => { openSignInTerminal(await findClaude()); resetClaudeSession(); return true; });
 ipcMain.handle("settings:set", async (_e, patch) => {
   if (typeof patch.apiKey === "string" && patch.apiKey.trim()) apiKey = patch.apiKey.trim();
   if (typeof patch.openAtLogin === "boolean") app.setLoginItemSettings({ openAtLogin: patch.openAtLogin });
   for (const k of Object.keys(DEFAULTS)) if (k in patch) settings[k] = patch[k];
   await saveSettings();
+  resetClaudeSession(); // pick up model / name changes
   const hotkeys = registerHotkeys();
-  return { ...publicSettings(), hotkeys };
+  return { ...(await publicSettings()), hotkeys };
 });
 ipcMain.handle("memory:get", () => loadMemory());
 ipcMain.handle("memory:delete", async (_e, i) => { const m = await loadMemory(); m.notes.splice(i, 1); await saveMemory(m); return m; });
@@ -461,6 +495,6 @@ else {
       win.setPosition(Math.round(workArea.x + (workArea.width - w) / 2), workArea.y);
     });
   });
-  app.on("will-quit", () => globalShortcut.unregisterAll());
+  app.on("will-quit", () => { globalShortcut.unregisterAll(); cc?.kill(); mcp?.close(); });
   app.on("window-all-closed", () => app.quit());
 }

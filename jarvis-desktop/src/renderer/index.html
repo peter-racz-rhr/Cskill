@@ -57,14 +57,22 @@
     <div class="view" id="setView" hidden>
       <p class="vh">Settings <button class="link" data-back>Done</button></p>
       <form class="settings" id="setForm">
-        <label>Anthropic API key<input name="apiKey" type="password" placeholder="sk-ant-…" autocomplete="off"><small id="keyHint">Get one at console.anthropic.com</small></label>
+        <label>Brain<select name="backend">
+          <option value="claude">My Claude account (Pro / Max, via Claude Code)</option>
+          <option value="api">Anthropic API key (pay per use)</option>
+        </select></label>
+        <div class="acct" id="acctBox">
+          <p id="acctStatus">Checking for Claude Code…</p>
+          <button type="button" class="ghost" id="btnSignIn">Connect Claude account</button>
+        </div>
+        <label id="keyRow">Anthropic API key<input name="apiKey" type="password" placeholder="sk-ant-…" autocomplete="off"><small>Get one at console.anthropic.com</small></label>
         <div class="row">
           <label>Model<select name="model">
             <option value="claude-opus-5-5">Opus 5.5 (smartest)</option>
             <option value="claude-sonnet-5-5">Sonnet 5.5 (faster, cheaper)</option>
             <option value="claude-haiku-5-5">Haiku 5.5 (fastest)</option>
           </select></label>
-          <label>Thinking<select name="effort">
+          <label id="effortRow">Thinking<select name="effort">
             <option value="low">Quick</option><option value="medium">Balanced</option><option value="high">Thorough</option>
           </select></label>
         </div>
