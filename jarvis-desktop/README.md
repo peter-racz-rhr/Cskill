@@ -1,16 +1,16 @@
 # Jarvis
 
-A voice assistant for Windows that lives at the top of your screen as a small liquid ball. Click it and talk. It answers out loud, keeps listening so you can just keep talking, and can look at your screen and do things for you. It runs on your own Claude account, so there's no API key.
+A voice assistant for Windows that lives at the top of your screen as a small black liquid drop. Click it and talk. It answers out loud, keeps listening so you can just keep talking, and can look at your screen and do things for you. It runs on your own Claude account, so there's no API key.
 
 ## The ball
 
-- **Docked:** a blue drop hanging from the top edge of your screen. Hover over it and it droops a little.
+- **Docked:** a black drop hanging from the top edge of your screen, like a notch. Hover over it and it droops a little.
 - **Click it** and talk. When you stop, Jarvis answers out loud, then listens again. Stay quiet for a few seconds and the conversation ends.
 - **Pull it down:** it stretches on a liquid neck and **snaps off** into a floating ball you can put anywhere. Drag it back into the top edge to merge it in again.
-- **What the ball shows:**
-  - it reacts to your voice while listening (cyan ring)
-  - a purple swirl while thinking
-  - it pulses with Jarvis's voice while speaking
+- **What the light inside shows** (the drop itself is always black):
+  - a blue light that follows your voice while it's listening
+  - a thin white arc circling while it's thinking
+  - a soft white pulse while it's speaking
   - violet while it's using your mouse and keyboard
   - amber while it's waiting for your OK
 - **Right-click** it for Settings, Memory, Float/Dock and Quit.

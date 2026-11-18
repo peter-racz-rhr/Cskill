@@ -8,10 +8,14 @@ const $ = (id) => document.getElementById(id);
 const W = innerWidth, H = innerHeight;
 
 // ---------- look per state ----------
+// The blob is always black. Only a small light inside it shows what's happening:
+// blue while it listens, soft white while it speaks, amber/violet when it needs you.
 const COLORS = {
-  idle: [61, 109, 255], listening: [40, 170, 255], thinking: [110, 92, 255], speaking: [61, 120, 255],
-  control: [139, 92, 255], alert: [255, 176, 32], error: [255, 90, 79],
+  idle: [255, 255, 255], listening: [64, 140, 255], thinking: [255, 255, 255], speaking: [235, 240, 255],
+  control: [150, 110, 255], alert: [255, 176, 32], error: [255, 90, 79],
 };
+const DOT = { idle: 0, listening: 1, thinking: 0, speaking: 0.55, control: 0.8, alert: 0.8, error: 0.8 };
+let dotA = 0; // current light strength (eased)
 let state = "idle", level = 0, docked = true; // docked: is the ball living in the top edge (dock window)?
 let color = [...COLORS.idle];
 
@@ -72,26 +76,26 @@ function frame(now) {
   step(anchorY, "y", "v", A.y + (MODE === "float" || !docked ? -12 : 0), WOBBLY, dt);
   const tc = COLORS[state] || COLORS.idle;
   for (let i = 0; i < 3; i++) color[i] += (tc[i] - color[i]) * Math.min(1, dt * 8);
+  dotA += ((DOT[state] ?? 0) - dotA) * Math.min(1, dt * 10);
   draw(now);
   const moving = Math.abs(ball.vx) + Math.abs(ball.vy) + Math.abs(ball.vr) + Math.abs(anchorY.v) > 0.05
     || Math.abs(target.y - ball.y) + Math.abs(target.x - ball.x) + Math.abs(target.r - ball.r) > 0.05
-    || tc.some((v, i) => Math.abs(v - color[i]) > 0.5);
+    || tc.some((v, i) => Math.abs(v - color[i]) > 0.5) || Math.abs((DOT[state] ?? 0) - dotA) > 0.01;
   raf = moving || pulling || state !== "idle" ? requestAnimationFrame(frame) : 0;
 }
 
 function draw(now) {
-  const fill = `rgb(${color.map(Math.round).join(",")})`;
-  document.body.style.setProperty("--glow", `rgba(${color.map(Math.round).join(",")},.55)`);
-  const r = Math.max(0, ball.r + (state === "speaking" ? level * 4 * Math.sin(now / 70) : 0));
+  const rgb = color.map(Math.round).join(",");
+  document.body.style.setProperty("--dot", `rgb(${rgb})`);
+  const r = Math.max(0, ball.r);
   const showBall = !(MODE === "dock" && (torn || !docked) && ball.y < 4);
-  for (const id of ["anchor", "neck", "ball"]) $(id).setAttribute("fill", fill);
 
-  // anchor (only in the dock window)
+  // anchor (only in the dock window): the bit of the drop that merges into the screen edge
   const an = $("anchor");
   if (MODE === "dock") { an.setAttribute("cx", A.x); an.setAttribute("cy", anchorY.y); an.setAttribute("r", A.r); }
   else an.setAttribute("r", 0);
 
-  // ball + neck
+  // ball + neck, all black
   const b = $("ball");
   b.setAttribute("cx", ball.x); b.setAttribute("cy", ball.y); b.setAttribute("r", showBall ? r : 0);
   let neck = "";
@@ -102,19 +106,26 @@ function draw(now) {
   }
   $("neck").setAttribute("d", neck);
 
-  // shading, highlight and state effects ride on the ball
-  for (const id of ["shadeC", "shineC"]) { const c = $(id); c.setAttribute("cx", ball.x); c.setAttribute("cy", ball.y); c.setAttribute("r", showBall ? r : 0); }
-  const ring = $("ring");
-  const ringOn = showBall && (state === "listening" || state === "alert" || state === "control");
-  ring.setAttribute("cx", ball.x); ring.setAttribute("cy", ball.y);
-  ring.setAttribute("r", r + 4 + (state === "listening" ? level * 12 : 2 + 2 * Math.sin(now / 160)));
-  ring.setAttribute("stroke", fill); ring.setAttribute("stroke-opacity", ringOn ? 0.55 : 0);
+  // a hairline edge so the floating ball is visible on dark backgrounds too
+  const e = $("edge");
+  e.setAttribute("cx", ball.x); e.setAttribute("cy", ball.y); e.setAttribute("r", MODE === "float" && showBall ? r - 0.5 : 0);
+
+  // the light inside: blue while listening (follows your voice), white pulse while speaking
+  const pulse = state === "speaking" ? 0.75 + 0.5 * level + 0.08 * Math.sin(now / 90)
+              : state === "listening" ? 0.55 + 0.6 * level
+              : 0.6 + 0.08 * Math.sin(now / 220);
+  const dr = showBall ? Math.max(0, r * 0.5 * pulse * Math.min(1, dotA * 1.4)) : 0;
+  const dot = $("dot");
+  dot.setAttribute("cx", ball.x); dot.setAttribute("cy", ball.y); dot.setAttribute("r", dr);
+  dot.setAttribute("opacity", Math.min(1, dotA));
+
+  // thinking: a thin white arc circling inside the black ball
   const sw = $("swirl");
   const swirlOn = showBall && state === "thinking";
-  const sr = Math.max(0, r * 0.62);
+  const sr = Math.max(0, r * 0.5);
   sw.setAttribute("cx", ball.x); sw.setAttribute("cy", ball.y); sw.setAttribute("r", swirlOn ? sr : 0);
-  sw.setAttribute("stroke-dasharray", `${(sr * 2 * Math.PI * 0.28).toFixed(1)} ${(sr * 2 * Math.PI).toFixed(1)}`);
-  sw.setAttribute("transform", `rotate(${((now - t0) / 3) % 360} ${ball.x} ${ball.y})`);
+  sw.setAttribute("stroke-dasharray", `${(sr * 2 * Math.PI * 0.3).toFixed(1)} ${(sr * 2 * Math.PI).toFixed(1)}`);
+  sw.setAttribute("transform", `rotate(${((now - t0) / 2.6) % 360} ${ball.x} ${ball.y})`);
 }
 
 // ---------- pointer: hover, click, pull / drag ----------

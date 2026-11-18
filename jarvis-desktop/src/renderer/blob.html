@@ -7,7 +7,7 @@
 <style>
   html,body{margin:0;height:100%;background:transparent;overflow:hidden;user-select:none}
   svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
-  #glow{filter:drop-shadow(0 6px 14px var(--glow,rgba(61,109,255,.55)))}
+  #glow{filter:drop-shadow(0 4px 10px rgba(0,0,0,.35))}
   body.grab{cursor:grab}
   body.grabbing{cursor:grabbing}
 </style>
@@ -15,25 +15,20 @@
 <body>
 <svg id="svg" aria-label="Jarvis">
   <defs>
-    <radialGradient id="shine" cx="34%" cy="28%" r="62%">
-      <stop offset="0" stop-color="#fff" stop-opacity=".75"/>
-      <stop offset=".35" stop-color="#fff" stop-opacity=".18"/>
-      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="shade" cx="50%" cy="45%" r="55%">
-      <stop offset=".6" stop-color="#000" stop-opacity="0"/>
-      <stop offset="1" stop-color="#000" stop-opacity=".28"/>
+    <radialGradient id="light" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="var(--dot)" stop-opacity="1"/>
+      <stop offset=".55" stop-color="var(--dot)" stop-opacity=".85"/>
+      <stop offset="1" stop-color="var(--dot)" stop-opacity="0"/>
     </radialGradient>
   </defs>
   <g id="glow">
-    <circle id="anchor"/>
-    <path id="neck"/>
-    <circle id="ball"/>
+    <circle id="anchor" fill="#000"/>
+    <path id="neck" fill="#000"/>
+    <circle id="ball" fill="#000"/>
   </g>
-  <circle id="shadeC" fill="url(#shade)"/>
-  <circle id="ring" fill="none" stroke-width="2"/>
-  <circle id="swirl" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="2.2" stroke-linecap="round"/>
-  <circle id="shineC" fill="url(#shine)"/>
+  <circle id="edge" fill="none" stroke="#fff" stroke-opacity=".10" stroke-width="1"/>
+  <circle id="dot" fill="url(#light)"/>
+  <circle id="swirl" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width="1.8" stroke-linecap="round"/>
 </svg>
 <script src="blob.js"></script>
 </body>
