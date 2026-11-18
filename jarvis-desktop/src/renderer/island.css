@@ -2,8 +2,8 @@
 :root{
   --ink:#000; --fg:#f5f5f7; --muted:#a1a1a8; --faint:#5c5c63; --line:#26262b; --raise:#141416; --raise2:#1d1d21;
   --idle:#6e6e76; --listen:#ff453a; --think:#0a84ff; --speak:#30d158; --warn:#ffd60a; --control:#7c5cff;
-  /* geometry, driven from island.js so the black goo and the content move together */
-  --w:120px; --h:30px; --y:-26px;
+  /* geometry, driven from island.js */
+  --w:150px; --h:7px; --r:7px; --s:8px; --pad:0px;
   --drop:cubic-bezier(.34,1.45,.55,1);
   color-scheme:dark;
 }
@@ -15,21 +15,28 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
 kbd{font:600 11px/1 inherit;background:var(--raise2);border:1px solid var(--line);border-radius:5px;padding:2px 6px}
 
-/* ---------- liquid layer ---------- */
-#goo{position:absolute;inset:0;filter:url(#goo);pointer-events:none}
-.anchor{position:absolute;top:-16px;left:50%;width:150px;height:21px;margin-left:-75px;border-radius:12px;background:var(--ink)}
-.blob,#island{position:absolute;left:50%;top:var(--y);width:var(--w);height:var(--h);transform:translateX(-50%);border-radius:min(22px, calc(var(--h) / 2));
-  transition:top .62s var(--drop),width .55s var(--drop),height .55s var(--drop),border-radius .55s var(--drop)}
-.blob{background:var(--ink)}
-body.big .blob,body.big #island{border-radius:26px}
-.hotzone{position:absolute;top:0;left:50%;width:260px;height:14px;margin-left:-130px}
+/* ---------- one continuous shape growing out of the top edge ----------
+   The island is flush with the top of the screen; its bottom corners are round, and two
+   concave "shoulders" curve it smoothly into the screen edge, so it reads as one liquid
+   blob stretching down rather than a pill hanging off a stalk. */
+#island{
+  position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:var(--w);height:var(--h);background:var(--ink);
+  border-radius:0 0 var(--r) var(--r);
+  transition:width .55s var(--drop),height .6s var(--drop),border-radius .55s var(--drop);
+  cursor:pointer;
+}
+#island::before,#island::after{content:"";position:absolute;top:0;width:var(--s);height:var(--s);pointer-events:none;
+  transition:width .55s var(--drop),height .55s var(--drop)}
+#island::before{left:calc(-1 * var(--s) + 1px);background:radial-gradient(circle at 0 100%,transparent calc(var(--s) - .5px),var(--ink) var(--s))}
+#island::after{right:calc(-1 * var(--s) + 1px);background:radial-gradient(circle at 100% 100%,transparent calc(var(--s) - .5px),var(--ink) var(--s))}
+.inner{position:relative;height:100%;display:flex;flex-direction:column;overflow:hidden;border-radius:0 0 var(--r) var(--r);padding-top:var(--pad)}
+.hotzone{position:absolute;top:0;left:50%;width:280px;height:14px;margin-left:-140px}
 
-/* ---------- content layer ---------- */
-#island{display:flex;flex-direction:column;overflow:hidden;cursor:pointer}
-#island[data-mode=hidden]{pointer-events:none}
-#island > *{transition:opacity .2s ease}
-#island[data-mode=hidden] > *{opacity:0}
-#island:not([data-mode=hidden]) > *{transition-delay:.12s}
+/* ---------- content ---------- */
+#island[data-mode=hidden] .inner > *{opacity:0}
+.inner > *{transition:opacity .2s ease}
+#island:not([data-mode=hidden]) .inner > *{transition-delay:.14s}
 
 #island{--state:var(--idle)}
 #island[data-state=listening]{--state:var(--listen)}

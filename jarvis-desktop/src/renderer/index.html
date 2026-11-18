@@ -8,19 +8,9 @@
 </head>
 <body>
 
-<!-- Liquid "goo": black shapes are blurred then alpha-thresholded so the pill melts out of the screen edge. -->
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <filter id="goo" x="-50%" y="-50%" width="200%" height="200%">
-    <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="b"/>
-    <feColorMatrix in="b" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 24 -11" result="g"/>
-    <feComposite in="SourceGraphic" in2="g" operator="atop"/>
-  </filter>
-</svg>
-
-<div id="goo"><div class="anchor"></div><div class="blob" id="blob"></div></div>
 <div class="hotzone" id="hotzone"></div>
 
-<div id="island" data-mode="hidden" data-state="idle">
+<div id="island" data-mode="hidden" data-state="idle"><div class="inner">
   <!-- pill row -->
   <div class="bar">
     <span class="orb" aria-hidden="true"></span>
@@ -71,6 +61,14 @@
           <label>Talk hotkey<input name="hotkeyTalk"></label>
           <label>Spare hotkey<input name="hotkeyPanel"></label>
         </div>
+        <label>Voice<select name="voiceName">
+          <option value="bm_george">George (British, male)</option>
+          <option value="bm_fable">Fable (British, male)</option>
+          <option value="bm_daniel">Daniel (British, male)</option>
+          <option value="bf_emma">Emma (British, female)</option>
+          <option value="am_michael">Michael (American, male)</option>
+          <option value="af_heart">Heart (American, female)</option>
+        </select></label>
         <label class="tg"><input type="checkbox" name="voice"> Speak answers out loud</label>
         <label class="tg"><input type="checkbox" name="allowControl"> Let Jarvis use my mouse and keyboard when I ask (asks once per task)</label>
         <label class="tg"><input type="checkbox" name="confirmCommands"> Ask before running commands on my PC</label>
@@ -120,7 +118,7 @@
       </div>
     </section>
   </div>
-</div>
+</div></div>
 <script src="island.js" defer></script>
 </body>
 </html>

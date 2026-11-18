@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld("jarvis", {
   reset: () => ipcRenderer.send("chat:reset"),
   transcribe: (samples) => ipcRenderer.invoke("stt:transcribe", samples),
   warmup: () => ipcRenderer.invoke("stt:warmup"),
+  tts: (text) => ipcRenderer.invoke("tts:speak", text),
   getSettings: () => ipcRenderer.invoke("settings:get"),
   setSettings: (patch) => ipcRenderer.invoke("settings:set", patch),
   getMemory: () => ipcRenderer.invoke("memory:get"),

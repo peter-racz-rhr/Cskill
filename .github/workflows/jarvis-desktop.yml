@@ -20,8 +20,8 @@ jobs:
           cache-dependency-path: jarvis-desktop/package-lock.json
       - run: npm ci
       - name: Check the main process loads its dependencies
-        run: node -e "import('@anthropic-ai/sdk').then(()=>import('@huggingface/transformers')).then(()=>console.log('deps ok'))"
-      - name: Build installer and portable .exe
+        run: node -e "import('@anthropic-ai/sdk').then(()=>import('@huggingface/transformers')).then(()=>import('kokoro-js')).then(()=>console.log('deps ok'))"
+      - name: Build installer .exe
         run: npx electron-builder --win --x64 --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"

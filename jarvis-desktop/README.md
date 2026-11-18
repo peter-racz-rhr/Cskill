@@ -10,7 +10,7 @@ A small "Dynamic Island" at the top of your screen, powered by Claude. Talk to i
 
 ## Install
 
-1. Download **Jarvis-Setup-x.y.z.exe** (installer) or **Jarvis-x.y.z-portable.exe** (no install) from this repo's
+1. Download **Jarvis-Setup-x.y.z.exe** from this repo's
    **Actions → Build Jarvis for Windows → latest run → Artifacts → Jarvis-Windows**.
 2. Run it. Windows SmartScreen will warn that the app is unsigned. Click **More info → Run anyway**.
 3. Setup opens by itself: **Sign in** (a window installs Claude Code if needed and your browser asks you to log in to your Claude account; Jarvis notices when you're done), then **microphone**, **screen and control**, and the one-time **voice model download** (about 290 MB).
@@ -25,7 +25,7 @@ If you prefer an API key instead, choose **Brain → Anthropic API key** in Sett
 
 | | |
 |---|---|
-| Hover the top of the screen, click the pill | Talk. It listens until you pause, then answers |
+| Hover the top of the screen, click the pill | Start a conversation. It answers, then listens again by itself; stay quiet a few seconds to end it |
 | `Alt+J` | Talk from anywhere |
 | Click while it's working or talking | Stop |
 | `Esc` | Stop listening, stop talking, or stop controlling your PC |
@@ -54,7 +54,7 @@ Hotkeys, model, voice and speech language can be changed in **Settings**.
 ## Privacy and safety
 
 - Default mode uses your Claude account through Claude Code. No key is stored by Jarvis. In API-key mode, the key is encrypted with Windows' own encryption (DPAPI via Electron `safeStorage`).
-- Speech is transcribed on your machine with Whisper. Audio never leaves your PC; only the text is sent to Claude.
+- Speech is transcribed on your machine with Whisper, and Jarvis's voice is generated on your machine with Kokoro (a neural voice). Audio never leaves your PC; only the text is sent to Claude.
 - Screenshots are taken only when you press 👁 or when Jarvis decides to look. They are sent to Claude for that request.
 - PowerShell commands need your approval unless you turn that off in Settings.
 - The island hides itself from screen capture, so it never appears in its own screenshots.

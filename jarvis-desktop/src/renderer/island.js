@@ -37,20 +37,18 @@ function currentMode() {
 function render() {
   const mode = currentMode();
   island.dataset.mode = mode;
-  document.body.classList.toggle("big", mode === "panel");
-  for (const [id, v] of [["answerView", "answer"], ["setView", "settings"], ["memView", "memory"], ["setupView", "setup"]]) $(id).hidden = view !== v;
+    for (const [id, v] of [["answerView", "answer"], ["setView", "settings"], ["memView", "memory"], ["setupView", "setup"]]) $(id).hidden = view !== v;
 
-  let w = 120, h = 30, y = -26;
-  if (mode === "peek") { w = 230; h = 38; y = 14; }
-  if (mode === "active") { w = 340; h = 38; y = 14; }
+  // hidden: a thin notch in the top edge · peek/active: it stretches down · panel: a big rounded drop
+  let w = 150, h = 7, r = 7, sh = 8, pad = 0;
+  if (mode === "peek") { w = 240; h = 46; r = 23; sh = 14; pad = 8; }
+  if (mode === "active") { w = 350; h = 46; r = 23; sh = 14; pad = 8; }
   if (mode === "panel") {
     const sec = { answer: "answerView", settings: "setView", memory: "memView", setup: "setupView" }[view];
     w = view === "answer" ? ($("extras").children.length ? 480 : 420) : 480;
-    h = Math.min(38 + $(sec).offsetHeight, 680); y = 14;
+    pad = 8; h = Math.min(pad + 38 + $(sec).offsetHeight, 690); r = 28; sh = 18;
   }
-  root.style.setProperty("--w", w + "px");
-  root.style.setProperty("--h", h + "px");
-  root.style.setProperty("--y", y + "px");
+  for (const [k, v] of [["--w", w], ["--h", h], ["--r", r], ["--s", sh], ["--pad", pad]]) root.style.setProperty(k, v + "px");
   renderBar(mode);
 }
 new ResizeObserver(() => render()).observe($("body"));
@@ -97,9 +95,9 @@ for (const el of [$("hotzone"), island]) { el.addEventListener("mouseenter", ent
 island.querySelector(".bar").addEventListener("click", () => {
   if (view === "setup") return;
   if (settings.ready === false) return openView("setup");
-  if (busy) { J.stop(); hush(); return; }
-  if (speaking) { hush(); settle(); return; }
-  listening ? stopListening() : startListening();
+  if (busy) { endConversation(); J.stop(); hush(); return; }
+  if (speaking) { endConversation(); hush(); settle(); return; }
+  listening ? stopListening(!rec?.speechAt) : startListening();
 });
 island.addEventListener("contextmenu", (e) => { e.preventDefault(); J.menu(); });
 
@@ -115,26 +113,71 @@ function resumeDismiss() { if (answerShown && !busy && !speaking) scheduleDismis
 function dismissAnswer() { if (pendingApprovals || busy) return; answerShown = false; render(); }
 
 // ------------------------------------------------------------- speech out
-let voice = null;
-function pickVoice() {
-  const vs = speechSynthesis.getVoices();
-  for (const p of [/George/i, /Ryan/i, /Thomas/i, /Daniel/i, /Google UK English Male/i, /en-GB/i, /David/i, /^en/i]) { const v = vs.find((v) => p.test(v.name) || p.test(v.lang)); if (v) return v; }
-  return null;
+// Sentences are synthesised by Kokoro (a local neural voice) as soon as they arrive, and played
+// back in order, so Jarvis starts talking after the first sentence. If Kokoro isn't available,
+// the Windows voice is used instead.
+let audioCtx = null, gainNode = null, playHead = 0, sources = [], ttsGen = 0, kokoroOk = true;
+let chain = Promise.resolve();
+function audio() {
+  if (!audioCtx) { audioCtx = new AudioContext(); gainNode = audioCtx.createGain(); gainNode.gain.value = 1.0; gainNode.connect(audioCtx.destination); }
+  return audioCtx;
 }
-voice = pickVoice(); speechSynthesis.onvoiceschanged = () => (voice = pickVoice());
 function speak(text) {
-  text = text.replace(/[*_#`>]/g, "").trim();
+  text = text.replace(/[*_#`>]/g, "").replace(/\s+/g, " ").trim();
   if (!settings.voice || !text) return;
-  const u = new SpeechSynthesisUtterance(text);
-  if (voice) u.voice = voice;
-  u.rate = 1.05;
+  const gen = ttsGen;
   speaking++;
-  u.onstart = () => { if (!busy && !control) setState("speaking", "Jarvis"); };
-  u.onend = u.onerror = () => { speaking = Math.max(0, speaking - 1); if (!speaking) { settle(); if (!busy) scheduleDismiss(afterReadMs()); } };
-  speechSynthesis.speak(u);
+  if (!busy && !control) setState("speaking", "Jarvis");
+  const synth = kokoroOk ? J.tts(text).catch((e) => { console.warn("Kokoro failed, using Windows voice", e); kokoroOk = false; return null; }) : Promise.resolve(null);
+  chain = chain.then(async () => {
+    const res = await synth;
+    if (gen !== ttsGen) return doneOne();
+    if (!res) return fallbackSpeak(text, gen);
+    const ctx = audio();
+    if (ctx.state === "suspended") await ctx.resume();
+    const buf = ctx.createBuffer(1, res.audio.length, res.sampleRate);
+    buf.copyToChannel(res.audio instanceof Float32Array ? res.audio : new Float32Array(res.audio), 0);
+    const src = ctx.createBufferSource(); src.buffer = buf; src.connect(gainNode);
+    const start = Math.max(ctx.currentTime + 0.02, playHead);
+    src.start(start); playHead = start + buf.duration + 0.08;
+    sources.push(src);
+    src.onended = () => { sources = sources.filter((x) => x !== src); doneOne(); };
+  });
 }
-function hush() { speechSynthesis.cancel(); speaking = 0; }
+function fallbackSpeak(text, gen) {
+  return new Promise((resolve) => {
+    const u = new SpeechSynthesisUtterance(text);
+    const vs = speechSynthesis.getVoices();
+    const v = [/Ryan|George|Thomas/i, /en-GB/i, /^en/i].map((p) => vs.find((x) => p.test(x.name) || p.test(x.lang))).find(Boolean);
+    if (v) u.voice = v;
+    u.rate = 1.15; u.volume = 1;
+    u.onend = u.onerror = () => { doneOne(); resolve(); };
+    if (gen !== ttsGen) { doneOne(); return resolve(); }
+    speechSynthesis.speak(u);
+  });
+}
+function doneOne() {
+  speaking = Math.max(0, speaking - 1);
+  if (speaking) return;
+  settle();
+  if (!busy) { scheduleDismiss(afterReadMs()); continueConversation(); }
+}
+function hush() {
+  ttsGen++; speaking = 0; chain = Promise.resolve();
+  for (const s of sources) { try { s.onended = null; s.stop(); } catch {} }
+  sources = []; playHead = 0; speechSynthesis.cancel();
+}
 const afterReadMs = () => ($("extras").children.length ? 14000 : 5000);
+
+// ------------------------------------------------------------- conversation mode
+// One click starts a conversation: after each answer Jarvis listens again by itself.
+// Silence for a few seconds (or Esc / a click) ends it.
+let convo = false;
+function continueConversation() {
+  if (!convo || listening || busy || pendingApprovals || view !== "answer") return;
+  setTimeout(() => { if (convo && !listening && !busy && !speaking) startListening(true); }, 250);
+}
+function endConversation() { convo = false; }
 
 // ------------------------------------------------------------- asking
 let out = "", spoken = 0;
@@ -157,6 +200,7 @@ async function ask(text) {
   busy = false;
   settle();
   if (answerShown && !speaking) scheduleDismiss(settings.voice ? afterReadMs() : 6000 + out.length * 45);
+  if (!speaking) continueConversation();
 }
 
 J.onAgent((ev) => {
@@ -211,17 +255,26 @@ const WORKLET_URL = URL.createObjectURL(new Blob([`
   }
   registerProcessor("recorder", Recorder);`], { type: "text/javascript" }));
 let rec = null;
-async function startListening() {
+async function startListening(followUp = false) {
   if (listening || busy) return;
-  hush(); answerShown = false;
+  if (!followUp) { convo = true; hush(); answerShown = false; }
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     const ctx = new AudioContext({ sampleRate: 16000 });
-    await ctx.audioWorklet.addModule(WORKLET_URL);
-    const src = ctx.createMediaStreamSource(stream), node = new AudioWorkletNode(ctx, "recorder");
-    src.connect(node);
-    rec = { stream, ctx, node, chunks: [], samples: 0, started: performance.now(), speechAt: 0, lastVoice: 0, floor: 0, floorN: 0 };
-    node.port.onmessage = ({ data }) => onAudio(data);
+    const src = ctx.createMediaStreamSource(stream);
+    let node, port;
+    try {                                   // preferred: AudioWorklet (off the main thread)
+      await ctx.audioWorklet.addModule(WORKLET_URL);
+      node = new AudioWorkletNode(ctx, "recorder"); port = node.port;
+      src.connect(node);
+    } catch {                               // fallback: ScriptProcessor (works everywhere)
+      node = ctx.createScriptProcessor(2048, 1, 1);
+      port = { set onmessage(fn) { node.onaudioprocess = fn ? (e) => fn({ data: e.inputBuffer.getChannelData(0).slice(0) }) : null; } };
+      const mute = ctx.createGain(); mute.gain.value = 0;
+      src.connect(node); node.connect(mute); mute.connect(ctx.destination);
+    }
+    rec = { stream, ctx, node, port, chunks: [], samples: 0, started: performance.now(), speechAt: 0, lastVoice: 0, floor: 0, floorN: 0, followUp };
+    port.onmessage = ({ data }) => onAudio(data);
   } catch {
     flashBar("Microphone blocked · Windows Settings → Privacy → Microphone", 5000);
     return;
@@ -236,16 +289,17 @@ function onAudio(chunk) {
   if (t < 300) rec.floor = (rec.floor * rec.floorN + rms) / ++rec.floorN;
   if (rms > Math.max(0.012, rec.floor * 2.5)) { rec.lastVoice = now; if (!rec.speechAt) rec.speechAt = now; }
   document.querySelectorAll(".wave i").forEach((b, i) => (b.style.height = 4 + Math.min(12, rms * 260 * (0.6 + 0.4 * Math.sin(now / 90 + i))) + "px"));
-  if (rec.speechAt && now - rec.lastVoice > 1300) stopListening();
-  else if (!rec.speechAt && t > 8000) stopListening(true);
+  if (rec.speechAt && now - rec.lastVoice > 900) stopListening();          // you paused → send
+  else if (!rec.speechAt && t > (rec.followUp ? 6000 : 8000)) stopListening(true, true); // silence → conversation over
   else if (t > 45000) stopListening();
 }
-async function stopListening(cancel = false) {
+async function stopListening(cancel = false, quiet = false) {
   if (!rec) return;
   const r = rec; rec = null; listening = false;
-  r.node.port.onmessage = null; r.stream.getTracks().forEach((t) => t.stop()); r.ctx.close();
+  if (cancel) endConversation();
+  r.port.onmessage = null; r.stream.getTracks().forEach((t) => t.stop()); r.ctx.close();
   document.querySelectorAll(".wave i").forEach((b) => (b.style.height = "4px"));
-  if (cancel || !r.speechAt || r.samples < 16000 * 0.4) { settle(); flashBar("Didn't catch that", 1800, "idle"); return; }
+  if (cancel || !r.speechAt || r.samples < 16000 * 0.4) { settle(); if (!quiet) flashBar("Didn't catch that", 1800, "idle"); return; }
   const audio = new Float32Array(r.samples);
   let o = 0; for (const c of r.chunks) { audio.set(c, o); o += c.length; }
   setState("thinking", "Transcribing…");
@@ -253,7 +307,7 @@ async function stopListening(cancel = false) {
   try {
     const text = await J.transcribe(audio);
     dl.waiting = false;
-    if (!text || /^\[.*\]$|^\(.*\)$/.test(text)) { settle(); flashBar("Didn't catch that", 1800, "idle"); return; }
+    if (!text || /^\[.*\]$|^\(.*\)$/.test(text)) { settle(); flashBar("Didn't catch that", 1800, "idle"); continueConversation(); return; }
     ask(text);
   } catch (e) {
     dl.waiting = false; settle();
@@ -416,18 +470,20 @@ $("btnFinish").onclick = async () => {
 // ------------------------------------------------------------- global events
 J.onHotkeyTalk(() => {
   if (settings.ready === false || !settings.onboarded) return openView("setup");
-  if (busy) { J.stop(); hush(); return; }
-  listening ? stopListening() : startListening();
+  if (busy) { endConversation(); J.stop(); hush(); return; }
+  if (speaking) { endConversation(); hush(); settle(); return; }
+  listening ? stopListening(!rec?.speechAt) : startListening();
 });
 J.onHotkeyPanel(() => { if ($("answer").textContent || $("extras").children.length) { answerShown = !answerShown; render(); if (answerShown) scheduleDismiss(10000); } });
 J.onView((v) => {
-  if (v === "stop") { hush(); if (listening) stopListening(true); return; }
+  if (v === "stop") { endConversation(); hush(); if (listening) stopListening(true); return; }
   openView(v === "onboarding" ? "setup" : v);
 });
 J.onSettingsOpen(() => openView("settings"));
 J.onBlur(() => { if (view === "settings" || view === "memory") closeView(); });
 addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
+  endConversation();
   if (listening) stopListening(true);
   else if (speaking) { hush(); settle(); }
   else if (view !== "answer" && view !== "setup") closeView();

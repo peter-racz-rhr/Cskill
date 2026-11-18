@@ -106,8 +106,8 @@ export async function startMcpServer({ tools, runTool }) {
 const quote = (a) => (/[\s"&|<>^]/.test(a) ? `"${a.replace(/"/g, '""')}"` : a);
 
 export class ClaudeCodeSession {
-  constructor({ send, mcpUrl, systemPrompt, model, userDir }) {
-    Object.assign(this, { send, mcpUrl, systemPrompt, model, userDir });
+  constructor({ send, mcpUrl, systemPrompt, model, effort, userDir }) {
+    Object.assign(this, { send, mcpUrl, systemPrompt, model, effort, userDir });
     this.proc = null; this.turn = null; this.buf = ""; this.stderr = "";
   }
 
@@ -123,6 +123,7 @@ export class ClaudeCodeSession {
     const args = [
       "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
       "--model", this.model,
+      ...(this.effort ? ["--effort", this.effort] : []),
       "--tools", "WebSearch,WebFetch",                  // built-ins: research only
       "--mcp-config", mcpFile, "--strict-mcp-config",   // Jarvis's tools
       "--allowedTools", "mcp__jarvis", "WebSearch", "WebFetch",

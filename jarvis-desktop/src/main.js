@@ -23,8 +23,10 @@ const USER_DIR = () => app.getPath("userData");
 // ---------------------------------------------------------------- settings
 const DEFAULTS = {
   backend: "claude", // "claude" = your Claude account via Claude Code · "api" = Anthropic API key
-  model: "claude-opus-5-5",
+  model: "claude-sonnet-5-5", // fast enough for conversation; Opus is one click away in Settings
   effort: "low",
+  voiceName: "bm_george",     // Kokoro neural voice (British male)
+  settingsVersion: 2,
   name: "sir",
   speechModel: "onnx-community/whisper-base",
   language: "auto",
@@ -42,6 +44,9 @@ async function loadSettings() {
   try {
     const raw = JSON.parse(await fs.readFile(path.join(USER_DIR(), "settings.json"), "utf8"));
     settings = { ...DEFAULTS, ...raw.settings };
+    if ((raw.settings?.settingsVersion || 1) < 2) { // v1 → v2: faster voice defaults
+      settings.model = DEFAULTS.model; settings.effort = "low"; settings.settingsVersion = 2;
+    }
     if (raw.apiKey) {
       apiKey = raw.encrypted && safeStorage.isEncryptionAvailable()
         ? safeStorage.decryptString(Buffer.from(raw.apiKey, "base64"))
@@ -446,7 +451,7 @@ let abort = null;
 let mcp = null, cc = null;
 async function claudeSession() {
   mcp ||= await startMcpServer({ tools: TOOLS, runTool });
-  cc ||= new ClaudeCodeSession({ send, mcpUrl: mcp.url, systemPrompt: systemPrompt(), model: settings.model, userDir: USER_DIR() });
+  cc ||= new ClaudeCodeSession({ send, mcpUrl: mcp.url, systemPrompt: systemPrompt(), model: settings.model, effort: settings.effort, userDir: USER_DIR() });
   return cc;
 }
 function resetClaudeSession() { cc?.kill(); cc = null; }
@@ -541,25 +546,55 @@ async function chat({ text, withScreen }) {
   }
 }
 
-// ---------------------------------------------------------------- speech to text (local Whisper)
-let asr = null, asrModel = "";
+// ---------------------------------------------------------------- local voice models (Whisper in, Kokoro out)
+// Both run on the same transformers.js / ONNX runtime. Downloads happen once into userData/models,
+// and report one combined, steady progress number to the island.
+let transformers = null;
+async function lib() {
+  if (transformers) return transformers;
+  transformers = await import("@huggingface/transformers");
+  transformers.env.cacheDir = path.join(USER_DIR(), "models");
+  return transformers;
+}
+const dlFiles = {};
+let dlLoading = 0;
+function onDownload(p) {
+  if (p.status !== "progress" || !p.total) return;
+  dlFiles[p.file] = { loaded: p.loaded, total: p.total };
+  const all = Object.values(dlFiles).filter((x) => x.loaded < x.total || dlLoading);
+  const loaded = all.reduce((a, x) => a + x.loaded, 0), total = all.reduce((a, x) => a + x.total, 0);
+  if (total) send("stt:progress", { pct: Math.floor((loaded / total) * 100) });
+}
+async function tracked(load) {
+  dlLoading++;
+  try { return await load(); }
+  finally { if (--dlLoading === 0) { for (const k in dlFiles) delete dlFiles[k]; send("stt:progress", { pct: 100, ready: true }); } }
+}
+
+let asr = null, asrModel = "", asrLoading = null;
 async function getAsr() {
   if (asr && asrModel === settings.speechModel) return asr;
-  const { pipeline, env } = await import("@huggingface/transformers");
-  env.cacheDir = path.join(USER_DIR(), "models");
-  const seen = {};
-  asr = await pipeline("automatic-speech-recognition", settings.speechModel, {
-    progress_callback: (p) => {
-      if (p.status === "progress" && p.total) {
-        seen[p.file] = { loaded: p.loaded, total: p.total };
-        const all = Object.values(seen), loaded = all.reduce((a, x) => a + x.loaded, 0), total = all.reduce((a, x) => a + x.total, 0);
-        send("stt:progress", { pct: Math.round((loaded / total) * 100) });
-      }
-    },
-  });
-  asrModel = settings.speechModel;
-  send("stt:progress", { pct: 100, ready: true });
-  return asr;
+  if (asrLoading) return asrLoading;
+  asrLoading = tracked(async () => {
+    const { pipeline } = await lib();
+    asr = await pipeline("automatic-speech-recognition", settings.speechModel, { progress_callback: onDownload });
+    asrModel = settings.speechModel;
+    return asr;
+  }).finally(() => (asrLoading = null));
+  return asrLoading;
+}
+
+let tts = null, ttsLoading = null;
+async function getTts() {
+  if (tts) return tts;
+  if (ttsLoading) return ttsLoading;
+  ttsLoading = tracked(async () => {
+    await lib();
+    const { KokoroTTS } = await import("kokoro-js");
+    tts = await KokoroTTS.from_pretrained("onnx-community/Kokoro-82M-v1.0-ONNX", { dtype: "q8", device: "cpu", progress_callback: onDownload });
+    return tts;
+  }).finally(() => (ttsLoading = null));
+  return ttsLoading;
 }
 
 ipcMain.handle("stt:transcribe", async (_e, samples) => {
@@ -570,7 +605,21 @@ ipcMain.handle("stt:transcribe", async (_e, samples) => {
   const out = await t(audio, opts);
   return (out.text || "").trim();
 });
-ipcMain.handle("stt:warmup", () => getAsr().then(() => true).catch((e) => { send("stt:progress", { error: e.message }); return false; }));
+
+// Returns 24 kHz mono samples, peak-normalised so Jarvis is clearly audible.
+ipcMain.handle("tts:speak", async (_e, text) => {
+  const t = await getTts();
+  const out = await t.generate(String(text).slice(0, 600), { voice: settings.voiceName || "bm_george", speed: 1.08 });
+  const audio = out.audio;
+  let peak = 0; for (let i = 0; i < audio.length; i++) peak = Math.max(peak, Math.abs(audio[i]));
+  if (peak > 0) { const g = 0.95 / peak; for (let i = 0; i < audio.length; i++) audio[i] *= g; }
+  return { sampleRate: out.sampling_rate, audio };
+});
+
+ipcMain.handle("stt:warmup", async () => {
+  try { await Promise.all([getAsr(), getTts()]); return true; }
+  catch (e) { send("stt:progress", { error: e.message }); return false; }
+});
 
 // ---------------------------------------------------------------- ipc
 ipcMain.handle("chat:send", (_e, payload) => chat(payload));
@@ -620,6 +669,9 @@ else {
     createWindow();
     createTray();
     registerHotkeys();
+    // Warm up so the first question is quick: start Claude Code in the background.
+    if (settings.onboarded && settings.backend === "claude")
+      claudeSession().then((s) => s.proc || s.start()).catch(() => {});
     // keep the island centred if displays change
     screen.on("display-metrics-changed", () => {
       const { workArea } = screen.getPrimaryDisplay(); const [w] = win.getSize();
