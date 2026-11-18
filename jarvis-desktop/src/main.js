@@ -1,11 +1,14 @@
 // Jarvis desktop — main process.
-// A transparent, always-on-top window at the top of the screen hosts the "island".
-// This process owns the API key, the Claude tool loop, speech-to-text, and every
-// tool that touches the computer (screen capture, PowerShell, clipboard, media keys).
+// Windows:  dock  – the liquid blob hanging from the top edge of the screen
+//           float – the same blob torn off into a ball you can put anywhere
+//           brain – hidden; listens, speaks and runs the conversation
+//           panel – small card for setup, settings, memory and approvals
+// This process owns the Claude connection and every tool that touches the computer.
+// Speech models run in a separate utility process (ml-worker.js) so nothing here stutters.
 
 import {
   app, BrowserWindow, screen, globalShortcut, ipcMain, desktopCapturer, shell,
-  clipboard, Tray, Menu, nativeImage, safeStorage, Notification, session,
+  clipboard, Tray, Menu, nativeImage, safeStorage, Notification, session, utilityProcess,
 } from "electron";
 import path from "node:path";
 import os from "node:os";
@@ -27,14 +30,13 @@ const DEFAULTS = {
   effort: "low",
   voiceName: "bm_george",     // Kokoro neural voice (British male)
   settingsVersion: 2,
-  dock: "top",          // "top" = island in the screen edge · "float" = torn-off widget
+  dock: "top",          // "top" = blob in the screen edge · "float" = torn-off ball
   floatX: null, floatY: null,
-  city: "",             // home city for the widget's weather
+  setupDone: 0,         // version of the setup flow the user finished
   name: "sir",
   speechModel: "onnx-community/whisper-base",
   language: "auto",
   hotkeyTalk: "Alt+J",
-  hotkeyPanel: "Alt+Shift+J",
   voice: true,
   confirmCommands: true,
   allowControl: true,   // may Jarvis use mouse & keyboard when asked (still asks once per task)
@@ -64,12 +66,13 @@ async function saveSettings() {
   await fs.writeFile(path.join(USER_DIR(), "settings.json"),
     JSON.stringify({ settings, apiKey: stored, encrypted: enc }, null, 2));
 }
+const SETUP_VERSION = 3;
 const publicSettings = async () => {
   const claudePath = await findClaude();
   return {
   ...settings,
   claudePath,
-  ready: settings.backend === "claude" ? (!!claudePath && await claudeAuthStatus(claudePath)) : !!apiKey,
+  ready: settings.backend === "claude" ? !!claudePath : !!apiKey, // fast; sign-in is checked separately
   hasKey: !!apiKey,
   keyHint: apiKey ? "…" + apiKey.slice(-4) : "",
   openAtLogin: app.getLoginItemSettings().openAtLogin,
@@ -82,109 +85,161 @@ const MEM = () => path.join(USER_DIR(), "memory.json");
 async function loadMemory() { try { return JSON.parse(await fs.readFile(MEM(), "utf8")); } catch { return { notes: [] }; } }
 async function saveMemory(m) { await fs.writeFile(MEM(), JSON.stringify(m, null, 2)); }
 
-// ---------------------------------------------------------------- window
-let win, tray;
-
-function createWindow() {
-  const { workArea } = screen.getPrimaryDisplay();
-  const W = 600, H = 720;
-  win = new BrowserWindow({
-    width: W, height: H,
-    x: Math.round(workArea.x + (workArea.width - W) / 2), y: workArea.y,
-    frame: false, transparent: true, resizable: false, movable: false,
-    skipTaskbar: true, hasShadow: false, alwaysOnTop: true, show: false,
-    fullscreenable: false, maximizable: false, minimizable: false,
-    backgroundColor: "#00000000",
-    webPreferences: {
-      preload: path.join(here, "preload.cjs"),
-      contextIsolation: true, sandbox: true, backgroundThrottling: false,
-    },
-  });
-  win.setAlwaysOnTop(true, "screen-saver");
-  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  win.setIgnoreMouseEvents(true, { forward: true }); // click-through until the pointer is over the island
-  win.setContentProtection(true);                     // keep the island out of its own screenshots
-  win.loadFile(path.join(here, "renderer", "index.html"));
-  win.once("ready-to-show", () => { win.showInactive(); if (settings.dock === "float") setDock("float", settings.floatX, settings.floatY, false); });
-  win.on("blur", () => send("ui:blurred"));
-}
-
-// ---------------------------------------------------------------- dock ↔ float
-// One window plays both roles: a wide transparent strip at the top edge (island), or a
-// small always-on-top widget anywhere on screen (after the blob is torn off).
-const ISLAND = { w: 600, h: 720 }, WIDGET = { w: 380, h: 640 };
+// ---------------------------------------------------------------- windows
+let dockWin, floatWin, brainWin, panelWin, tray;
+const DOCK = { w: 240, h: 300 }, FLOAT = { w: 150, h: 150 }, PANEL_W = 440;
 let dock = "top";
-function islandBounds() {
-  const { workArea } = screen.getPrimaryDisplay();
-  return { x: Math.round(workArea.x + (workArea.width - ISLAND.w) / 2), y: workArea.y, width: ISLAND.w, height: ISLAND.h };
-}
-function clampToScreen(x, y) {
-  const d = screen.getDisplayNearestPoint({ x, y }).workArea;
-  return { x: Math.round(Math.min(Math.max(x, d.x - 20), d.x + d.width - WIDGET.w + 20)), y: Math.round(Math.min(Math.max(y, d.y), d.y + d.height - 160)) };
-}
-function setDock(mode, x, y, save = true) {
-  dock = mode;
-  if (mode === "float") {
-    const fallback = { x: islandBounds().x + 110, y: 140 };
-    const p = clampToScreen(x ?? fallback.x, y ?? fallback.y);
-    win.setBounds({ ...p, width: WIDGET.w, height: WIDGET.h });
-    settings.floatX = p.x; settings.floatY = p.y;
-  } else win.setBounds(islandBounds());
-  win.setIgnoreMouseEvents(true, { forward: true });
-  settings.dock = mode;
-  if (save) saveSettings().catch(() => {});
-  send("ui:dock", mode);
-}
-ipcMain.on("ui:tear", (_e, { x, y }) => setDock("float", x - WIDGET.w / 2, y - 40));
-ipcMain.on("ui:dockTop", () => setDock("top"));
-let dragOffset = null;
-ipcMain.on("ui:dragStart", (_e, { offX, offY }) => { dragOffset = { offX, offY }; });
-ipcMain.on("ui:dragMove", (_e, { x, y }) => {
-  if (!dragOffset || dock !== "float") return;
-  win.setPosition(Math.round(x - dragOffset.offX), Math.round(y - dragOffset.offY));
-});
-ipcMain.on("ui:dragEnd", () => {
-  dragOffset = null;
-  if (dock !== "float") return;
-  const [x, y] = win.getPosition();
-  const top = screen.getDisplayNearestPoint({ x, y }).workArea.y;
-  if (y <= top + 6) return setDock("top");   // pushed into the top edge → melt back in
-  const p = clampToScreen(x, y);
-  win.setPosition(p.x, p.y);
-  settings.floatX = p.x; settings.floatY = p.y; saveSettings().catch(() => {});
-});
-ipcMain.handle("ui:dockMode", () => dock);
-ipcMain.handle("weather:get", async () => (settings.city ? getWeather(settings.city) : null));
-ipcMain.on("media:key", (_e, action) => { if (MEDIA_VK[action]) pressMediaKey(action, action.startsWith("volume") ? 3 : 1); });
 
-const send = (channel, payload) => { if (win && !win.isDestroyed()) win.webContents.send(channel, payload); };
+const prefs = (extra = {}) => ({
+  preload: path.join(here, "preload.cjs"), contextIsolation: true, sandbox: true, backgroundThrottling: false, ...extra,
+});
+const overlay = { frame: false, transparent: true, resizable: false, movable: false, skipTaskbar: true, hasShadow: false,
+  alwaysOnTop: true, show: false, fullscreenable: false, maximizable: false, minimizable: false, backgroundColor: "#00000000" };
+
+function dockBounds() {
+  const { workArea } = screen.getPrimaryDisplay();
+  return { x: Math.round(workArea.x + (workArea.width - DOCK.w) / 2), y: workArea.y, width: DOCK.w, height: DOCK.h };
+}
+function makeOverlay(file, bounds, query) {
+  const w = new BrowserWindow({ ...overlay, ...bounds, focusable: true, webPreferences: prefs() });
+  w.setAlwaysOnTop(true, "screen-saver");
+  w.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  w.setContentProtection(true);                   // never in Jarvis's own screenshots
+  w.setIgnoreMouseEvents(true, { forward: true }); // click-through except over the blob
+  w.loadFile(path.join(here, "renderer", file), { query });
+  return w;
+}
+
+function createWindows() {
+  brainWin = new BrowserWindow({ show: false, width: 200, height: 200, skipTaskbar: true, webPreferences: prefs() });
+  brainWin.loadFile(path.join(here, "renderer", "brain.html"));
+
+  dockWin = makeOverlay("blob.html", dockBounds(), { mode: "dock" });
+  dockWin.once("ready-to-show", () => dockWin.showInactive());
+
+  floatWin = makeOverlay("blob.html", { x: 0, y: 0, width: FLOAT.w, height: FLOAT.h }, { mode: "float" });
+  floatWin.once("ready-to-show", () => { if (settings.dock === "float") toFloat(settings.floatX, settings.floatY, false); });
+}
+
+// broadcast to every Jarvis window; each one ignores what it doesn't need
+const send = (channel, payload) => {
+  for (const w of [brainWin, dockWin, floatWin, panelWin]) if (w && !w.isDestroyed()) w.webContents.send(channel, payload);
+};
+
+// ---- dock ↔ float
+function clampFloat(x, y) {
+  const d = screen.getDisplayNearestPoint({ x: x + FLOAT.w / 2, y: y + FLOAT.h / 2 }).workArea;
+  return { x: Math.round(Math.min(Math.max(x, d.x - 40), d.x + d.width - FLOAT.w + 40)), y: Math.round(Math.min(Math.max(y, d.y - 20), d.y + d.height - FLOAT.h + 40)) };
+}
+function toFloat(x, y, save = true) {
+  const b = dockBounds();
+  const p = clampFloat(x ?? b.x + b.width / 2 - FLOAT.w / 2, y ?? b.y + 160);
+  floatWin.setBounds({ ...p, width: FLOAT.w, height: FLOAT.h });
+  floatWin.showInactive();
+  dock = "float"; settings.dock = "float"; settings.floatX = p.x; settings.floatY = p.y;
+  send("blob:dock", "float");
+  if (save) saveSettings().catch(() => {});
+}
+function toDock(save = true) {
+  stopFollow();
+  floatWin.hide();
+  dock = "top"; settings.dock = "top";
+  send("blob:dock", "top");
+  if (save) saveSettings().catch(() => {});
+}
+// While the mouse button is held, the floating ball follows the cursor (driven from here,
+// which is much smoother than relaying every mouse move from the page).
+let follow = null;
+function startFollow() {
+  stopFollow();
+  const c = screen.getCursorScreenPoint();
+  follow = setInterval(() => {
+    const p = screen.getCursorScreenPoint();
+    floatWin.setPosition(Math.round(p.x - FLOAT.w / 2), Math.round(p.y - FLOAT.h / 2));
+  }, 8);
+  floatWin.setPosition(Math.round(c.x - FLOAT.w / 2), Math.round(c.y - FLOAT.h / 2));
+}
+function stopFollow() { if (follow) clearInterval(follow); follow = null; }
+
+ipcMain.on("blob:hover", (e, on) => BrowserWindow.fromWebContents(e.sender)?.setIgnoreMouseEvents(!on, { forward: true }));
+ipcMain.on("blob:click", () => send("brain:talk"));
+ipcMain.on("blob:menu", () => {
+  Menu.buildFromTemplate([
+    { label: "Settings", click: () => openPanel("settings") },
+    { label: "Memory", click: () => openPanel("memory") },
+    { label: dock === "top" ? "Float" : "Dock to top", click: () => (dock === "top" ? toFloat() : toDock()) },
+    { type: "separator" },
+    { label: "Quit Jarvis", click: () => app.quit() },
+  ]).popup();
+});
+ipcMain.on("blob:tear", () => {                       // pulled hard enough: the ball snaps off and follows the mouse
+  const c = screen.getCursorScreenPoint();
+  toFloat(c.x - FLOAT.w / 2, c.y - FLOAT.h / 2, false);
+  floatWin.setIgnoreMouseEvents(false);
+  startFollow();
+});
+ipcMain.on("blob:dragStart", () => { if (dock === "float") { floatWin.setIgnoreMouseEvents(false); startFollow(); } });
+ipcMain.on("blob:dragEnd", () => {
+  if (!follow) return;
+  stopFollow();
+  const [x, y] = floatWin.getPosition();
+  const top = screen.getDisplayNearestPoint({ x, y }).workArea.y;
+  if (y + FLOAT.h / 2 < top + 40) return toDock();   // dropped on the top edge → merge back in
+  const p = clampFloat(x, y);
+  floatWin.setPosition(p.x, p.y);
+  settings.floatX = p.x; settings.floatY = p.y; saveSettings().catch(() => {});
+  floatWin.setIgnoreMouseEvents(true, { forward: true });
+});
+ipcMain.handle("blob:dockMode", () => dock);
+ipcMain.on("brain:state", (_e, st) => { for (const w of [dockWin, floatWin]) if (w && !w.isDestroyed()) w.webContents.send("blob:state", st); });
+
+// ---- panel: setup, settings, memory, approvals
+let panelView = null;
+function openPanel(view, data) {
+  const { workArea } = screen.getPrimaryDisplay();
+  if (!panelWin || panelWin.isDestroyed()) {
+    panelWin = new BrowserWindow({ ...overlay, width: PANEL_W, height: 200, focusable: true, webPreferences: prefs() });
+    panelWin.setAlwaysOnTop(true, "floating");
+    panelWin.loadFile(path.join(here, "renderer", "panel.html"));
+    panelWin.on("blur", () => { if (panelView === "settings" || panelView === "memory") closePanel(); });
+    panelWin.on("closed", () => (panelWin = null));
+  }
+  panelView = view;
+  const anchor = dock === "float" ? floatWin.getBounds() : dockBounds();
+  const x = Math.round(Math.min(Math.max(anchor.x + anchor.width / 2 - PANEL_W / 2, workArea.x + 8), workArea.x + workArea.width - PANEL_W - 8));
+  const y = dock === "float" ? Math.min(anchor.y + anchor.height - 10, workArea.y + workArea.height - 420) : workArea.y + 56;
+  panelWin.setPosition(x, Math.round(y));
+  const show = () => { panelWin.webContents.send("panel:open", { view, data }); panelWin.show(); panelWin.focus(); };
+  panelWin.webContents.isLoading() ? panelWin.webContents.once("did-finish-load", show) : show();
+}
+function closePanel() { panelView = null; if (panelWin && !panelWin.isDestroyed()) panelWin.hide(); }
+ipcMain.on("panel:resize", (_e, h) => { if (panelWin && !panelWin.isDestroyed()) panelWin.setSize(PANEL_W, Math.min(Math.max(80, Math.round(h)), 640)); });
+ipcMain.on("panel:close", () => closePanel());
+ipcMain.on("setup:done", async () => { settings.setupDone = SETUP_VERSION; settings.onboarded = true; await saveSettings(); closePanel(); send("setup:done"); });
 
 function createTray() {
   const img = nativeImage.createFromPath(path.join(here, "..", "assets", "tray.png"));
   tray = new Tray(img);
   tray.setToolTip("Jarvis");
-  const menu = () => Menu.buildFromTemplate([
-    { label: "Talk", click: () => send("hotkey:talk") },
-    { label: "Settings", click: () => send("ui:view", "settings") },
-    { label: "Memory", click: () => send("ui:view", "memory") },
-    { label: "Run setup again", click: () => send("ui:view", "onboarding") },
-    { label: "Float / dock", click: () => (dock === "top" ? setDock("float") : setDock("top")) },
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: "Talk", click: () => send("brain:talk") },
+    { label: "Settings", click: () => openPanel("settings") },
+    { label: "Memory", click: () => openPanel("memory") },
+    { label: "Run setup again", click: () => openPanel("setup") },
+    { label: "Float / dock", click: () => (dock === "top" ? toFloat() : toDock()) },
     { type: "separator" },
     { label: "Start with Windows", type: "checkbox", checked: app.getLoginItemSettings().openAtLogin,
       click: (i) => app.setLoginItemSettings({ openAtLogin: i.checked }) },
     { label: "Quit Jarvis", click: () => app.quit() },
-  ]);
-  tray.setContextMenu(menu());
-  tray.on("click", () => send("hotkey:talk"));
+  ]));
+  tray.on("click", () => send("brain:talk"));
 }
 
 function registerHotkeys() {
   globalShortcut.unregisterAll();
   const ok = [];
-  for (const [key, ch] of [[settings.hotkeyTalk, "hotkey:talk"], [settings.hotkeyPanel, "hotkey:panel"]]) {
-    try { ok.push(globalShortcut.register(key, () => send(ch)) ? key : `${key} (in use)`); }
-    catch { ok.push(`${key} (invalid)`); }
-  }
+  try { ok.push(globalShortcut.register(settings.hotkeyTalk, () => send("brain:talk")) ? settings.hotkeyTalk : `${settings.hotkeyTalk} (in use)`); }
+  catch { ok.push(`${settings.hotkeyTalk} (invalid)`); }
   return ok;
 }
 
@@ -326,11 +381,15 @@ function askApproval(command, reason, kind = "command") {
     const id = Math.random().toString(36).slice(2);
     pendingApprovals.set(id, resolve);
     send("agent", { type: "approval", id, command, reason, kind });
+    openPanel("approval", { id, command, reason, kind });
   });
 }
 ipcMain.on("approval:respond", (_e, { id, approved }) => {
-  pendingApprovals.get(id)?.(approved);
+  if (!pendingApprovals.has(id)) return;
+  pendingApprovals.get(id)(approved);
   pendingApprovals.delete(id);
+  send("approval:resolved", { id, approved });
+  if (panelView === "approval") closePanel();
 });
 
 // ---------------------------------------------------------------- tools
@@ -373,7 +432,7 @@ const TOOLS = [
     description: "Current weather and today's forecast for a city.",
     input_schema: s({ city: { type: "string" } }) },
   { name: "set_timer", strict: true,
-    description: "Start a countdown on the island; it alerts the user out loud when done. Also use for reminders ('remind me at 3pm' → compute seconds from the current time).",
+    description: "Start a countdown; Jarvis says out loud when it's done and shows a notification. Also use for reminders ('remind me at 3pm' → compute seconds from the current time).",
     input_schema: s({ seconds: { type: "integer" }, label: { type: "string" } }) },
   { name: "remember", strict: true,
     description: "Save a lasting fact or preference about the user for future conversations.",
@@ -381,11 +440,8 @@ const TOOLS = [
   { name: "forget", strict: true,
     description: "Delete saved notes containing the given text.",
     input_schema: s({ match: { type: "string" } }) },
-  { name: "show_card", strict: true,
-    description: "Show a card in the panel with a title and markdown body. Use for anything better read than heard: lists, steps, code, links, comparisons, research summaries with sources.",
-    input_schema: s({ title: { type: "string" }, body: { type: "string" } }) },
 ];
-const UI_TOOLS = new Set(["set_timer", "show_card"]);
+const UI_TOOLS = new Set(["set_timer"]);
 
 const WMO = { 0: "clear", 1: "mainly clear", 2: "partly cloudy", 3: "overcast", 45: "fog", 48: "fog", 51: "light drizzle", 53: "drizzle", 55: "drizzle", 61: "light rain", 63: "rain", 65: "heavy rain", 71: "light snow", 73: "snow", 75: "heavy snow", 80: "showers", 81: "showers", 82: "heavy showers", 95: "thunderstorm", 96: "thunderstorm with hail", 99: "thunderstorm with hail" };
 async function getWeather(city) {
@@ -472,11 +528,11 @@ async function runTool(name, input) {
 }
 
 // ---------------------------------------------------------------- agent
-const systemPrompt = () => `You are Jarvis, a personal AI assistant living in a small "island" at the top of the user's computer screen. You have a calm, dry, understated British wit, and you are genuinely useful. Address the user as "${settings.name}".
+const systemPrompt = () => `You are Jarvis, a personal AI assistant: a small liquid blob at the top of the user's computer screen that they talk to. You have a calm, dry, understated British wit, and you are genuinely useful. Address the user as "${settings.name}".
 
-The user usually talks to you by voice and hears your reply spoken aloud. So:
-- Keep spoken replies to 1–3 short, natural sentences. No markdown, bullet points, emoji or URLs in the reply text.
-- Put anything better read than heard (lists, steps, code, links, research findings with sources) in show_card, then say one line about it.
+The user talks to you by voice and every word you write is spoken aloud; nothing is shown on screen. So:
+- Answer like a person in conversation: 1–3 short, natural sentences. No markdown, lists, emoji, URLs or code in your reply.
+- When something is long (a list, steps, code, research with sources), give the gist out loud and offer to copy the details to the clipboard or open the page.
 
 You can act on this computer:
 - look_at_screen when the user refers to what they're looking at, or when seeing it would help. Describe only what matters.
@@ -598,80 +654,33 @@ async function chat({ text, withScreen }) {
   }
 }
 
-// ---------------------------------------------------------------- local voice models (Whisper in, Kokoro out)
-// Both run on the same transformers.js / ONNX runtime. Downloads happen once into userData/models,
-// and report one combined, steady progress number to the island.
-let transformers = null;
-async function lib() {
-  if (transformers) return transformers;
-  transformers = await import("@huggingface/transformers");
-  transformers.env.cacheDir = path.join(USER_DIR(), "models");
-  return transformers;
+// ---------------------------------------------------------------- speech models (separate process)
+let ml = null, mlSeq = 0;
+const mlCalls = new Map();
+function mlProc() {
+  if (ml) return ml;
+  ml = utilityProcess.fork(path.join(here, "ml-worker.js"), [], { serviceName: "Jarvis speech" });
+  ml.on("message", (m) => {
+    if (m.type === "progress") return send("stt:progress", { pct: m.pct });
+    if (m.type === "ready") return send("stt:progress", { pct: 100, ready: true });
+    const c = mlCalls.get(m.id); if (!c) return;
+    mlCalls.delete(m.id);
+    m.ok ? c.resolve(m.result) : c.reject(new Error(m.error));
+  });
+  ml.on("exit", () => { ml = null; for (const c of mlCalls.values()) c.reject(new Error("Speech engine stopped")); mlCalls.clear(); });
+  ml.postMessage({ id: 0, type: "init", dir: path.join(USER_DIR(), "models") });
+  return ml;
 }
-const dlFiles = {};
-let dlLoading = 0;
-function onDownload(p) {
-  if (p.status !== "progress" || !p.total) return;
-  dlFiles[p.file] = { loaded: p.loaded, total: p.total };
-  const all = Object.values(dlFiles).filter((x) => x.loaded < x.total || dlLoading);
-  const loaded = all.reduce((a, x) => a + x.loaded, 0), total = all.reduce((a, x) => a + x.total, 0);
-  if (total) send("stt:progress", { pct: Math.floor((loaded / total) * 100) });
+function mlCall(type, args = {}) {
+  return new Promise((resolve, reject) => {
+    const id = ++mlSeq;
+    mlCalls.set(id, { resolve, reject });
+    mlProc().postMessage({ id, type, ...args });
+  });
 }
-async function tracked(load) {
-  dlLoading++;
-  try { return await load(); }
-  finally { if (--dlLoading === 0) { for (const k in dlFiles) delete dlFiles[k]; send("stt:progress", { pct: 100, ready: true }); } }
-}
-
-let asr = null, asrModel = "", asrLoading = null;
-async function getAsr() {
-  if (asr && asrModel === settings.speechModel) return asr;
-  if (asrLoading) return asrLoading;
-  asrLoading = tracked(async () => {
-    const { pipeline } = await lib();
-    asr = await pipeline("automatic-speech-recognition", settings.speechModel, { progress_callback: onDownload });
-    asrModel = settings.speechModel;
-    return asr;
-  }).finally(() => (asrLoading = null));
-  return asrLoading;
-}
-
-let tts = null, ttsLoading = null;
-async function getTts() {
-  if (tts) return tts;
-  if (ttsLoading) return ttsLoading;
-  ttsLoading = tracked(async () => {
-    await lib();
-    const { KokoroTTS } = await import("kokoro-js");
-    tts = await KokoroTTS.from_pretrained("onnx-community/Kokoro-82M-v1.0-ONNX", { dtype: "q8", device: "cpu", progress_callback: onDownload });
-    return tts;
-  }).finally(() => (ttsLoading = null));
-  return ttsLoading;
-}
-
-ipcMain.handle("stt:transcribe", async (_e, samples) => {
-  const audio = samples instanceof Float32Array ? samples : new Float32Array(samples);
-  const t = await getAsr();
-  const opts = { chunk_length_s: 30 };
-  if (settings.language && settings.language !== "auto") opts.language = settings.language;
-  const out = await t(audio, opts);
-  return (out.text || "").trim();
-});
-
-// Returns 24 kHz mono samples, peak-normalised so Jarvis is clearly audible.
-ipcMain.handle("tts:speak", async (_e, text) => {
-  const t = await getTts();
-  const out = await t.generate(String(text).slice(0, 600), { voice: settings.voiceName || "bm_george", speed: 1.08 });
-  const audio = out.audio;
-  let peak = 0; for (let i = 0; i < audio.length; i++) peak = Math.max(peak, Math.abs(audio[i]));
-  if (peak > 0) { const g = 0.95 / peak; for (let i = 0; i < audio.length; i++) audio[i] *= g; }
-  return { sampleRate: out.sampling_rate, audio };
-});
-
-ipcMain.handle("stt:warmup", async () => {
-  try { await Promise.all([getAsr(), getTts()]); return true; }
-  catch (e) { send("stt:progress", { error: e.message }); return false; }
-});
+ipcMain.handle("stt:transcribe", (_e, audio) => mlCall("transcribe", { audio, speechModel: settings.speechModel, language: settings.language }));
+ipcMain.handle("tts:speak", (_e, text) => mlCall("speak", { text, voice: settings.voiceName }));
+ipcMain.handle("stt:warmup", () => mlCall("warmup", { speechModel: settings.speechModel }).then(() => true).catch((e) => { send("stt:progress", { error: e.message }); return false; }));
 
 // ---------------------------------------------------------------- ipc
 ipcMain.handle("chat:send", (_e, payload) => chat(payload));
@@ -683,16 +692,7 @@ ipcMain.handle("claude:status", async () => {
   const bin = await findClaude();
   return { installed: !!bin, loggedIn: bin ? await claudeAuthStatus(bin) : false };
 });
-ipcMain.on("ui:menu", () => {
-  Menu.buildFromTemplate([
-    { label: "Settings", click: () => send("ui:view", "settings") },
-    { label: "Memory", click: () => send("ui:view", "memory") },
-    { label: "Stop", click: () => { stopAll(); send("ui:view", "stop"); } },
-    { label: dock === "top" ? "Float as widget" : "Dock to top", click: () => (dock === "top" ? setDock("float") : setDock("top")) },
-    { type: "separator" },
-    { label: "Quit Jarvis", click: () => app.quit() },
-  ]).popup({ window: win });
-});
+ipcMain.on("panel:open", (_e, v) => openPanel(v));
 ipcMain.handle("settings:set", async (_e, patch) => {
   if (typeof patch.apiKey === "string" && patch.apiKey.trim()) apiKey = patch.apiKey.trim();
   if (typeof patch.openAtLogin === "boolean") app.setLoginItemSettings({ openAtLogin: patch.openAtLogin });
@@ -704,30 +704,29 @@ ipcMain.handle("settings:set", async (_e, patch) => {
 });
 ipcMain.handle("memory:get", () => loadMemory());
 ipcMain.handle("memory:delete", async (_e, i) => { const m = await loadMemory(); m.notes.splice(i, 1); await saveMemory(m); return m; });
-ipcMain.on("ui:interactive", (_e, on) => win?.setIgnoreMouseEvents(!on, { forward: true }));
-ipcMain.on("ui:focus", () => { win?.focus(); });
-ipcMain.on("ui:release", () => { if (win?.isFocused()) win.blur(); });
 ipcMain.on("notify", (_e, { title, body }) => { if (Notification.isSupported()) new Notification({ title, body, silent: false }).show(); });
 ipcMain.on("app:quit", () => app.quit());
 
 // ---------------------------------------------------------------- lifecycle
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
-  app.on("second-instance", () => send("hotkey:panel"));
+  app.on("second-instance", () => send("brain:talk"));
   app.whenReady().then(async () => {
     if (IS_WIN) app.setAppUserModelId("com.jarvis.desktop");
     session.defaultSession.setPermissionRequestHandler((_wc, perm, cb) => cb(["media", "notifications"].includes(perm)));
     session.defaultSession.setPermissionCheckHandler((_wc, perm) => ["media", "notifications"].includes(perm));
     await loadSettings();
-    createWindow();
+    createWindows();
     createTray();
     registerHotkeys();
-    // Warm up so the first question is quick: start Claude Code in the background.
-    if (settings.onboarded && settings.backend === "claude")
-      claudeSession().then((s) => s.proc || s.start()).catch(() => {});
-    // keep the island centred if displays change
-    screen.on("display-metrics-changed", () => { if (dock === "top") win.setBounds(islandBounds()); });
+    if ((settings.setupDone || 0) < SETUP_VERSION) {
+      setTimeout(() => openPanel("setup"), 900);      // first launch of this version: walk through setup
+    } else {
+      mlCall("warmup", { speechModel: settings.speechModel }).catch(() => {}); // voice ready before the first click
+      if (settings.backend === "claude") claudeSession().then((s) => s.proc || s.start()).catch(() => {});
+    }
+    screen.on("display-metrics-changed", () => dockWin?.setBounds(dockBounds()));
   });
-  app.on("will-quit", () => { globalShortcut.unregisterAll(); cc?.kill(); mcp?.close(); input.stop(); });
+  app.on("will-quit", () => { globalShortcut.unregisterAll(); cc?.kill(); mcp?.close(); input.stop(); ml?.kill(); });
   app.on("window-all-closed", () => app.quit());
 }

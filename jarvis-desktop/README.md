@@ -1,80 +1,71 @@
-# Jarvis for Windows
+# Jarvis
 
-A small "Dynamic Island" at the top of your screen, powered by Claude. Talk to it, show it your screen, and let it do things on your PC.
+A voice assistant for Windows that lives at the top of your screen as a small liquid ball. Click it and talk. It answers out loud, keeps listening so you can just keep talking, and can look at your screen and do things for you. It runs on your own Claude account, so there's no API key.
 
-- **Hidden:** only a thin notch shows at the top of your screen.
-- **Hover:** the pill drips down out of the notch. Click it and start talking.
-- **Working:** it shows what it's doing: listening, searching, looking at your screen, using your PC.
-- **Answer:** it speaks, and the answer (plus any details or approvals) drops down below the pill, then folds away.
-- **Right-click** the pill for Settings, Memory, Stop and Quit.
+## The ball
+
+- **Docked:** a blue drop hanging from the top edge of your screen. Hover over it and it droops a little.
+- **Click it** and talk. When you stop, Jarvis answers out loud, then listens again. Stay quiet for a few seconds and the conversation ends.
+- **Pull it down:** it stretches on a liquid neck and **snaps off** into a floating ball you can put anywhere. Drag it back into the top edge to merge it in again.
+- **What the ball shows:**
+  - it reacts to your voice while listening (cyan ring)
+  - a purple swirl while thinking
+  - it pulses with Jarvis's voice while speaking
+  - violet while it's using your mouse and keyboard
+  - amber while it's waiting for your OK
+- **Right-click** it for Settings, Memory, Float/Dock and Quit.
+
+There are no text panels and no buttons, apart from setup, settings, and the permission card when Jarvis wants to act on your PC.
 
 ## Install
 
-1. Download **Jarvis-Setup-x.y.z.exe** from this repo's
-   **Actions → Build Jarvis for Windows → latest run → Artifacts → Jarvis-Windows**.
-2. Run it. Windows SmartScreen will warn that the app is unsigned. Click **More info → Run anyway**.
-3. Setup opens by itself: **Sign in** (a window installs Claude Code if needed and your browser asks you to log in to your Claude account; Jarvis notices when you're done), then **microphone**, **screen and control**, and the one-time **voice model download** (about 290 MB).
+1. Download **Jarvis-Setup-x.y.z.exe** from the latest release, or from this repo's **Actions → Build Jarvis for Windows → Artifacts**.
+2. Run it. Windows will warn that the app is unsigned: click **More info → Run anyway**.
+3. Setup walks you through four steps:
+   - **Sign in to your Claude account.** Claude Code is installed if needed, and Jarvis notices when you're done.
+   - **Microphone test.**
+   - **Screen and control permission.**
+   - **Voice download.** About 400 MB, one time; it runs in the background.
 
-### How the "no API key" mode works
+## What you can ask
 
-Jarvis runs your own Claude Code in the background, signed in with your Claude account. It isn't billed per message; it counts toward your plan's normal usage limits, the same as using Claude Code yourself. Jarvis gives Claude Code its own tools (screen, PowerShell with approval, clipboard, media, timers, memory) through a small local MCP server that only listens on your PC. Claude Code's built-in tools are limited to web search and page reading, so everything that touches your PC goes through Jarvis's approval prompt.
-
-If you prefer an API key instead, choose **Brain → Anthropic API key** in Settings.
-
-## Using it
-
-| | |
+| Say | What happens |
 |---|---|
-| Hover the top of the screen, click the pill | Start a conversation. It answers, then listens again by itself; stay quiet a few seconds to end it |
-| `Alt+J` | Talk from anywhere |
-| Click while it's working or talking | Stop |
-| `Esc` | Stop listening, stop talking, or stop controlling your PC |
-| Right-click the pill / tray icon | Settings, Memory, Run setup again, Quit |
-| Pull the blob down hard | It stretches and **tears off into a floating widget**: talk button, clock, weather, music controls, quick actions, timers and the last answer |
-| Drag the widget into the top edge (or press ↑) | It melts back into the notch |
+| "What's on my screen?" / "What does this error mean?" | Looks at your screen and explains |
+| "Show me where the Wi-Fi settings are" | Points with its own glowing cursor. Touches nothing |
+| "Fill in this form" / "Fix the typo in this paragraph" | Uses your mouse and keyboard. Asks first; **Esc** stops it |
+| "Go through my unread emails" | Opens your mail in the browser and reads it to you. Never sends or deletes without asking |
+| "Research the best budget monitors" | Searches the web and gives you the gist; offers to copy the details |
+| "Find the biggest files in my Downloads" / "Open Spotify" | Runs PowerShell or opens things. Commands need your OK, by voice ("yes") or button |
+| "Pause the music" / "Next song" / "Volume down" | Media keys |
+| "25 minute focus timer" / "Remind me at 3pm to call Anna" | Speaks up and shows a notification when it's time |
+| "Remember I prefer short answers" | Remembers across restarts (right-click → Memory to view or delete) |
 
-Hotkeys, model, voice and speech language can be changed in **Settings**.
+The talk hotkey is **Alt+J** by default. You can change it in Settings.
 
-## What it can do
+## Privacy
 
-| Ask | Tool |
+- **Hearing and voice run on your PC.** Speech recognition uses Whisper and the voice uses Kokoro, so audio never leaves your computer. Only the text of what you say is sent to Claude.
+- **Screenshots** are taken only when Jarvis needs to look, and are sent to Claude for that request.
+- **Commands and mouse/keyboard control** always ask first. **Esc** stops control instantly.
+- **Your Claude account:** Jarvis uses Claude Code signed in with your account, and it counts toward your plan's usage like normal Claude use.
+
+## How it's built
+
+| File | What it does |
 |---|---|
-| "What's this error on my screen?" / "Summarise this page" | **Sees your screen** (screenshot of the display under your mouse) |
-| "Show me where the Wi-Fi settings are" | **Points** with its own glowing cursor and a label. Touches nothing |
-| "Rename these files", "Fill in this form", "Fix the typo in this paragraph" | **Uses your mouse and keyboard.** Asks once per task, and `Esc` stops it instantly |
-| "Go through my unread emails" | Opens your mail in the browser and **reads it from the screen**. Never sends or deletes without asking |
-| "Research the best budget monitors and compare them" | **Web search and page reading**, with a summary card and sources |
-| "Find the biggest files in Downloads", "Open Spotify", "Turn on dark mode", "Close Chrome" | **Runs PowerShell.** You approve every command first (can be turned off) |
-| "Open my Documents folder", "Open youtube.com" | **Opens** files, folders, apps and URLs |
-| "Copy that as an email draft", "What's on my clipboard?" | **Clipboard** read and write |
-| "Pause the music", "Next song", "Volume down a bit" | **Media keys and volume** |
-| "How's my battery and disk space?" | **System status** |
-| "Weather in Budapest" | **Weather** (no extra key needed) |
-| "25 minute focus timer", "Remind me at 3pm to call Anna" | **Timers and reminders** in the pill, spoken alert and Windows notification |
-| "Remember I prefer short answers" | **Memory**, kept across restarts. You can view and delete it in the panel |
-
-## Privacy and safety
-
-- Default mode uses your Claude account through Claude Code. No key is stored by Jarvis. In API-key mode, the key is encrypted with Windows' own encryption (DPAPI via Electron `safeStorage`).
-- Speech is transcribed on your machine with Whisper, and Jarvis's voice is generated on your machine with Kokoro (a neural voice). Audio never leaves your PC; only the text is sent to Claude.
-- Screenshots are taken only when you press 👁 or when Jarvis decides to look. They are sent to Claude for that request.
-- PowerShell commands need your approval unless you turn that off in Settings.
-- The island hides itself from screen capture, so it never appears in its own screenshots.
-
-## Develop
+| `src/main.js` | Windows, tray, hotkey, the Claude connection and every tool that touches the PC |
+| `src/claude-code.js` | Runs Claude Code with your account, and gives it Jarvis's tools via a local MCP server |
+| `src/ml-worker.js` | Whisper and Kokoro in their own process, so the UI never stutters |
+| `src/input-driver.js` | Mouse and keyboard control (Windows) |
+| `src/renderer/blob.*` | The liquid ball: metaball geometry and spring physics |
+| `src/renderer/brain.*` | Hidden window: microphone, voice-activity detection, playback, conversation, voice approvals |
+| `src/renderer/panel.*` | Setup, settings, memory and the approval card |
+| `src/renderer/cursor.*` | Jarvis's own on-screen cursor |
 
 ```bash
 cd jarvis-desktop
 npm install
-npm start          # run from source (Windows, macOS or Linux)
-npm run dist       # build the Windows .exe (run on Windows)
+npm start        # run from source
+npm run dist     # build the installer (on Windows)
 ```
-
-Files:
-
-- `src/main.js`: window, hotkeys, tray, all tools, local Whisper, and the API-key backend.
-- `src/claude-code.js`: the Claude-account backend (runs the Claude Code CLI) and the local MCP server.
-- `src/preload.cjs`: the bridge between the window and the main process.
-- `src/renderer/`: the island UI (HTML/CSS/JS, no framework).
-
-To add a tool: add it to `TOOLS` and `runTool()` in `main.js`, plus an icon and label in `island.js`.
