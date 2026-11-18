@@ -25,6 +25,7 @@ let s = "idle", hover = false, cardOpen = false, mode = "dock", pulling = null;
 let timer = null, music = null, hud = null, dragOver = false, shelf = [];
 let task = null, flashTask = 0, taskPinned = false, notifs = [], unread = 0, notifShow = 0;
 let settings = {};
+let hidden = false, peekT = null;
 function setS(v, text) { s = v; island.dataset.s = v; if (text !== undefined) $("statusText").textContent = text; }
 
 // ---------------- geometry: one black shape that springs between sizes ----------------
@@ -33,8 +34,12 @@ const WPOS = { x: 20, y: 20 };   // where the island sits inside the window in w
 let target = null;
 const TEAR = 150;
 function contentH() { return $("lCard").scrollHeight; }
+function needsYou() {   // even when hidden, the island comes out for these
+  return s !== "idle" || pendingApproval() || performance.now() < notifShow || (task && performance.now() < flashTask) || cardOpen || dragOver;
+}
 function shape() {
   const cx = innerWidth / 2, at = (w, h, layer, r) => ({ x: cx - w / 2, y: 10, w, h, layer, r: r ?? h / 2 });
+  if (mode === "dock" && hidden && !needsYou()) return { x: cx - 63, y: -52, w: 126, h: 36, layer: null, r: 18 };
   if (mode === "widget") return { x: WPOS.x, y: WPOS.y, w: 400, h: Math.max(160, contentH()), layer: "lCard", r: 28 };
   if (dragOver) return at(260, 48, "lDrop");
   if (s === "listening") return at(300, 48, "lStatus");
@@ -64,6 +69,7 @@ function frame(now) {
   if (sh.layer === "lStatus" && s === "idle") $("statusText").textContent = "Click to talk";
   $("count").textContent = unread; $("count").classList.toggle("on", unread > 0 && !sh.layer);
   if (task && task.status !== "done" && (hover || taskPinned) && sh.layer === "lCard" && !cardOpen && $("card").dataset.task !== "1") renderTaskCard();
+  $("peek").classList.toggle("on", hidden && mode === "dock" && !needsYou());
   const dual = mode === "dock" && timer && music && !cardOpen && s === "idle" && sh.layer === "lMusic";
   $("bubble").classList.toggle("on", !!dual);
   if (dual) Object.assign($("bubble").style, { left: box.x + box.w + 8 + "px", top: box.y + (box.h - 38) / 2 + "px" });
@@ -74,12 +80,19 @@ requestAnimationFrame(frame);
 // ---------------- pointer: the window is click-through except over the island ----------------
 let interactive = false;
 function setInteractive(on) { if (on !== interactive) { interactive = on; J.hover(on); } }
+const onPeek = (x, y) => hidden && mode === "dock" && y <= 8 && Math.abs(x - innerWidth / 2) <= 50;
 const overIsland = (x, y) => x >= box.x - 8 && x <= box.x + box.w + 8 && y >= box.y - 8 && y <= box.y + box.h + 8;
 addEventListener("mousemove", (e) => {
   if (pulling) return;
-  const over = overIsland(e.clientX, e.clientY) || ($("typed").classList.contains("on"));
+  if (onPeek(e.clientX, e.clientY)) {               // resting on the little line at the top edge brings it back
+    setInteractive(true);
+    if (!peekT) peekT = setTimeout(() => { hidden = false; peekT = null; $("peek").classList.remove("on"); }, 450);
+    return;
+  }
+  clearTimeout(peekT); peekT = null;
+  const over = (!hidden || needsYou()) && overIsland(e.clientX, e.clientY) || ($("typed").classList.contains("on"));
   setInteractive(over);
-  if (mode === "dock") hover = over || (e.clientY < 70 && Math.abs(e.clientX - innerWidth / 2) < 120);
+  if (mode === "dock") hover = !hidden && (over || (e.clientY < 70 && Math.abs(e.clientX - innerWidth / 2) < 120));
 });
 addEventListener("mouseleave", () => { if (!pulling) { setInteractive(false); hover = false; } });
 
@@ -94,6 +107,9 @@ island.addEventListener("pointermove", (e) => {
   if (!pulling || mode === "widget") return;
   const dx = e.screenX - pulling.x0, dy = e.screenY - pulling.y0;
   if (!pulling.moved && Math.hypot(dx, dy) < 6) return;
+  if (!pulling.moved && dy < 0 && Math.abs(dy) > Math.abs(dx)) {   // flick up → hide
+    pulling = null; hideIsland(); return;
+  }
   pulling.moved = true;
   const base = shape(), pull = Math.max(0, dy), t = Math.min(1, pull / TEAR);
   const w = Math.max(120, base.w * (1 - .15 * t)), h = base.h + pull * .5;
@@ -192,6 +208,13 @@ addEventListener("keydown", (e) => {
   if ((e.key === "Enter" || e.key === " ") && document.activeElement === island) { e.preventDefault(); talk(); }
 });
 J.onTalk(() => talk());
+J.onToggleHide(() => (hidden ? showIsland() : hideIsland()));
+function hideIsland() {
+  if (pendingApproval()) return;
+  hidden = true; hover = false; cardOpen = false; taskPinned = false; $("card").dataset.task = "";
+  setInteractive(false); $("peek").classList.add("on");
+}
+function showIsland() { hidden = false; $("peek").classList.remove("on"); }
 
 // ---------------- one card layout for every answer ----------------
 let lastAnswer = null, closeT = null;
@@ -342,10 +365,15 @@ function finishTask() {
 // ---------------- music: real "now playing" from Windows ----------------
 const ART = ["linear-gradient(135deg,#ff2d55,#5856d6)", "linear-gradient(135deg,#ff9f0a,#ff375f)", "linear-gradient(135deg,#30d158,#0a84ff)", "linear-gradient(135deg,#bf5af2,#5e5ce6)", "linear-gradient(135deg,#64d2ff,#5856d6)"];
 const artFor = (s) => ART[[...String(s)].reduce((a, c) => a + c.charCodeAt(0), 0) % ART.length];
+const coverCss = (dataUrl) => `url('${dataUrl}') center / cover no-repeat`;   // single quotes: it goes inside a style="…" attribute
+let coverKey = "", cover = "";
 J.onMedia((m) => {
   if (!m || !m.title) { music = null; return; }
   const same = music && music.title === m.title;
-  music = { title: m.title, artist: m.artist || appName(m.app), playing: !!m.playing, pos: m.pos || 0, dur: m.dur || 0, at: performance.now(), art: artFor(m.title + m.artist) };
+  if (m.key !== coverKey) { coverKey = m.key; cover = ""; }
+  if (m.art) cover = coverCss(m.art);
+  music = { title: m.title, artist: m.artist || appName(m.app), playing: !!m.playing, pos: m.pos || 0, dur: m.dur || 0, at: performance.now(), art: cover || artFor(m.title + m.artist) };
+  if (same && $("card").dataset.np === "1") { const c = $("card").querySelector(".cover"); if (c) c.style.setProperty("--art", music.art); }
   if (!same && $("card").dataset.np === "1" && cardOpen) render(nowPlaying());
 });
 const appName = (id) => /spotify/i.test(id) ? "Spotify" : /chrome|msedge|firefox/i.test(id) ? "Browser" : "Media";
@@ -364,7 +392,7 @@ function nowPlaying() {
   const m = music;
   if (!m) return { icon: "music", kicker: "Music", title: "Nothing is playing", body: "Start something in Spotify or your browser and it shows up here." };
   return { bare: true, stay: true,
-    html: `<div class="player"><div class="cover" style="--art:${m.art}"></div><div class="side">
+    html: `<div class="player"><div class="cover${m.art.startsWith("url(") ? " photo" : ""}" style="--art:${m.art}"></div><div class="side">
         <div class="t">${esc(m.title)}</div><div class="a">${esc(m.artist)}</div>
         <div class="ctrls"><button id="mPrev" aria-label="Previous"><svg viewBox="0 0 24 24">${CTRL.prev}</svg></button><button id="mPlay" aria-label="Play or pause"><svg viewBox="0 0 24 24" id="mPlayIcon"></svg></button><button id="mNext" aria-label="Next"><svg viewBox="0 0 24 24">${CTRL.next}</svg></button></div>
         <div class="prog"><i id="mProg"></i></div><div class="times"><span id="mPos">0:00</span><span>${m.dur ? fmt(m.dur) : ""}</span></div>

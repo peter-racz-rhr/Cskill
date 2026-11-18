@@ -7,10 +7,11 @@ A black island at the top of your Windows screen, powered by your own Claude acc
 - **Idle:** a small black pill. **Hover** and it grows; **click** and it listens (red light, bars follow your voice).
 - **Answers** drop down as cards. Click anywhere outside to shrink it back.
 - **Claude working:** a spinner with the current step and a timer. Click it for the step list. **Needs your OK** opens a card with the exact command and **Run it / Don't**. **Ready** shows a green tick, then the answer.
-- **Music:** whatever plays on Windows (Spotify, YouTube in the browser…) shows as a mini player: art, progress, equaliser. Click it for the player with ⏮ ⏯ ⏭ (real media keys).
+- **Music:** whatever plays on Windows (Spotify, YouTube in the browser…) shows as a mini player: the real album cover, progress, equaliser. Click it for the player with ⏮ ⏯ ⏭ (real media keys).
 - **Timers:** an orange ring that drains. With music playing, the timer sits in its own little bubble.
 - **Shelf:** drag files onto the island; click one later to open it.
 - **Notifications:** Claude finishing, timers and approvals drop in from the island; the unread count stays as a red badge. Click the island to see them all.
+- **Flick it up** to hide it (only a faint line stays in the top edge; rest the mouse there, press Alt+J, or use the tray to bring it back). It still pops out for things that need you.
 - **Pull it down hard** to tear it off into a floating widget; drag it back to the top edge to dock. Right-click for Settings, Memory, Float/Dock and Quit.
 
 Quick things run instantly on your PC without using Claude: weather (with the next hours), timers, maths, currency, notes, translation, play/pause/next, volume. Everything else goes to Claude.

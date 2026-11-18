@@ -154,6 +154,7 @@ ipcMain.on("island:menu", () => {
   Menu.buildFromTemplate([
     { label: "Settings", click: () => openPanel("settings") },
     { label: "Memory", click: () => openPanel("memory") },
+    { label: "Hide / show island", click: () => send("island:toggleHide") },
     { label: dock === "top" ? "Float as widget" : "Dock to top", click: () => (dock === "top" ? toWidget() : toDock()) },
     { type: "separator" },
     { label: "Quit Jarvis", click: () => app.quit() },
@@ -200,6 +201,22 @@ Add-Type -AssemblyName System.Runtime.WindowsRuntime
 $asTask = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1' })[0]
 function Await($op, [Type]$t) { $task = $asTask.MakeGenericMethod($t).Invoke($null, @($op)); $task.Wait(-1) | Out-Null; $task.Result }
 [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime] | Out-Null
+[Windows.Storage.Streams.DataReader, Windows.Storage.Streams, ContentType = WindowsRuntime] | Out-Null
+$lastKey = ''; $art = ''; $tick = 0
+function Get-Art($ref) {
+  if (-not $ref) { return '' }
+  try {
+    $stream = Await ($ref.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
+    $size = [uint32]$stream.Size
+    if ($size -le 0 -or $size -gt 3MB) { return '' }
+    $reader = [Windows.Storage.Streams.DataReader]::new($stream.GetInputStreamAt(0))
+    Await ($reader.LoadAsync($size)) ([uint32]) | Out-Null
+    $bytes = New-Object byte[] $size
+    $reader.ReadBytes($bytes)
+    $type = if ($stream.ContentType) { $stream.ContentType } else { 'image/png' }
+    return 'data:' + $type + ';base64,' + [Convert]::ToBase64String($bytes)
+  } catch { return '' }
+}
 $mgr = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
 while ($true) {
   try {
@@ -207,7 +224,12 @@ while ($true) {
     if ($s) {
       $p = Await ($s.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
       $pb = $s.GetPlaybackInfo(); $tl = $s.GetTimelineProperties()
-      $o = @{ title = $p.Title; artist = $p.Artist; app = $s.SourceAppUserModelId; playing = ($pb.PlaybackStatus.ToString() -eq 'Playing'); pos = $tl.Position.TotalSeconds; dur = $tl.EndTime.TotalSeconds }
+      $key = $p.Title + '|' + $p.Artist
+      $newSong = ($key -ne $lastKey)
+      if ($newSong) { $lastKey = $key; $art = Get-Art $p.Thumbnail; if (-not $art) { Start-Sleep -Milliseconds 700; $p = Await ($s.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties]); $art = Get-Art $p.Thumbnail } }
+      $o = @{ title = $p.Title; artist = $p.Artist; app = $s.SourceAppUserModelId; playing = ($pb.PlaybackStatus.ToString() -eq 'Playing'); pos = $tl.Position.TotalSeconds; dur = $tl.EndTime.TotalSeconds; key = $key }
+      if ($newSong -or $tick % 20 -eq 0) { $o.art = $art }   # cover only when the song changes (and now and then)
+      $tick++
       [Console]::Out.WriteLine(($o | ConvertTo-Json -Compress))
     } else { [Console]::Out.WriteLine('{}') }
   } catch { [Console]::Out.WriteLine('{}') }
@@ -266,6 +288,7 @@ function createTray() {
     { label: "Settings", click: () => openPanel("settings") },
     { label: "Memory", click: () => openPanel("memory") },
     { label: "Run setup again", click: () => openPanel("setup") },
+    { label: "Hide / show island", click: () => send("island:toggleHide") },
     { label: "Float / dock", click: () => (dock === "top" ? toWidget() : toDock()) },
     { type: "separator" },
     { label: "Start with Windows", type: "checkbox", checked: app.getLoginItemSettings().openAtLogin,

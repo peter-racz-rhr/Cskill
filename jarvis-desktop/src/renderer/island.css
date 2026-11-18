@@ -209,3 +209,9 @@
   .md li{position:relative;padding-left:14px;margin:3px 0}
   .md li::before{content:"";position:absolute;left:2px;top:.62em;width:4px;height:4px;border-radius:50%;background:var(--muted)}
   .bars i{animation:none!important;transition:height .08s}
+
+  /* hidden: a faint line in the top edge; rest the mouse on it to bring the island back */
+  #peek{position:fixed;top:2px;left:50%;width:56px;height:4px;margin-left:-28px;border-radius:2px;background:rgba(0,0,0,.45);box-shadow:0 0 0 .5px rgba(255,255,255,.25);opacity:0;transition:opacity .25s,width .25s;pointer-events:none}
+  #peek.on{opacity:1}
+  .player .cover,.mini .art{background-color:#1c1c1e}
+  .player .cover.photo::after{display:none}

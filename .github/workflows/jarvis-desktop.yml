@@ -47,6 +47,6 @@ jobs:
             **Download `Jarvis-Setup-${{ steps.version.outputs.v }}.exe` below, run it, and follow the setup.**
             Windows may warn that the app is unsigned: click **More info → Run anyway**.
 
-            Jarvis is a little liquid ball at the top of your screen. Click it and talk; it answers out loud and keeps listening. Pull it down to tear it off and put it anywhere. It runs on your own Claude account (no API key).
+            Jarvis is a black island at the top of your screen. Click it (or press Alt+J) and ask anything; answers drop down as cards. Flick it up to hide it, pull it down to tear it off into a widget. It runs on your own Claude account (no API key).
           files: jarvis-desktop/dist/Jarvis-Setup-*.exe
           make_latest: true
