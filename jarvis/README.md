@@ -1,6 +1,6 @@
 # J.A.R.V.I.S.
 
-A voice-driven personal assistant powered by Claude. It has a holographic arc-reactor HUD, a British voice, and tools it actually uses.
+A voice-driven personal assistant powered by Claude. It has a clean, minimal chat interface (light and dark), a British voice, and tools it actually uses.
 
 ## Run it (2 minutes)
 
@@ -11,15 +11,15 @@ export ANTHROPIC_API_KEY=sk-ant-...      # get one at console.anthropic.com
 npm start
 ```
 
-Open **http://localhost:3000** in **Chrome or Edge**, click to initialise, and allow the microphone.
+Open **http://localhost:3000** in **Chrome or Edge** and allow the microphone when asked.
 
 ## Talking to it
 
 | How | What |
 |---|---|
-| Click the reactor or mic button | Talk once, and it sends when you stop speaking |
+| Click the mic | Talk once, and it sends when you pause |
 | Hold **Space** | Push-to-talk (release to send) |
-| **WAKE WORD** toggle | Always listening: say *"Jarvis, what's the weather in Budapest?"* |
+| **Hands-free** button | Always listening: say *"Jarvis, what's the weather in Budapest?"* |
 | Start talking while it speaks | Interrupts it (barge-in). **Esc** also silences it |
 | Type in the bar | Works anywhere, no mic needed |
 
@@ -27,11 +27,10 @@ Open **http://localhost:3000** in **Chrome or Edge**, click to initialise, and a
 
 - **Web search**: current news, facts, prices
 - **Weather**: any city, live (Open-Meteo, no key needed)
-- **Memory**: "Remember I take my coffee black". This is saved to `memory.json` and kept across restarts
-- **Timers**: "Set a 10 minute timer for the pasta". It announces when the time is up
+- **Memory**: "Remember I take my coffee black". This is saved to `memory.json` and kept across restarts. Open **Memory** to see or delete notes
+- **Timers**: "Set a 10 minute timer for the pasta". It appears above the input bar and is announced when the time is up
 - **Open websites**: "Open YouTube"
-- **HUD panels**: lists, steps, code, and comparisons appear on screen, and it speaks a short summary
-- **Themes**: "Switch to Mark 42 colours" (arc · mark42 · stealth · vibranium)
+- **Cards**: lists, steps, code, and comparisons appear as a card in the chat, and it speaks a short summary
 
 ## Config (env vars)
 

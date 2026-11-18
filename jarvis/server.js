@@ -1,5 +1,5 @@
 // J.A.R.V.I.S. — local server.
-// Serves the HUD, holds the API key, and runs Claude's tool loop.
+// Serves the UI, holds the API key, and runs Claude's tool loop.
 // Streams Server-Sent Events to the browser: text deltas, tool activity, UI actions.
 
 import http from "node:http";
@@ -75,7 +75,7 @@ const tools = [
   },
   {
     name: "set_timer",
-    description: "Start a countdown timer on the HUD; it announces itself when done.",
+    description: "Start a countdown timer on screen; it announces itself out loud when done.",
     strict: true,
     input_schema: {
       type: "object",
@@ -88,9 +88,9 @@ const tools = [
     },
   },
   {
-    name: "hud_display",
+    name: "show_card",
     description:
-      "Put a panel on the HUD: a short title plus markdown-ish body (lists, key facts, code). Use for anything that is better read than heard: lists, steps, numbers, links.",
+      "Show a card in the chat: a short title plus a markdown body (lists, key facts, code, links). Use for anything better read than heard: lists, steps, numbers, links, comparisons.",
     strict: true,
     input_schema: {
       type: "object",
@@ -99,21 +99,10 @@ const tools = [
       additionalProperties: false,
     },
   },
-  {
-    name: "set_theme",
-    description: "Change the HUD colour scheme.",
-    strict: true,
-    input_schema: {
-      type: "object",
-      properties: { theme: { type: "string", enum: ["arc", "mark42", "stealth", "vibranium"] } },
-      required: ["theme"],
-      additionalProperties: false,
-    },
-  },
 ];
 
 // Tools whose effect happens in the browser: we forward them as "action" events.
-const UI_TOOLS = new Set(["open_website", "set_timer", "hud_display", "set_theme"]);
+const UI_TOOLS = new Set(["open_website", "set_timer", "show_card"]);
 
 const WMO = {
   0: "clear sky", 1: "mainly clear", 2: "partly cloudy", 3: "overcast", 45: "fog", 48: "rime fog",
@@ -166,7 +155,7 @@ async function runTool(name, input, send) {
       if (UI_TOOLS.has(name)) {
         if (name === "open_website" && !/^https?:\/\//i.test(input.url)) return "Error: URL must start with https://";
         send("action", { name, input });
-        return "Done — shown on the user's HUD.";
+        return "Done — shown on the user's screen.";
       }
       return `Unknown tool ${name}`;
   }
@@ -177,7 +166,7 @@ const STABLE_SYSTEM = `You are J.A.R.V.I.S. — Just A Rather Very Intelligent S
 
 You are speaking out loud through a voice interface. So:
 - Default to 1–3 short spoken sentences. Sound natural when read aloud: no markdown, no bullet points, no emoji, no URLs in your spoken reply.
-- Anything better read than heard (lists, steps, numbers, code, links, comparisons) goes on the HUD with hud_display; then give a one-line spoken summary.
+- Anything better read than heard (lists, steps, numbers, code, links, comparisons) goes in a card with show_card; then give a one-line spoken summary.
 - Use tools proactively: web_search for anything current or factual you are unsure of, get_weather for weather, remember when the user shares a lasting preference or fact or asks you to remember something, set_timer for timers and reminders, open_website when asked to open or show a site.
 - A touch of wit is welcome; never at the expense of being useful. Never claim to have done something you did not do with a tool.`;
 
@@ -292,6 +281,15 @@ const server = http.createServer(async (req, res) => {
       conversations.delete(String(JSON.parse(raw || "{}").session || "default"));
       res.writeHead(200, { "Content-Type": "application/json" });
       return res.end('{"ok":true}');
+    }
+    if (req.method === "POST" && url.pathname === "/api/memory/delete") {
+      let raw = "";
+      for await (const chunk of req) raw += chunk;
+      const mem = await loadMemory();
+      mem.notes.splice(Number(JSON.parse(raw || "{}").index), 1);
+      await saveMemory(mem);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      return res.end(JSON.stringify(mem));
     }
     if (url.pathname === "/api/memory") {
       res.writeHead(200, { "Content-Type": "application/json" });
