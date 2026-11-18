@@ -1,0 +1,10 @@
+{
+  "name": "jarvis",
+  "version": "1.0.0",
+  "description": "J.A.R.V.I.S. — a voice-driven Claude assistant with a holographic HUD",
+  "type": "module",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=20" },
+  "dependencies": { "@anthropic-ai/sdk": "^1.10.0" }
+}
