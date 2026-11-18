@@ -113,6 +113,42 @@
   .note{font-size:11.5px;color:var(--faint);margin-top:10px}
   .thumb{float:right;width:64px;height:64px;border-radius:12px;object-fit:cover;margin:0 0 6px 12px}
 
+  /* Claude task live activity */
+  .task{display:flex;align-items:center;gap:12px;height:100%;padding:0 18px 0 14px}
+  .spin{width:18px;height:18px;flex:none}
+  .spin circle{fill:none;stroke-width:2.5;stroke-linecap:round}
+  .spin .bg{stroke:rgba(235,235,245,.16)}
+  .spin .fg{stroke:#d97757;stroke-dasharray:14 60;transform-origin:center}
+  @media (prefers-reduced-motion:no-preference){.spin .fg{animation:spin .9s linear infinite}}
+  @keyframes spin{to{rotate:360deg}}
+  .task .who{font-size:13px;font-weight:600;color:var(--fg);white-space:nowrap}
+  .task .what{flex:1;min-width:0;font-size:13px;color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .task .step{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .badge{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;flex:none;font-size:12px;font-weight:700;color:#000}
+  .badge.ok{background:var(--green)}
+  .badge.wait{background:var(--orange)}
+  .claude{width:18px;height:18px;flex:none;color:#d97757}
+  .steps2{list-style:none;margin-top:10px}
+  .steps2 li{display:flex;align-items:center;gap:12px;min-height:36px;font-size:13.5px;color:var(--faint)}
+  .steps2 li.done{color:var(--fg2)}
+  .steps2 li.cur{color:var(--fg)}
+  .steps2 .ic{width:18px;display:grid;place-items:center;flex:none;font-size:13px}
+  .steps2 li.done .ic{color:var(--green)}
+  /* notifications */
+  .notif{display:flex;align-items:center;gap:12px;height:100%;padding:0 18px 0 12px}
+  .app{width:36px;height:36px;border-radius:9px;flex:none;display:grid;place-items:center;color:#fff}
+  .app svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .notif .txt{flex:1;min-width:0}
+  .notif .from{font-size:13.5px;font-weight:600;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .notif .msg{font-size:13px;color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .notif .when{font-size:12px;color:var(--muted);align-self:flex-start;margin-top:14px}
+  .count{position:absolute;right:12px;top:50%;translate:0 -50%;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--red);color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center;opacity:0;scale:.5;transition:opacity .2s,scale .35s linear(0, 0.45 15%, 1.08 35%, 0.97 55%, 1.01 75%, 1)}
+  .count.on{opacity:1;scale:1}
+  .nlist{list-style:none;margin-top:10px}
+  .nlist li{display:flex;gap:12px;align-items:center;padding:10px 0;border-top:.5px solid var(--line)}
+  .nlist .app{width:32px;height:32px;border-radius:8px}
+  .nlist .app svg{width:17px;height:17px}
+  .nlist .txt{flex:1;min-width:0}
   /* music, following the sketch: compact mini player · now playing · playlist with fading track list */
   .mini{display:flex;align-items:center;gap:14px;height:100%;padding:0 22px 0 14px}
   .mini .art{width:32px;height:32px;border-radius:9px}                      /* sits inside the pill's curve with even space around it */
@@ -195,6 +231,9 @@
   <div class="layer" id="lStatus"><div class="status"><span class="light"></span><span class="text" id="statusText"></span><span class="bars"><i></i><i></i><i></i><i></i><i></i></span></div></div>
   <div class="layer" id="lTimer"><div class="split"><svg class="ring" viewBox="0 0 24 24"><circle class="bg" cx="12" cy="12" r="9"/><circle class="fg" id="tRing" cx="12" cy="12" r="9" stroke-dasharray="56.5" stroke-dashoffset="0"/></svg><span class="tval" id="tCompact">0:00</span></div></div>
   <div class="layer" id="lHud"><div class="hud"><svg viewBox="0 0 24 24" id="hudIcon"></svg><span class="lvl"><i id="hudLvl"></i></span></div></div>
+  <div class="layer" id="lTask"><div class="task" id="taskRow"></div></div>
+  <div class="layer" id="lNotif"><div class="notif" id="notifRow"></div></div>
+  <span class="count" id="count"></span>
   <div class="layer" id="lDrop"><div class="drop"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Drop to add to Shelf</div></div>
   <div class="layer" id="lMusic"><div class="mini"><span class="art" id="mArt"></span><span class="track"><i id="mMini"></i></span><span class="eq"><i></i><i></i><i></i><i></i></span></div></div>
   <div class="layer" id="lCard"><div class="w-top" id="wTop" hidden><i></i></div><div class="card" id="card"></div></div>
@@ -205,7 +244,8 @@
 <form id="typed"><input id="typedIn" placeholder="Type what you'd say…" autocomplete="off"></form>
 
 <div class="hint" id="hint">
-  <b>Click</b> the island and talk · try “play Blinding Lights”, “songs like Fejezz”, “play my workout playlist”, “who is Ada Lovelace”, “weather in Budapest”, “100 euro to forint”, “15% of 80”, “note buy milk”, “5 minute timer”, “translate good morning to Hungarian”, “delete my old downloads”, “open Spotify”<br>
+  <b>Click</b> the island and talk · try “play Blinding Lights”, “songs like Fejezz”, “play my workout playlist”, “who is Ada Lovelace”, “weather in Budapest”, “100 euro to forint”, “15% of 80”, “note buy milk”, “5 minute timer”, “translate good morning to Hungarian”, “delete my old downloads”, “open Spotify”, “research the best laptop for students”<br>
+  <b>N</b> for a demo notification · 
   <b>Drag files</b> onto the page for the Shelf · <b>↑ ↓</b> for the volume HUD · 
 <b>Pull it down</b> to snap it into a widget · drag it back to the top to dock · <b>T</b> to type · <b>Esc</b> to close
 </div>
@@ -231,6 +271,7 @@ const ICON = {
 // ---------------- state ----------------
 let s = "idle", hover = false, cardOpen = false, mode = "dock", pulling = null, widgetPos = null;
 let timer = null, music = null, hud = null, dragOver = false, shelf = [];
+let task = null, flashTask = 0, notifs = [], unread = 0, notifShow = 0;
 function setS(v, text) { s = v; island.dataset.s = v; if (text !== undefined) $("statusText").textContent = text; }
 
 // ---------------- geometry: one black shape that springs between sizes ----------------
@@ -245,7 +286,10 @@ function shape() {                               // which size + layer the islan
   if (s === "listening") return at(300, 48, "lStatus");
   if (s === "thinking") return at(240, 42, "lStatus");
   if (hud && performance.now() < hud.until) return at(220, 40, "lHud");
+  if (performance.now() < notifShow) return at(360, 60, "lNotif");                 // a notification drops in
+  if (task && performance.now() < flashTask) return at(240, 44, "lTask");          // "Ready" / "Needs your OK" moment
   if (cardOpen) return at(400, contentH(), "lCard", 28);
+  if (task && task.status !== "done") return hover ? at(400, contentTaskH(), "lCard", 28) : at(330, 44, "lTask");   // Claude working
   if (timer && music) return at(hover ? 312 : 300, 56, "lMusic");   // two activities: music here, timer in the bubble
   if (timer) return at(hover ? 196 : 180, 38, "lTimer");
   if (music) return at(hover ? 312 : 300, 56, "lMusic");
@@ -260,7 +304,9 @@ function frame(now) {
   const k = pulling ? 520 : 290, c = pulling ? 34 : 23;
   for (const [p, v] of [["x", "vx"], ["y", "vy"], ["w", "vw"], ["h", "vh"]]) { box[v] += (k * (target[p] - box[p]) - c * box[v]) * dt; box[p] += box[v] * dt; }
   Object.assign(island.style, { left: box.x + "px", top: box.y + "px", width: box.w + "px", height: box.h + "px", borderRadius: Math.min(sh.r, box.h / 2) + "px" });
-  for (const id of ["lStatus", "lTimer", "lMusic", "lCard", "lHud", "lDrop"]) $(id).classList.toggle("on", id === sh.layer);
+  for (const id of ["lStatus", "lTimer", "lMusic", "lCard", "lHud", "lDrop", "lTask", "lNotif"]) $(id).classList.toggle("on", id === sh.layer);
+  $("count").textContent = unread; $("count").classList.toggle("on", unread > 0 && !sh.layer);
+  if (task && task.status !== "done" && hover && sh.layer === "lCard" && !cardOpen && $("card").dataset.task !== "1") renderTaskCard();
   const dual = mode === "dock" && timer && music && !cardOpen && s === "idle" && sh.layer === "lMusic";
   $("bubble").classList.toggle("on", !!dual);
   if (dual) Object.assign($("bubble").style, { left: box.x + box.w + 8 + "px", top: box.y + (box.h - 38) / 2 + "px" });
@@ -300,7 +346,11 @@ function onPull(e) {
 addEventListener("pointerup", () => {
   if (!pulling) return;
   const p = pulling; pulling = null;
-  if (!p.moved) { if (mode === "dock" || p.mic) talk(); return; }
+  if (!p.moved) {
+    if (mode === "dock" && unread && !cardOpen && s === "idle" && !task) { show(notifCenter()); unread = 0; return; }
+    if (mode === "dock" || p.mic) talk();
+    return;
+  }
   if (mode === "widget" && widgetPos.y < 36) {     // dropped on the top edge: dock again
     mode = "dock"; island.classList.remove("widget"); $("wTop").hidden = true;
     $("card").querySelectorAll(".w-mic,.w-hint").forEach((el) => el.remove());
@@ -327,6 +377,7 @@ addEventListener("keydown", (e) => {
   if (e.key.toLowerCase() === "t" && document.activeElement !== $("typedIn")) { e.preventDefault(); openTyped(); }
   if (e.key === "Escape") { $("typed").classList.remove("on"); rec?.abort(); setS("idle"); cardOpen = false; }
   if ((e.key === "Enter" || e.key === " ") && document.activeElement === island) { e.preventDefault(); talk(); }
+  if (e.key.toLowerCase() === "n" && document.activeElement !== $("typedIn")) { e.preventDefault(); notify(); }
   if ((e.key === "ArrowUp" || e.key === "ArrowDown") && document.activeElement !== $("typedIn")) { e.preventDefault(); showHud(e.key === "ArrowUp" ? 1 : -1); }
 });
 
@@ -375,6 +426,7 @@ async function handle(text) {
     else if (/^[\d\s.+\-*/x×()%]+$|% of|percent of|\bplus\b|\bminus\b|\btimes\b|divided by/.test(t)) a = calc(text, t);
     else if (/^(note|remember|write down)\b/.test(t)) a = note(text);
     else if (/\b(today|schedule|calendar|agenda)\b/.test(t)) a = schedule(text);
+    else if (/^(research|compare|find me|plan|summari[sz]e|write|draft|organi[sz]e)\b/.test(t)) { startTask(text); setS("idle"); return; }
     else if (/^translate\b/.test(t)) a = await translate(text, t);
     else if (/\b(delete|remove|empty|clean up|wipe|uninstall)\b/.test(t)) a = confirmRisky(text, t);
     else if (/\bshelf\b/.test(t)) a = shelfCard(text);
@@ -602,6 +654,82 @@ addEventListener("drop", (e) => {
   show(shelfCard(""));
 });
 
+// ---------------- Claude task: live progress in the island ----------------
+const CLAUDE = '<svg class="claude" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.7 6.3L20 6.6l-4.6 4.6L22 12l-6.6 1.7 4.6 4.7-6.3-1.7L12 22l-1.7-6.3L4 17.4l4.6-4.7L2 12l6.6-.8L4 6.6l6.3 1.7z"/></svg>';
+const SPIN = '<svg class="spin" viewBox="0 0 24 24"><circle class="bg" cx="12" cy="12" r="9"/><circle class="fg" cx="12" cy="12" r="9"/></svg>';
+function startTask(said) {
+  const clean = said.replace(/[.?!]$/, "").trim(), what = (clean[0].toUpperCase() + clean.slice(1)).slice(0, 60);
+  task = { said, what, steps: ["Understanding the request", "Searching the web", "Comparing 6 sources", "Writing the summary"], i: 0, start: Date.now(), status: "working" };
+  cardOpen = false; renderTaskRow();
+  const next = () => {
+    if (!task || task.status !== "working") return;
+    task.i++;
+    if (task.i === 2 && /buy|order|delete|send|book/i.test(said)) { task.status = "approval"; flashTask = performance.now() + 4000; renderTaskRow(); notifyTask("Needs your OK", task.what); return; }
+    if (task.i >= task.steps.length) return finishTask();
+    renderTaskRow(); if ($("card").dataset.task === "1") renderTaskCard();
+    setTimeout(next, 1700);
+  };
+  setTimeout(next, 1700);
+  clearInterval(task.int); task.int = setInterval(() => { if (task?.status !== "done") renderTaskRow(); }, 1000);
+}
+function renderTaskRow() {
+  if (!task) return;
+  const secs = Math.floor((Date.now() - task.start) / 1000);
+  const lead = task.status === "done" ? '<span class="badge ok">✓</span>' : task.status === "approval" ? '<span class="badge wait">!</span>' : SPIN;
+  const label = task.status === "done" ? "Ready" : task.status === "approval" ? "Needs your OK" : task.steps[task.i];
+  $("taskRow").innerHTML = `${lead}<span class="who">Claude</span><span class="what">${esc(label)}</span><span class="step">${task.status === "working" ? `${task.i + 1}/${task.steps.length} · ${fmt(secs)}` : ""}</span>`;
+}
+function taskAnswer() {
+  const t = task;
+  return { icon: "info", kicker: t.status === "done" ? "Claude · done" : "Claude is working", said: t.said, title: t.what,
+    html: `<ul class="steps2">${t.steps.map((x, i) => { const st = t.status === "done" || i < t.i ? "done" : i === t.i ? "cur" : ""; return `<li class="${st}"><span class="ic">${st === "done" ? "✓" : st === "cur" ? SPIN : "○"}</span>${esc(x)}</li>`; }).join("")}</ul><div class="prog"><i style="width:${t.status === "done" ? 100 : (100 * t.i / t.steps.length)}%;background:#d97757;transition:width .4s"></i></div>`,
+    chips: t.status === "approval" ? [{ label: "Allow", run: () => { task.status = "working"; renderTaskRow(); renderTaskCard(); setTimeout(() => { task.i++; finishTask(); }, 1500); } }, { label: "Stop", run: cancelTask }] : [{ label: "Cancel", run: cancelTask }] };
+}
+function renderTaskCard() { render(taskAnswer()); $("card").dataset.task = "1"; }
+function contentTaskH() { return $("card").dataset.task === "1" ? contentH() : 200; }
+function cancelTask() { clearInterval(task?.int); task = null; $("card").dataset.task = ""; cardOpen = false; }
+function finishTask() {
+  task.status = "done"; task.i = task.steps.length; clearInterval(task.int);
+  renderTaskRow(); flashTask = performance.now() + 2200; $("card").dataset.task = "";
+  notifyTask("Ready", task.what);
+  setTimeout(() => {
+    const t = task; if (!t) return;
+    show({ icon: "info", kicker: "Claude · done in " + fmt(Math.floor((Date.now() - t.start) / 1000)), said: t.said, title: t.what,
+      html: `<div class="body">Here's the short version: the top three options, what sets them apart, and the one I'd pick for you.</div><ul class="list"><li><span class="k">1</span><span class="v">Best overall</span></li><li><span class="k">2</span><span class="v">Best value</span></li><li><span class="k">3</span><span class="v">If you want the lightest</span></li></ul>`,
+      chips: [{ label: "Copy summary", run: () => {} }], note: "Preview. In the app this is Claude's real answer.", stay: true });
+    task = null;
+  }, 2300);
+}
+function notifyTask(title, what) { notifs.unshift({ app: "claude", from: `Claude · ${title}`, msg: what, at: Date.now() }); }
+
+// ---------------- notifications: drop in, then leave a badge ----------------
+const APPS = {
+  messages: { bg: "#30d158", icon: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z"/>' },
+  mail: { bg: "#0a84ff", icon: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>' },
+  calendar: { bg: "#ff3b30", icon: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>' },
+  claude: { bg: "#d97757", icon: '<path d="M12 4l1.5 5.5L19 8l-4 4 4 4-5.5-1.5L12 20l-1.5-5.5L5 16l4-4-4-4 5.5 1.5z"/>' },
+};
+const DEMO = [
+  { app: "messages", from: "Anna", msg: "Dinner Friday at 8? I booked the place we liked" },
+  { app: "mail", from: "GitHub", msg: "Build passed · Jarvis for Windows #7" },
+  { app: "calendar", from: "Design review", msg: "Starts in 10 minutes · Room 3" },
+];
+let demoI = 0;
+function notify(n = DEMO[demoI++ % DEMO.length]) {
+  n = { ...n, at: Date.now() };
+  notifs.unshift(n); notifs = notifs.slice(0, 12); unread++;
+  const a = APPS[n.app];
+  $("notifRow").innerHTML = `<span class="app" style="background:${a.bg}"><svg viewBox="0 0 24 24">${a.icon}</svg></span><span class="txt"><div class="from">${esc(n.from)}</div><div class="msg">${esc(n.msg)}</div></span><span class="when">now</span>`;
+  notifShow = performance.now() + 4200;
+  $("live").textContent = `${n.from}: ${n.msg}`;
+}
+function notifCenter() {
+  const ago = (t) => { const m = Math.floor((Date.now() - t) / 60000); return m < 1 ? "now" : m + "m"; };
+  return { icon: "info", kicker: "Notifications", title: notifs.length ? `${notifs.length} notification${notifs.length > 1 ? "s" : ""}` : "You're all caught up",
+    html: notifs.length ? `<ul class="nlist">${notifs.map((n) => `<li><span class="app" style="background:${APPS[n.app].bg}"><svg viewBox="0 0 24 24">${APPS[n.app].icon}</svg></span><span class="txt"><div class="from" style="font-size:13.5px;font-weight:600;color:var(--fg)">${esc(n.from)}</div><div style="font-size:13px;color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(n.msg)}</div></span><span style="font-size:12px;color:var(--muted)">${ago(n.at)}</span></li>`).join("")}</ul>` : "",
+    chips: notifs.length ? [{ label: "Clear all", run: () => { notifs = []; cardOpen = false; } }] : [], stay: true };
+}
+
 // ---------------- gallery ----------------
 const STATUS = (st, text, extra = "") => `<div class="layer"><div class="status"><span class="light"></span><span class="text">${esc(text)}</span>${extra}<span class="bars"><i></i><i></i><i></i><i></i><i></i></span></div></div>`;
 const PILLS = [
@@ -613,6 +741,11 @@ const PILLS = [
   ["Volume", "replaces the system HUD · ↑ ↓ keys", 220, 40, "idle", `<div class="layer"><div class="hud"><svg viewBox="0 0 24 24">${'<path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>'}</svg><span class="lvl"><i style="width:62%"></i></span></div></div>`],
   ["Drop target", "drag files onto the island", 260, 48, "idle", `<div class="layer"><div class="drop"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Drop to add to Shelf</div></div>`],
   ["Next meeting", "live activity", 230, 38, "idle", `<div class="layer"><div class="split"><span style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--fg2)"><span style="width:8px;height:8px;border-radius:50%;background:#0a84ff"></span>Design review</span><span class="tval" style="color:#0a84ff">in 12m</span></div></div>`],
+  ["Claude working", "spinner · current step · progress", 330, 44, "idle", `<div class="layer"><div class="task">${SPIN}<span class="who">Claude</span><span class="what">Comparing 6 sources</span><span class="step">3/4 · 0:05</span></div></div>`],
+  ["Claude needs you", "amber · a decision is waiting", 240, 44, "idle", `<div class="layer"><div class="task"><span class="badge wait">!</span><span class="who">Claude</span><span class="what">Needs your OK</span><span class="step"></span></div></div>`],
+  ["Claude is ready", "green · then the answer opens", 240, 44, "idle", `<div class="layer"><div class="task"><span class="badge ok">✓</span><span class="who">Claude</span><span class="what">Ready</span><span class="step"></span></div></div>`],
+  ["Notification", "drops in, then tucks away · N key", 360, 60, "idle", `<div class="layer"><div class="notif"><span class="app" style="background:#30d158"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z"/></svg></span><span class="txt"><div class="from">Anna</div><div class="msg">Dinner Friday at 8? I booked the place we liked</div></span><span class="when">now</span></div></div>`],
+  ["Unread badge", "click the island to see them", 126, 36, "idle", `<span class="count on" style="right:10px">3</span>`],
   ["Charging", "live activity", 180, 38, "idle", `<div class="layer"><div class="split"><span style="font-size:12.5px;color:var(--fg2);margin-left:6px">Charging</span><span class="tval" style="color:var(--green)">84%</span></div></div>`],
   ["Music playing", "mini player", 300, 56, "idle", `<div class="layer"><div class="mini"><span class="art" style="--art:${ART[0]}"></span><span class="track"><i style="width:35%"></i></span><span class="eq"><i></i><i></i><i></i><i></i></span></div></div>`],
 ];
@@ -629,6 +762,8 @@ const CARDS = [
   ["Translate", "Translation", "translate good morning to hungarian", () => ({ icon: "web", kicker: "Translate → Hungarian", said: "translate good morning to hungarian", title: "Jó reggelt", body: "good morning", chips: [{ label: "Copy" }] })],
   ["Safety", "Asks before anything risky", "delete my old downloads", () => { const a = confirmRisky("delete my old downloads", "delete my old downloads"); a.chips = [{ label: "Cancel" }, { label: "Delete" }]; return a; }],
   ["Shelf", "File shelf", "drag files onto the page", () => { const keep = shelf; shelf = [{ name: "contract-final.pdf", size: "1.2 MB" }, { name: "IMG_2041.jpg", size: "3.4 MB" }]; const a = shelfCard(""); shelf = keep; return a; }],
+  ["Claude", "Task in progress (hover the island)", "research the best laptop for students", () => ({ icon: "info", kicker: "Claude is working", said: "research the best laptop for students", title: "Research the best laptop for students", html: `<ul class="steps2"><li class="done"><span class="ic">✓</span>Understanding the request</li><li class="done"><span class="ic">✓</span>Searching the web</li><li class="cur"><span class="ic">${SPIN}</span>Comparing 6 sources</li><li><span class="ic">○</span>Writing the summary</li></ul><div class="prog"><i style="width:50%;background:#d97757"></i></div>`, chips: [{ label: "Cancel" }] })],
+  ["Notifications", "Notification list", "", () => { const keep = notifs; notifs = DEMO.map((d, i) => ({ ...d, at: Date.now() - i * 4 * 60000 })); const a = notifCenter(); notifs = keep; return a; }],
   ["Errors", "When something fails", "", () => ({ icon: "info", kicker: "Couldn't finish", title: "No internet connection", body: "I'll try again when you're back online.", chips: [{ label: "Retry" }] })],
   ["Timer", "Time's up", "", () => ({ icon: "timer", kicker: "Timer", title: "Time's up" })],
   ["Money", "Currency", "100 euro to forint", () => ({ icon: "calc", kicker: "Currency", said: "100 euro to forint", html: `<div class="big">39,412 HUF</div>`, body: "100 EUR · rate 394.12 · today" })],
@@ -659,11 +794,14 @@ function buildGallery() {
   g.querySelectorAll("[data-pill]").forEach((f) => (f.onclick = () => {
     scrollTo({ top: 0, behavior: "smooth" });
     const i = f.dataset.pill === "dual" ? -1 : +f.dataset.pill;
-    if (i === 2) { cardOpen = false; setS("listening", "play blinding lights"); setTimeout(() => setS("idle"), 2500); }
-    if (i === 3) { cardOpen = false; setS("thinking", "Thinking"); setTimeout(() => setS("idle"), 2500); }
-    if (i === 4) { startTimer("", "5 minute timer"); cardOpen = false; }
-    if (i === 5) { music = { ...sampleMusic, playing: true }; tick(); cardOpen = false; }
-    if (i === 6) { showHud(0); island.focus(); }
+    const name = i >= 0 ? PILLS[i][0] : "";
+    if (name === "Listening") { cardOpen = false; setS("listening", "play blinding lights"); setTimeout(() => setS("idle"), 2500); }
+    if (name === "Thinking") { cardOpen = false; setS("thinking", "Thinking"); setTimeout(() => setS("idle"), 2500); }
+    if (name === "Timer running") { startTimer("", "5 minute timer"); cardOpen = false; }
+    if (name === "Music playing") { music = { ...sampleMusic, playing: true }; tick(); cardOpen = false; }
+    if (name === "Volume") { showHud(0); island.focus(); }
+    if (name.startsWith("Claude")) { startTask(name === "Claude needs you" ? "research and book a table for friday" : "research the best laptop for students"); }
+    if (name === "Notification" || name === "Unread badge") { notify(); }
     if (f.dataset.pill === "dual") { music = { ...sampleMusic, playing: true }; tick(); startTimer("", "3 minute timer"); cardOpen = false; }
   }));
 }
