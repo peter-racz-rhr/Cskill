@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jarvis Prototype</title>
+<style>
+  :root{--ink:#000;--fg:#f5f5f7;--muted:#9a9aa2;--line:#26262b;--blue:#408cff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font:400 14px/1.45 "Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif;color:#1d1d1f;overflow:hidden;
+    background:linear-gradient(160deg,#dfe6ee 0%,#c9d3df 45%,#b8c4d3 100%)}
+  /* fake desktop hint */
+  .hint{position:fixed;z-index:0;left:50%;bottom:28px;transform:translateX(-50%);color:#4b5563;font-size:13px;text-align:center;line-height:1.7;max-width:92vw}
+  .hint b{color:#111}
+  kbd{font:600 11px/1 inherit;background:#fff;border:1px solid #c7ccd3;border-bottom-width:2px;border-radius:5px;padding:2px 6px}
+
+  /* liquid layer: black shapes blurred + thresholded so they melt together */
+  #goo{position:fixed;inset:0;z-index:1;filter:url(#gooF);pointer-events:none}
+  #goo div{position:absolute;background:var(--ink)}
+  #bar{left:50%;top:-24px;width:200px;height:40px;margin-left:-100px;border-radius:20px}
+  #neck{border-radius:0}
+  #blob{border-radius:22px}
+
+  /* content layer (not blurred), follows the blob */
+  #ui{position:fixed;z-index:2;color:var(--fg);cursor:pointer;user-select:none;touch-action:none}
+  #ui.widget{cursor:default}
+  .row{position:absolute;left:0;right:0;top:0;height:44px;display:flex;align-items:center;gap:10px;padding:0 18px;opacity:0;transition:opacity .18s}
+  #ui.show .row{opacity:1}
+  .light{width:9px;height:9px;border-radius:50%;background:#3a3a40;flex:none;transition:background .25s,box-shadow .25s,transform .1s}
+  [data-s=listening] .light{background:var(--blue);box-shadow:0 0 12px var(--blue)}
+  [data-s=thinking] .light{background:#fff;animation:pulse .9s ease-in-out infinite}
+  [data-s=speaking] .light{background:#e9eefc;box-shadow:0 0 10px rgba(255,255,255,.6)}
+  @keyframes pulse{50%{transform:scale(.55);opacity:.5}}
+  .label{flex:1;font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#d9d9de}
+  .wave{display:none;gap:3px;align-items:center;height:16px}
+  [data-s=listening] .wave,[data-s=speaking] .wave{display:inline-flex}
+  .wave i{width:3px;height:4px;border-radius:2px;background:#fff;opacity:.85}
+  [data-s=listening] .wave i{background:var(--blue)}
+  [data-s=speaking] .wave i{animation:talk .8s ease-in-out infinite}
+  .wave i:nth-child(2){animation-delay:.1s}.wave i:nth-child(3){animation-delay:.2s}.wave i:nth-child(4){animation-delay:.3s}
+  @keyframes talk{50%{height:14px}}
+
+  .card{position:absolute;left:0;right:0;top:44px;bottom:0;padding:2px 18px 18px;opacity:0;transition:opacity .2s;overflow:hidden}
+  #ui.data .card,#ui.widget .card{opacity:1;transition-delay:.15s}
+  .said{color:#8e8e96;font-size:12.5px;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .answer{font-size:14px;color:#ececf0;margin-bottom:12px}
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .tile{background:#141417;border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+  .tile small{display:block;color:var(--muted);font-size:11.5px}
+  .tile b{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+  .big{font-size:44px;font-weight:600;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
+  .list{list-style:none}
+  .list li{display:flex;gap:12px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+  .list li:last-child{border:0}
+  .list li span{color:var(--muted);width:46px;flex:none;font-variant-numeric:tabular-nums}
+  .bar2{height:4px;background:#222;border-radius:3px;overflow:hidden;margin-top:12px}
+  .bar2 i{display:block;height:100%;background:var(--blue);border-radius:3px}
+
+  /* widget extras */
+  .w-talk{display:none;margin:4px auto 14px;width:64px;height:64px;border-radius:50%;background:#0d0d10;border:1px solid #2a2a30;position:relative;cursor:pointer}
+  .w-talk::after{content:"";position:absolute;inset:24px;border-radius:50%;background:#3a3a40;transition:.25s}
+  [data-s=listening] .w-talk::after{background:var(--blue);box-shadow:0 0 16px var(--blue);inset:20px}
+  #ui.widget .w-talk{display:block}
+  .w-hint{display:none;text-align:center;color:#6e6e76;font-size:12px;margin-top:10px}
+  #ui.widget .w-hint{display:block}
+  #ui.widget .row{cursor:grab}
+  #typed{position:fixed;z-index:3;left:50%;top:120px;transform:translateX(-50%);width:min(420px,90vw);display:none;gap:8px}
+  #typed.on{display:flex}
+  #typed input{flex:1;height:38px;border-radius:12px;border:1px solid #c7ccd3;padding:0 12px;font:inherit}
+  #typed button{height:38px;border-radius:12px;border:0;background:#111;color:#fff;padding:0 14px;font:600 13px inherit;cursor:pointer}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="gooF" x="-20%" y="-20%" width="140%" height="140%">
+    <feGaussianBlur in="SourceGraphic" stdDeviation="9" result="b"/>
+    <feColorMatrix in="b" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -10"/>
+  </filter>
+</svg>
+
+<div id="goo"><div id="bar"></div><div id="neck"></div><div id="blob"></div></div>
+
+<div id="ui" data-s="idle">
+  <div class="row"><span class="light"></span><span class="label" id="label">Click to talk</span><span class="wave"><i></i><i></i><i></i><i></i></span></div>
+  <div class="card" id="card"></div>
+</div>
+
+<form id="typed"><input id="typedIn" placeholder="Type what you'd say…" autocomplete="off"><button>Ask</button></form>
+
+<div class="hint">
+  <b>Hover</b> the black bar at the top · <b>click</b> it and talk (“weather in Budapest”, “set a 5 minute timer”, “what's on today”)<br>
+  <b>Pull it down hard</b> to snap it off into a widget · drag the widget back to the top to merge · no mic? press <kbd>T</kbd> to type
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const ui = $("ui"), blobEl = $("blob"), neckEl = $("neck");
+const W = () => innerWidth;
+
+// ---------------- geometry + springs ----------------
+// The blob is a rounded rectangle; it eases toward a target box with a slightly bouncy spring.
+const box = { x: 0, y: -30, w: 200, h: 40, vx: 0, vy: 0, vw: 0, vh: 0 };
+let target = null, mode = "dock", hover = false, s = "idle", dataOpen = false, pulling = null, widgetPos = null;
+const TEAR = 170;
+
+function dockBox() {
+  const cx = W() / 2;
+  if (dataOpen) return { x: cx - 200, y: 8, w: 400, h: cardHeight() + 44 };
+  if (s !== "idle") return { x: cx - 170, y: 8, w: 340, h: 44 };
+  if (hover) return { x: cx - 150, y: 8, w: 300, h: 44 };
+  return { x: cx - 100, y: -30, w: 200, h: 40 };     // tucked into the top edge
+}
+function widgetBox() { return { x: widgetPos.x, y: widgetPos.y, w: 340, h: Math.max(250, cardHeight() + 44 + 92) }; }
+function cardHeight() { const c = $("card"); return c.firstElementChild ? Math.min(c.scrollHeight, 360) : 0; }
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.033, (now - last) / 1000); last = now;
+  if (!pulling) target = mode === "widget" ? widgetBox() : dockBox();
+  const k = pulling ? 520 : 210, c = pulling ? 34 : 17;
+  for (const [p, v] of [["x", "vx"], ["y", "vy"], ["w", "vw"], ["h", "vh"]]) {
+    box[v] += (k * (target[p] - box[p]) - c * box[v]) * dt; box[p] += box[v] * dt;
+  }
+  draw(); requestAnimationFrame(frame);
+}
+function draw() {
+  const r = mode === "widget" ? 30 : dataOpen ? 28 : 22;
+  Object.assign(blobEl.style, { left: box.x + "px", top: box.y + "px", width: box.w + "px", height: box.h + "px", borderRadius: r + "px" });
+  Object.assign(ui.style, { left: box.x + "px", top: box.y + "px", width: box.w + "px", height: box.h + "px" });
+  // neck: only while pulling — it thins as the blob moves away, then snaps
+  if (pulling && mode === "dock") {
+    const top = 6, bottom = box.y + 6, len = Math.max(0, bottom - top);
+    // hourglass: wide where it meets the bar and the blob, pinched in the middle like stretched honey
+    const t = Math.min(1, len / TEAR), nw = 150 - 40 * t, waist = Math.max(4, 70 * (1 - t) ** 1.6);
+    const pts = [];
+    for (let i = 0; i <= 12; i++) {
+      const v = i / 12, k = Math.pow(Math.abs(v - .5) * 2, 1.8);         // 0 in the middle, 1 at the ends
+      pts.push([(50 - (waist + (nw - waist) * k) / nw * 50).toFixed(1), (v * 100).toFixed(1)]);
+    }
+    const poly = pts.map(([x, y]) => `${x}% ${y}%`).concat(pts.slice().reverse().map(([x, y]) => `${(100 - x).toFixed(1)}% ${y}%`)).join(",");
+    Object.assign(neckEl.style, { display: "block", left: (box.x + box.w / 2 - nw / 2) + "px", top: top + "px", width: nw + "px", height: len + 10 + "px", clipPath: `polygon(${poly})` });
+  } else neckEl.style.display = "none";
+  ui.classList.toggle("show", mode === "widget" || box.y > -2);
+}
+requestAnimationFrame(frame);
+
+// ---------------- hover / click / pull / drag ----------------
+addEventListener("pointermove", (e) => {
+  if (pulling) return onPull(e);
+  if (mode !== "dock") return;
+  const near = e.clientY < 70 && Math.abs(e.clientX - W() / 2) < 190;
+  const over = e.clientX > box.x && e.clientX < box.x + box.w && e.clientY < box.y + box.h + 10;
+  hover = near || over;
+});
+ui.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0) return;
+  if (mode === "widget" && !e.target.closest(".row") && !e.target.closest(".w-talk")) return;
+  pulling = { x0: e.clientX, y0: e.clientY, bx: box.x, by: box.y, moved: false, onTalk: !!e.target.closest(".w-talk") };
+  ui.setPointerCapture(e.pointerId);
+});
+function onPull(e) {
+  const dx = e.clientX - pulling.x0, dy = e.clientY - pulling.y0;
+  if (!pulling.moved && Math.hypot(dx, dy) < 6) return;
+  pulling.moved = true;
+  if (mode === "widget") {                                   // drag the widget around
+    target = { ...widgetBox(), x: pulling.bx + dx, y: pulling.by + dy };
+    widgetPos = { x: target.x, y: target.y };
+    return;
+  }
+  const pull = Math.max(0, dy);                                // pull the blob down: it stretches
+  const stretch = Math.min(1, pull / TEAR);
+  const base = dockBox();
+  target = { x: base.x + dx * .4 + base.w * .12 * stretch, y: base.y + pull, w: base.w * (1 - .24 * stretch), h: base.h + 6 * stretch };
+  if (pull > TEAR) snapOff(e);
+}
+function snapOff(e) {
+  mode = "widget"; dataOpen = false;
+  widgetPos = { x: e.clientX - 170, y: Math.max(70, e.clientY - 22) };
+  ui.classList.add("widget"); ui.classList.remove("data");
+  pulling.moved = true; pulling.by = widgetPos.y; pulling.bx = widgetPos.x; pulling.x0 = e.clientX; pulling.y0 = e.clientY;
+  box.vy -= 300; // little recoil
+  renderCard(lastCard || { said: "", answer: "Hi. Click the dot and talk to me.", html: "" });
+}
+addEventListener("pointerup", () => {
+  if (!pulling) return;
+  const p = pulling; pulling = null;
+  if (!p.moved) {
+    if (mode === "dock" || p.onTalk) talk();
+    return;
+  }
+  if (mode === "widget" && widgetPos.y < 40) {                 // dropped on the top edge: merge back in
+    mode = "dock"; ui.classList.remove("widget"); hover = true; lastCard && openData();
+  }
+});
+
+// ---------------- voice ----------------
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, convo = false;
+function setS(v, text) { s = v; ui.dataset.s = v; if (text !== undefined) $("label").textContent = text; }
+function talk() {
+  if (s === "listening") { rec?.stop(); return; }
+  if (s === "speaking") { speechSynthesis.cancel(); convo = false; setS("idle", "Click to talk"); return; }
+  convo = true; listen();
+}
+function listen() {
+  if (!SR) { $("typed").classList.add("on"); $("typedIn").focus(); setS("listening", "Type below (no speech support)"); return; }
+  rec = new SR(); rec.lang = navigator.language || "en-US"; rec.interimResults = true;
+  let final = "";
+  rec.onresult = (e) => {
+    let t = ""; for (const r of e.results) { t += r[0].transcript; if (r.isFinal) final = t; }
+    $("label").textContent = "“" + t + "”";
+  };
+  rec.onerror = (e) => { if (e.error === "not-allowed") { $("typed").classList.add("on"); setS("idle", "Mic blocked: press T to type"); convo = false; } };
+  rec.onend = () => { if (final.trim()) handle(final.trim()); else { convo = false; setS("idle", "Click to talk"); } };
+  setS("listening", "Listening…");
+  rec.start();
+}
+$("typed").onsubmit = (e) => { e.preventDefault(); const t = $("typedIn").value.trim(); $("typedIn").value = ""; $("typed").classList.remove("on"); if (t) handle(t); };
+addEventListener("keydown", (e) => {
+  if (e.key.toLowerCase() === "t" && document.activeElement !== $("typedIn")) { e.preventDefault(); $("typed").classList.add("on"); $("typedIn").focus(); }
+  if (e.key === "Escape") { $("typed").classList.remove("on"); speechSynthesis.cancel(); convo = false; setS("idle", "Click to talk"); closeData(); }
+});
+function say(text, then) {
+  setS("speaking", "Jarvis");
+  const u = new SpeechSynthesisUtterance(text);
+  const v = speechSynthesis.getVoices().find((v) => /en-GB/i.test(v.lang) && /male|george|daniel|ryan/i.test(v.name)) || speechSynthesis.getVoices().find((v) => /en-GB/i.test(v.lang));
+  if (v) u.voice = v; u.rate = 1.05;
+  u.onend = () => { setS("idle", "Click to talk"); then?.(); if (convo) setTimeout(listen, 250); };
+  speechSynthesis.speak(u);
+}
+
+// ---------------- answers (prototype: local intents, real weather) ----------------
+let lastCard = null, closeTimer = null;
+function renderCard(c) {
+  lastCard = c;
+  $("card").innerHTML = `${c.said ? `<p class="said">“${esc(c.said)}”</p>` : ""}<p class="answer">${esc(c.answer)}</p>${c.html || ""}<div class="w-talk" title="Talk"></div><p class="w-hint">Drag me by the top · drop me on the top edge to dock</p>`;
+}
+function openData() { dataOpen = mode === "dock"; ui.classList.add("data"); clearTimeout(closeTimer); closeTimer = setTimeout(() => { if (!hover) closeData(); else closeTimer = setTimeout(closeData, 6000); }, 9000); }
+function closeData() { dataOpen = false; ui.classList.remove("data"); }
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+async function handle(text) {
+  setS("thinking", "Thinking…");
+  const t = text.toLowerCase();
+  let card;
+  if (/weather|temperature|rain|hot|cold/.test(t)) card = await weather(t.match(/in ([a-zà-ž .'-]+)/i)?.[1]?.trim() || "Budapest", text);
+  else if (/timer|remind/.test(t)) card = timer(t, text);
+  else if (/today|schedule|calendar|agenda/.test(t)) card = { said: text, answer: "Three things today. The big one is design review at three.",
+      html: `<ul class="list"><li><span>10:00</span>Stand-up</li><li><span>13:00</span>Lunch with Anna</li><li><span>15:00</span>Design review</li></ul>` };
+  else if (/time/.test(t)) card = { said: text, answer: `It's ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`, html: `<div class="big">${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>` };
+  else card = { said: text, answer: "In the real app I'd ask Claude that. This prototype only knows weather, timers, time and your schedule." };
+  renderCard(card);
+  if (card.html || mode === "widget") openData();
+  say(card.answer);
+}
+async function weather(city, said) {
+  try {
+    const g = await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=1&name=${encodeURIComponent(city)}`).then((r) => r.json());
+    const p = g.results[0];
+    const w = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${p.latitude}&longitude=${p.longitude}&current=temperature_2m,wind_speed_10m,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=1`).then((r) => r.json());
+    const now = Math.round(w.current.temperature_2m), hi = Math.round(w.daily.temperature_2m_max[0]), lo = Math.round(w.daily.temperature_2m_min[0]), rain = w.daily.precipitation_probability_max[0];
+    return { said, answer: `It's ${now} degrees in ${p.name}, with a high of ${hi}.`,
+      html: `<div class="tiles"><div class="tile"><small>Now</small><b>${now}°</b></div><div class="tile"><small>High / low</small><b>${hi}°/${lo}°</b></div><div class="tile"><small>Rain</small><b>${rain}%</b></div></div>` };
+  } catch { return { said, answer: `I couldn't reach the weather service for ${city}.` }; }
+}
+let timerInt = null;
+function timer(t, said) {
+  const n = parseFloat(t.match(/(\d+(\.\d+)?)/)?.[1] || "5"), secs = Math.round(/second/.test(t) ? n : /hour/.test(t) ? n * 3600 : n * 60);
+  const end = Date.now() + secs * 1000;
+  clearInterval(timerInt);
+  timerInt = setInterval(() => {
+    const left = Math.max(0, Math.ceil((end - Date.now()) / 1000)), el = document.querySelector("#tLeft"), bar = document.querySelector("#tBar");
+    if (el) el.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+    if (bar) bar.style.width = (100 * left / secs) + "%";
+    if (!left) { clearInterval(timerInt); renderCard({ said: "", answer: "Time's up." }); openData(); say("Pardon me, your timer is done."); }
+  }, 250);
+  return { said, answer: `Timer set for ${secs >= 60 ? Math.round(secs / 60) + " minutes" : secs + " seconds"}.`, html: `<div class="big" id="tLeft"></div><div class="bar2"><i id="tBar" style="width:100%"></i></div>` };
+}
+</script>
+</body>
+</html>
