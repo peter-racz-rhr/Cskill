@@ -4,303 +4,465 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Island Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Inter:wght@400;500;600&family=Manrope:wght@400;500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root{--ink:#000;--fg:#f5f5f7;--muted:#9a9aa2;--line:#26262b;--blue:#408cff}
+  :root{
+    --font:"Geist";
+    --ink:#000; --fg:#f5f5f7; --fg2:#c9c9cf; --muted:#8a8a92; --faint:#55555c; --line:rgba(255,255,255,.08); --tile:#121214;
+    --red:#ff3b30; --green:#30d158; --orange:#ff9f0a; --blue:#0a84ff;
+    --ease:cubic-bezier(.2,.8,.2,1);
+  }
   *{box-sizing:border-box;margin:0;padding:0}
+  [hidden]{display:none!important}
   html,body{height:100%}
-  body{font:400 14px/1.45 "Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif;color:#1d1d1f;overflow:hidden;
-    background:linear-gradient(160deg,#dfe6ee 0%,#c9d3df 45%,#b8c4d3 100%)}
-  /* fake desktop hint */
-  .hint{position:fixed;z-index:0;left:50%;bottom:28px;transform:translateX(-50%);color:#4b5563;font-size:13px;text-align:center;line-height:1.7;max-width:92vw}
-  .hint b{color:#111}
-  kbd{font:600 11px/1 inherit;background:#fff;border:1px solid #c7ccd3;border-bottom-width:2px;border-radius:5px;padding:2px 6px}
+  body{font:400 14px/1.45 var(--font),system-ui,sans-serif;color:#1d1d1f;overflow:hidden;-webkit-font-smoothing:antialiased;
+    background:radial-gradient(1200px 600px at 50% -10%,#f1f4f8,#d7dee7 55%,#c4cdd8)}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 
-  /* liquid layer: black shapes blurred + thresholded so they melt together */
-  #goo{position:fixed;inset:0;z-index:1;pointer-events:none}
-  #goo div{position:absolute;background:var(--ink)}
-  #neck{border-radius:0}
-  #blob{border-radius:22px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+  /* ---------- island ---------- */
+  #island{position:fixed;z-index:2;background:var(--ink);color:var(--fg);overflow:hidden;cursor:pointer;user-select:none;touch-action:none;
+    box-shadow:0 12px 32px rgba(0,0,0,.16),0 2px 6px rgba(0,0,0,.08)}
+  #island.widget{cursor:default}
+  .layer{position:absolute;left:0;right:0;top:0;opacity:0;transition:opacity .22s var(--ease);pointer-events:none}
+  #lStatus,#lTimer,#lMusic{bottom:0}
+  .layer.on{opacity:1;pointer-events:auto;transition-delay:.06s}
 
-  /* content layer (not blurred), follows the blob */
-  #ui{position:fixed;z-index:2;color:var(--fg);cursor:pointer;user-select:none;touch-action:none}
-  #ui.widget{cursor:default}
-  .row{position:absolute;left:0;right:0;top:0;height:44px;display:flex;align-items:center;gap:10px;padding:0 18px;opacity:0;transition:opacity .18s}
-  #ui.show .row{opacity:1}
-  .light{width:9px;height:9px;border-radius:50%;background:#3a3a40;flex:none;transition:background .25s,box-shadow .25s,transform .1s}
-  [data-s=listening] .light{background:var(--blue);box-shadow:0 0 12px var(--blue)}
-  [data-s=thinking] .light{background:#fff;animation:pulse .9s ease-in-out infinite}
-  [data-s=speaking] .light{background:#e9eefc;box-shadow:0 0 10px rgba(255,255,255,.6)}
-  @keyframes pulse{50%{transform:scale(.55);opacity:.5}}
-  .label{flex:1;font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#d9d9de}
-  .wave{display:none;gap:3px;align-items:center;height:16px}
-  [data-s=listening] .wave,[data-s=speaking] .wave{display:inline-flex}
-  .wave i{width:3px;height:4px;border-radius:2px;background:#fff;opacity:.85}
-  [data-s=listening] .wave i{background:var(--blue)}
-  [data-s=speaking] .wave i{animation:talk .8s ease-in-out infinite}
-  .wave i:nth-child(2){animation-delay:.1s}.wave i:nth-child(3){animation-delay:.2s}.wave i:nth-child(4){animation-delay:.3s}
-  @keyframes talk{50%{height:14px}}
+  /* status row (listening / thinking / hover) */
+  .status{display:flex;align-items:center;gap:10px;padding:0 18px;height:100%}
+  .light{width:8px;height:8px;border-radius:50%;background:var(--faint);flex:none;transition:background .2s,box-shadow .2s}
+  [data-s=listening] .light{background:var(--red);box-shadow:0 0 10px var(--red)}
+  [data-s=thinking] .light{background:var(--fg);animation:pulse 1s ease-in-out infinite}
+  @keyframes pulse{50%{transform:scale(.5);opacity:.5}}
+  .status .text{flex:1;font-size:13.5px;font-weight:500;color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  [data-s=thinking] .status .text{background:linear-gradient(90deg,#77777f 0%,#fff 45%,#77777f 90%);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shimmer 1.4s linear infinite}
+  @keyframes shimmer{to{background-position:-200% 0}}
+  .bars{display:none;align-items:center;gap:3px;height:18px}
+  [data-s=listening] .bars{display:inline-flex}
+  .bars i{width:3px;height:4px;border-radius:2px;background:var(--red);animation:eq .9s ease-in-out infinite}
+  .bars i:nth-child(2){animation-delay:.15s}.bars i:nth-child(3){animation-delay:.3s}.bars i:nth-child(4){animation-delay:.45s}.bars i:nth-child(5){animation-delay:.6s}
+  @keyframes eq{0%,100%{height:4px}50%{height:16px}}
 
-  .split-row{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 16px;opacity:0;transition:opacity .2s;pointer-events:none}
-  #ui.split .split-row{opacity:1}
-  #ui.split .row{opacity:0!important}
-  .split-row span{color:#ff9f0a;font-weight:600;font-size:14px;font-variant-numeric:tabular-nums}
-  .card{position:absolute;left:0;right:0;top:44px;bottom:0;padding:2px 18px 18px;opacity:0;transition:opacity .2s;overflow:hidden}
-  #ui.data .card,#ui.widget .card{opacity:1;transition-delay:.15s}
-  .said{color:#8e8e96;font-size:12.5px;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .answer{font-size:14px;color:#ececf0;margin-bottom:12px}
-  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-  .tile{background:#141417;border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+  /* compact split pills (timer, music) */
+  .split{display:flex;align-items:center;justify-content:space-between;padding:0 10px 0 9px;height:100%}
+  .art{width:22px;height:22px;border-radius:6px;flex:none;background:var(--art,linear-gradient(135deg,#ff2d55,#5856d6))}
+  .eq{display:inline-flex;align-items:flex-end;gap:2px;height:14px;margin-right:6px}
+  .eq i{width:3px;border-radius:1.5px;background:var(--green);transform-origin:bottom;animation:eq2 1s ease-in-out infinite}
+  .eq i:nth-child(1){height:6px}.eq i:nth-child(2){height:12px;animation-delay:.2s}.eq i:nth-child(3){height:8px;animation-delay:.4s}.eq i:nth-child(4){height:11px;animation-delay:.1s}
+  .paused .eq i{animation-play-state:paused}
+  @keyframes eq2{50%{transform:scaleY(.35)}}
+  .tval{color:var(--orange);font-weight:600;font-size:14px;font-variant-numeric:tabular-nums;margin-right:6px}
+
+  /* ---------- cards (one layout for every feature) ---------- */
+  .card{padding:18px 20px 18px}
+  .card>*{animation:up .34s var(--ease) both;animation-delay:calc(var(--i,0) * 45ms)}
+  @keyframes up{from{opacity:0;transform:translateY(6px)}}
+  .kicker{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);margin-bottom:6px}
+  .kicker svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .said{margin-left:auto;max-width:60%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--faint)}
+  .title{font-size:17px;font-weight:600;letter-spacing:-.01em;color:var(--fg);line-height:1.3}
+  .body{font-size:13.5px;color:var(--fg2);margin-top:4px;line-height:1.5}
+  .big{font-size:40px;font-weight:600;letter-spacing:-.03em;line-height:1.05;font-variant-numeric:tabular-nums;color:var(--fg)}
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+  .tile{background:var(--tile);border-radius:14px;padding:10px 12px}
   .tile small{display:block;color:var(--muted);font-size:11.5px}
-  .tile b{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
-  .big{font-size:44px;font-weight:600;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
-  .list{list-style:none}
-  .list li{display:flex;gap:12px;padding:7px 0;border-bottom:1px solid var(--line);font-size:13.5px}
-  .list li:last-child{border:0}
-  .list li span{color:var(--muted);width:58px;flex:none;white-space:nowrap;font-variant-numeric:tabular-nums}
-  .demo{color:#6e6e76;font-size:11.5px;margin-top:10px}
-  .steps li{color:#8e8e96;transition:color .2s}
-  .steps li.ok{color:#ececf0}
-  .steps li span{color:#5c5c63}
-  .steps li.ok span{color:#30d158}
-  .bar2{height:4px;background:#222;border-radius:3px;overflow:hidden;margin-top:12px}
-  .bar2 i{display:block;height:100%;background:var(--blue);border-radius:3px}
+  .tile b{font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .list{list-style:none;margin-top:10px}
+  .list li{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--line);font-size:13.5px;color:var(--fg2);animation:up .3s var(--ease) both;animation-delay:calc(var(--j,0) * 50ms + 80ms);transition:color .2s}
+  .list li .k{color:var(--muted);min-width:52px;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .list li .v{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .list li .ok{color:var(--green)}
+  #steps .k{min-width:16px}
+  .list li.play{cursor:pointer}
+  .list li.play:hover{color:var(--fg)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+  .chip{height:30px;padding:0 13px;border-radius:15px;background:var(--tile);color:var(--fg);font-size:12.5px;font-weight:500;transition:background .15s,transform .1s}
+  .chip:hover{background:#1e1e22}
+  .chip:active{transform:scale(.96)}
+  .chip.primary{background:var(--fg);color:#000}
+  .note{font-size:11.5px;color:var(--faint);margin-top:10px}
+  .thumb{float:right;width:64px;height:64px;border-radius:12px;object-fit:cover;margin:0 0 6px 12px}
 
-  /* widget extras */
-  .w-talk{display:none;margin:4px auto 14px;width:64px;height:64px;border-radius:50%;background:#0d0d10;border:1px solid #2a2a30;position:relative;cursor:pointer}
-  .w-talk::after{content:"";position:absolute;inset:24px;border-radius:50%;background:#3a3a40;transition:.25s}
-  [data-s=listening] .w-talk::after{background:var(--blue);box-shadow:0 0 16px var(--blue);inset:20px}
-  #ui.widget .w-talk{display:block}
-  .w-hint{display:none;text-align:center;color:#6e6e76;font-size:12px;margin-top:10px}
-  #ui.widget .w-hint{display:block}
-  #ui.widget .row{cursor:grab}
-  #typed{position:fixed;z-index:3;left:50%;top:120px;transform:translateX(-50%);width:min(420px,90vw);display:none;gap:8px}
+  /* now playing */
+  .np{display:flex;gap:14px;align-items:center;margin-top:4px}
+  .np .cover{width:64px;height:64px;border-radius:14px;flex:none;background:var(--art);position:relative;overflow:hidden}
+  .np .cover::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 30% 25%,rgba(255,255,255,.35),transparent 55%)}
+  .np .meta{flex:1;min-width:0}
+  .np .meta b{display:block;font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .np .meta span{color:var(--muted);font-size:13px}
+  .prog{height:4px;background:#222226;border-radius:2px;margin-top:14px;overflow:hidden}
+  .prog i{display:block;height:100%;width:0;background:var(--fg);border-radius:2px;transition:width .5s linear}
+  .times{display:flex;justify-content:space-between;color:var(--faint);font-size:11px;margin-top:5px;font-variant-numeric:tabular-nums}
+  .ctrls{display:flex;justify-content:center;gap:26px;margin-top:6px}
+  .ctrls button{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:var(--fg);transition:transform .12s,background .15s}
+  .ctrls button:hover{background:var(--tile)}
+  .ctrls button:active{transform:scale(.9)}
+  .ctrls svg{width:20px;height:20px;fill:currentColor}
+
+  /* widget */
+  .w-top{height:30px;display:flex;align-items:center;justify-content:center;cursor:grab}
+  .w-top i{width:36px;height:4px;border-radius:2px;background:#2a2a2e}
+  .w-mic{display:block;margin:14px auto 0;width:56px;height:56px;border-radius:50%;background:var(--tile);position:relative}
+  .w-mic::after{content:"";position:absolute;inset:21px;border-radius:50%;background:var(--faint);transition:.2s}
+  [data-s=listening] .w-mic::after{background:var(--red);box-shadow:0 0 14px var(--red);inset:18px}
+  .w-hint{text-align:center;color:var(--faint);font-size:12px;margin:10px 0 0}
+
+  /* page chrome (outside the island) */
+  .hint{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);z-index:0;color:#4b5563;font-size:12.5px;text-align:center;line-height:1.75;width:min(760px,94vw)}
+  .hint b{color:#111;font-weight:600}
+  .fonts{position:fixed;left:16px;bottom:16px;z-index:3;display:flex;gap:2px;background:rgba(255,255,255,.7);backdrop-filter:blur(8px);padding:3px;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .fonts button{height:28px;padding:0 10px;border-radius:9px;font-size:12px;color:#444}
+  .fonts button.on{background:#111;color:#fff}
+  .fonts span{font-size:11px;color:#777;padding:0 6px 0 8px;align-self:center}
+  #typed{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,90vw);display:none;z-index:4}
   #typed.on{display:flex}
-  #typed input{flex:1;height:38px;border-radius:12px;border:1px solid #c7ccd3;padding:0 12px;font:inherit}
-  #typed button{height:38px;border-radius:12px;border:0;background:#111;color:#fff;padding:0 14px;font:600 13px inherit;cursor:pointer}
+  #typed input{flex:1;height:42px;border-radius:14px;border:0;padding:0 14px;font:inherit;font-size:15px;box-shadow:0 8px 30px rgba(0,0,0,.18);outline:none}
+  @media (max-width:900px){.fonts{right:16px;bottom:96px;overflow-x:auto}.hint{font-size:11.5px}}
 </style>
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute">
-  <filter id="gooF" x="-20%" y="-20%" width="140%" height="140%">
-    <feGaussianBlur in="SourceGraphic" stdDeviation="9" result="b"/>
-    <feColorMatrix in="b" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -10"/>
-  </filter>
-</svg>
 
-<div id="goo"><div id="neck"></div><div id="blob"></div></div>
+<div class="fonts" id="fonts"><span>Font</span></div>
 
-<div id="ui" data-s="idle">
-  <div class="row"><span class="light"></span><span class="label" id="label">Click to talk</span><span class="wave"><i></i><i></i><i></i><i></i></span></div>
-  <div class="split-row"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#ff9f0a" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg><span id="splitTime">0:00</span></div>
-  <div class="card" id="card"></div>
+<div id="island" data-s="idle">
+  <div class="layer" id="lStatus"><div class="status"><span class="light"></span><span class="text" id="statusText"></span><span class="bars"><i></i><i></i><i></i><i></i><i></i></span></div></div>
+  <div class="layer" id="lTimer"><div class="split"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#ff9f0a" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg><span class="tval" id="tCompact">0:00</span></div></div>
+  <div class="layer" id="lMusic"><div class="split"><span class="art" id="mArt"></span><span class="eq"><i></i><i></i><i></i><i></i></span></div></div>
+  <div class="layer" id="lCard"><div class="w-top" id="wTop" hidden><i></i></div><div class="card" id="card"></div></div>
 </div>
 
-<form id="typed"><input id="typedIn" placeholder="Type what you'd say…" autocomplete="off"><button>Ask</button></form>
+<form id="typed"><input id="typedIn" placeholder="Type what you'd say…" autocomplete="off"></form>
 
 <div class="hint">
-  <b>Hover</b> the black island at the top · <b>click</b> it and talk (“weather in Budapest”, “5 minute timer”, “what's on today”, “open Spotify”, “biggest files in Downloads”)<br>
-  <b>Pull it down hard</b> to snap it off into a widget · drag the widget back to the top to merge · no mic? press <kbd>T</kbd> to type
+  <b>Click</b> the island and talk · try “play Blinding Lights”, “songs like Fejezz”, “play my workout playlist”, “who is Ada Lovelace”, “weather in Budapest”, “100 euro to forint”, “15% of 80”, “note buy milk”, “5 minute timer”, “open Spotify”<br>
+  <b>Pull it down</b> to snap it into a widget · drag it back to the top to dock · <b>T</b> to type · <b>Esc</b> to close
 </div>
 
 <script>
 const $ = (id) => document.getElementById(id);
-const ui = $("ui"), blobEl = $("blob"), neckEl = $("neck");
-const W = () => innerWidth;
+const island = $("island");
+const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const ICON = {
+  music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  web: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  weather: '<path d="M7 18a4 4 0 0 1 0-8 6 6 0 0 1 11.5 1.5A3.5 3.5 0 0 1 18 18z"/>',
+  timer: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/>',
+  calc: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01"/>',
+  note: '<path d="M5 4h11l3 3v13H5z"/><path d="M9 10h6M9 14h6"/>',
+  pc: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/>',
+};
 
-// ---------------- geometry + springs ----------------
-// The blob is a rounded rectangle; it eases toward a target box with a slightly bouncy spring.
-const box = { x: 0, y: -30, w: 200, h: 40, vx: 0, vy: 0, vw: 0, vh: 0 };
-let target = null, mode = "dock", hover = false, s = "idle", dataOpen = false, pulling = null, widgetPos = null;
-const TEAR = 170;
-
-function dockBox() {
-  const cx = W() / 2, at = (w, h) => ({ x: cx - w / 2, y: 10, w, h });
-  if (dataOpen) return at(400, cardHeight() + 48);
-  if (s === "listening") return at(310, 54);
-  if (s === "speaking") return at(280, 48);
-  if (s === "thinking") return at(210, 40);
-  if (timerEnd) return at(hover ? 236 : 220, 38);   // split pill: icon left, countdown right
-  return hover ? at(148, 40) : at(126, 36);
+// ---------------- fonts (compare alternatives live) ----------------
+const FONTS = ["Geist", "Inter", "Manrope", "DM Sans", "Instrument Sans"];
+let font = "Geist"; try { font = localStorage.getItem("island-font") || font; } catch {}
+function setFont(f) {
+  font = f; document.documentElement.style.setProperty("--font", `"${f}"`);
+  try { localStorage.setItem("island-font", f); } catch {}
+  document.querySelectorAll("#fonts button").forEach((b) => b.classList.toggle("on", b.textContent === f));
 }
-function widgetBox() { return { x: widgetPos.x, y: widgetPos.y, w: 340, h: Math.max(250, cardHeight() + 44 + 92) }; }
-function cardHeight() {   // height of the visible content only (not the card box itself, which would feed back)
-  let bottom = 0;
-  for (const el of $("card").children) if (el.offsetParent !== null) bottom = Math.max(bottom, el.offsetTop + el.offsetHeight);
-  return bottom ? Math.min(bottom + 16, 380) : 0;
-}
+for (const f of FONTS) { const b = document.createElement("button"); b.textContent = f; b.style.fontFamily = `"${f}"`; b.onclick = () => setFont(f); $("fonts").appendChild(b); }
+setFont(font);
 
+// ---------------- state ----------------
+let s = "idle", hover = false, cardOpen = false, mode = "dock", pulling = null, widgetPos = null;
+let timer = null, music = null;
+function setS(v, text) { s = v; island.dataset.s = v; if (text !== undefined) $("statusText").textContent = text; }
+
+// ---------------- geometry: one black shape that springs between sizes ----------------
+const box = { x: innerWidth / 2 - 63, y: 10, w: 126, h: 36, vx: 0, vy: 0, vw: 0, vh: 0 };
+let target = null;
+const TEAR = 160;
+function contentH() { return $("lCard").scrollHeight; }
+function shape() {                               // which size + layer the island shows right now
+  const cx = innerWidth / 2, at = (w, h, layer, r) => ({ x: cx - w / 2, y: 10, w, h, layer, r: r ?? h / 2 });
+  if (mode === "widget") return { x: widgetPos.x, y: widgetPos.y, w: 360, h: Math.max(160, contentH()), layer: "lCard", r: 28 };
+  if (s === "listening") return at(300, 48, "lStatus");
+  if (s === "thinking") return at(240, 42, "lStatus");
+  if (cardOpen) return at(400, contentH(), "lCard", 28);
+  if (timer) return at(hover ? 196 : 180, 38, "lTimer");
+  if (music) return at(hover ? 196 : 180, 38, "lMusic");
+  if (hover) return at(170, 40, "lStatus");
+  return at(126, 36, null);
+}
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(.033, (now - last) / 1000); last = now;
-  if (!pulling) target = mode === "widget" ? widgetBox() : dockBox();
-  const k = pulling ? 520 : 300, c = pulling ? 34 : 24;      // smooth, slight overshoot
-  for (const [p, v] of [["x", "vx"], ["y", "vy"], ["w", "vw"], ["h", "vh"]]) {
-    box[v] += (k * (target[p] - box[p]) - c * box[v]) * dt; box[p] += box[v] * dt;
-  }
-  draw(); requestAnimationFrame(frame);
-}
-function draw() {
-  const r = mode === "widget" ? 32 : dataOpen ? 36 : Math.min(box.h / 2, 30);
-  Object.assign(blobEl.style, { left: box.x + "px", top: box.y + "px", width: box.w + "px", height: box.h + "px", borderRadius: r + "px" });
-  Object.assign(ui.style, { left: box.x + "px", top: box.y + "px", width: box.w + "px", height: box.h + "px" });
-  // neck: only while pulling — it thins as the blob moves away, then snaps
-  if (false) {
-    const top = 6, bottom = box.y + 6, len = Math.max(0, bottom - top);
-    // hourglass: wide where it meets the bar and the blob, pinched in the middle like stretched honey
-    const t = Math.min(1, len / TEAR), nw = 150 - 40 * t, waist = Math.max(4, 70 * (1 - t) ** 1.6);
-    const pts = [];
-    for (let i = 0; i <= 12; i++) {
-      const v = i / 12, k = Math.pow(Math.abs(v - .5) * 2, 1.8);         // 0 in the middle, 1 at the ends
-      pts.push([(50 - (waist + (nw - waist) * k) / nw * 50).toFixed(1), (v * 100).toFixed(1)]);
-    }
-    const poly = pts.map(([x, y]) => `${x}% ${y}%`).concat(pts.slice().reverse().map(([x, y]) => `${(100 - x).toFixed(1)}% ${y}%`)).join(",");
-    Object.assign(neckEl.style, { display: "block", left: (box.x + box.w / 2 - nw / 2) + "px", top: top + "px", width: nw + "px", height: len + 10 + "px", clipPath: `polygon(${poly})` });
-  } else neckEl.style.display = "none";
-  ui.classList.toggle("show", mode === "widget" || s !== "idle" || dataOpen || !!timerEnd);
-  ui.classList.toggle("split", mode === "dock" && !!timerEnd && s === "idle" && !dataOpen);
+  const sh = shape();
+  if (!pulling || !pulling.moved) target = sh;
+  const k = pulling ? 520 : 290, c = pulling ? 34 : 23;
+  for (const [p, v] of [["x", "vx"], ["y", "vy"], ["w", "vw"], ["h", "vh"]]) { box[v] += (k * (target[p] - box[p]) - c * box[v]) * dt; box[p] += box[v] * dt; }
+  Object.assign(island.style, { left: box.x + "px", top: box.y + "px", width: box.w + "px", height: box.h + "px", borderRadius: Math.min(sh.r, box.h / 2) + "px" });
+  for (const id of ["lStatus", "lTimer", "lMusic", "lCard"]) $(id).classList.toggle("on", id === sh.layer);
+  if (sh.layer === "lStatus" && s === "idle") $("statusText").textContent = "Click to talk";
+  requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
-// ---------------- hover / click / pull / drag ----------------
+// ---------------- pointer: hover, click, pull into a widget, drag ----------------
 addEventListener("pointermove", (e) => {
   if (pulling) return onPull(e);
   if (mode !== "dock") return;
-  const near = e.clientY < 70 && Math.abs(e.clientX - W() / 2) < 190;
-  const over = e.clientX > box.x && e.clientX < box.x + box.w && e.clientY < box.y + box.h + 10;
-  hover = near || over;
+  hover = e.clientY < box.y + box.h + 24 && Math.abs(e.clientX - innerWidth / 2) < Math.max(110, box.w / 2 + 20);
 });
-ui.addEventListener("pointerdown", (e) => {
-  if (e.button !== 0) return;
-  if (mode === "widget" && !e.target.closest(".row") && !e.target.closest(".w-talk")) return;
-  pulling = { x0: e.clientX, y0: e.clientY, bx: box.x, by: box.y, moved: false, onTalk: !!e.target.closest(".w-talk") };
-  ui.setPointerCapture(e.pointerId);
+island.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0 || e.target.closest("button:not(.w-mic),.play,a")) return;
+  if (mode === "widget" && !e.target.closest(".w-top,.w-mic")) return;
+  pulling = { x0: e.clientX, y0: e.clientY, bx: box.x, by: box.y, moved: false, mic: !!e.target.closest(".w-mic") };
+  island.setPointerCapture(e.pointerId);
 });
 function onPull(e) {
   const dx = e.clientX - pulling.x0, dy = e.clientY - pulling.y0;
   if (!pulling.moved && Math.hypot(dx, dy) < 6) return;
   pulling.moved = true;
-  if (mode === "widget") {                                   // drag the widget around
-    target = { ...widgetBox(), x: pulling.bx + dx, y: pulling.by + dy };
-    widgetPos = { x: target.x, y: target.y };
-    return;
+  if (mode === "widget") { widgetPos = { x: pulling.bx + dx, y: pulling.by + dy }; target = shape(); return; }
+  const base = shape(), pull = Math.max(0, dy), t = Math.min(1, pull / TEAR);
+  const w = Math.max(120, base.w * (1 - .15 * t)), h = base.h + pull * .5;
+  target = { ...base, x: innerWidth / 2 - w / 2 + dx * .2, y: 10 + pull * .25, w, h };
+  if (pull > TEAR) {                                // snap: it becomes a widget under the pointer
+    mode = "widget"; cardOpen = false; island.classList.add("widget"); $("wTop").hidden = false;
+    widgetPos = { x: e.clientX - 180, y: Math.max(64, e.clientY - 15) };
+    pulling.bx = widgetPos.x; pulling.by = widgetPos.y; pulling.x0 = e.clientX; pulling.y0 = e.clientY;
+    if (!$("card").innerHTML) render({ icon: "info", kicker: "Ready", title: "Ask anything", body: "Press the button below and talk." });
+    else addWidgetBits();
   }
-  const pull = Math.max(0, dy);                                // pull down: the island stretches like rubber
-  const stretch = Math.min(1, pull / TEAR);
-  const base = dockBox();
-  const h = base.h + pull * .55, w = Math.max(110, base.w * (1 - .18 * stretch));
-  target = { x: W() / 2 - w / 2 + dx * .25, y: base.y + pull * .25, w, h };
-  if (pull > TEAR) snapOff(e);
-}
-function snapOff(e) {
-  mode = "widget"; dataOpen = false;
-  widgetPos = { x: e.clientX - 170, y: Math.max(70, e.clientY - 22) };
-  ui.classList.add("widget"); ui.classList.remove("data");
-  pulling.moved = true; pulling.by = widgetPos.y; pulling.bx = widgetPos.x; pulling.x0 = e.clientX; pulling.y0 = e.clientY;
-  box.vy -= 300; // little recoil
-  renderCard(lastCard || { said: "", answer: "Click the dot and ask anything.", html: "" });
 }
 addEventListener("pointerup", () => {
   if (!pulling) return;
   const p = pulling; pulling = null;
-  if (!p.moved) {
-    if (mode === "dock" || p.onTalk) talk();
-    return;
-  }
-  if (mode === "widget" && widgetPos.y < 40) {                 // dropped on the top edge: merge back in
-    mode = "dock"; ui.classList.remove("widget"); hover = true; lastCard && openData();
+  if (!p.moved) { if (mode === "dock" || p.mic) talk(); return; }
+  if (mode === "widget" && widgetPos.y < 36) {     // dropped on the top edge: dock again
+    mode = "dock"; island.classList.remove("widget"); $("wTop").hidden = true;
+    $("card").querySelectorAll(".w-mic,.w-hint").forEach((el) => el.remove());
+    cardOpen = !!$("card").innerHTML; hover = true;
   }
 });
 
-// ---------------- voice ----------------
+// ---------------- listening (Web Speech) ----------------
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let rec = null, convo = false;
-function setS(v, text) { s = v; ui.dataset.s = v; if (text !== undefined) $("label").textContent = text; }
+let rec = null;
 function talk() {
   if (s === "listening") { rec?.stop(); return; }
-  listen();
-}
-function listen() {
-  if (!SR) { $("typed").classList.add("on"); $("typedIn").focus(); setS("listening", "Type below (no speech support)"); return; }
+  if (!SR) return openTyped();
   rec = new SR(); rec.lang = navigator.language || "en-US"; rec.interimResults = true;
   let final = "";
-  rec.onresult = (e) => {
-    let t = ""; for (const r of e.results) { t += r[0].transcript; if (r.isFinal) final = t; }
-    $("label").textContent = "“" + t + "”";
-  };
-  rec.onerror = (e) => { if (e.error === "not-allowed") { $("typed").classList.add("on"); setS("idle", "Mic blocked: press T to type"); convo = false; } };
-  rec.onend = () => { if (final.trim()) handle(final.trim()); else setS("idle", "Click to talk"); };
-  setS("listening", "Listening…");
-  rec.start();
+  rec.onresult = (e) => { let t = ""; for (const r of e.results) { t += r[0].transcript; if (r.isFinal) final = t; } $("statusText").textContent = t; };
+  rec.onerror = (e) => { if (e.error === "not-allowed") openTyped(); };
+  rec.onend = () => (final.trim() ? handle(final.trim()) : setS("idle"));
+  cardOpen = false; setS("listening", "Listening…"); rec.start();
 }
+function openTyped() { setS("idle"); $("typed").classList.add("on"); $("typedIn").focus(); }
 $("typed").onsubmit = (e) => { e.preventDefault(); const t = $("typedIn").value.trim(); $("typedIn").value = ""; $("typed").classList.remove("on"); if (t) handle(t); };
 addEventListener("keydown", (e) => {
-  if (e.key.toLowerCase() === "t" && document.activeElement !== $("typedIn")) { e.preventDefault(); $("typed").classList.add("on"); $("typedIn").focus(); }
-  if (e.key === "Escape") { $("typed").classList.remove("on"); rec?.abort(); setS("idle", "Click to talk"); closeData(); }
+  if (e.key.toLowerCase() === "t" && document.activeElement !== $("typedIn")) { e.preventDefault(); openTyped(); }
+  if (e.key === "Escape") { $("typed").classList.remove("on"); rec?.abort(); setS("idle"); cardOpen = false; }
 });
-function show() {            // no voice: the answer appears as text in the island
-  setS("idle", "Click to talk");
-  convo = false;
-}
 
-// ---------------- answers (prototype: local intents, real weather) ----------------
-let lastCard = null, closeTimer = null;
-function renderCard(c) {
-  lastCard = c;
-  $("card").innerHTML = `${c.said ? `<p class="said">“${esc(c.said)}”</p>` : ""}<p class="answer">${esc(c.answer)}</p>${c.html || ""}<div class="w-talk" title="Talk"></div><p class="w-hint">Drag me by the top · drop me on the top edge to dock</p>`;
+// ---------------- one card layout for every answer ----------------
+let lastAnswer = null, closeT = null;
+function render(a) {
+  lastAnswer = a;
+  const parts = [
+    `<div class="kicker"><svg viewBox="0 0 24 24">${ICON[a.icon] || ICON.info}</svg>${esc(a.kicker)}${a.said ? `<span class="said">“${esc(a.said)}”</span>` : ""}</div>`,
+    a.title ? `<div class="title">${esc(a.title)}</div>` : "",
+    a.html || "",
+    a.body ? `<div class="body">${esc(a.body)}</div>` : "",
+    a.chips?.length ? `<div class="chips">${a.chips.map((c, i) => `<button class="chip ${i === 0 ? "primary" : ""}" data-chip="${i}">${esc(c.label)}</button>`).join("")}</div>` : "",
+    a.note ? `<div class="note">${esc(a.note)}</div>` : "",
+  ].filter(Boolean);
+  $("card").innerHTML = parts.map((p, i) => p.replace(/^<(\w+)/, `<$1 style="--i:${i}"`)).join("");
+  $("card").querySelectorAll(".list li").forEach((li, j) => li.style.setProperty("--j", j));
+  $("card").querySelectorAll("[data-chip]").forEach((b) => (b.onclick = () => a.chips[+b.dataset.chip].run()));
+  a.after?.();
+  if (mode === "widget") addWidgetBits();
 }
-function openData() { dataOpen = mode === "dock"; ui.classList.add("data"); clearTimeout(closeTimer); closeTimer = setTimeout(() => { if (!hover) closeData(); else closeTimer = setTimeout(closeData, 6000); }, 9000); }
-function closeData() { dataOpen = false; ui.classList.remove("data"); }
-const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+function addWidgetBits() {
+  if ($("card").querySelector(".w-mic")) return;
+  $("card").insertAdjacentHTML("beforeend", `<button class="w-mic" title="Talk"></button><p class="w-hint">Drag the handle · drop on the top edge to dock</p>`);
+}
+function show(a) {
+  render(a); setS("idle");
+  if (mode === "dock") { cardOpen = true; clearTimeout(closeT); closeT = setTimeout(autoClose, a.stay ? 30000 : 12000); }
+}
+function autoClose() { if (hover) return (closeT = setTimeout(autoClose, 3000)); cardOpen = false; }
 
+// ---------------- intents ----------------
 async function handle(text) {
-  setS("thinking", "Thinking…");
-  const t = text.toLowerCase();
-  let card;
-  if (/weather|temperature|rain|hot|cold/.test(t)) card = await weather(t.match(/in ([a-zà-ž .'-]+)/i)?.[1]?.trim() || "Budapest", text);
-  else if (/timer|remind/.test(t)) card = timer(t, text);
-  else if (/today|schedule|calendar|agenda/.test(t)) card = { said: text, answer: "Three things today. The big one is design review at three.",
-      html: `<ul class="list"><li><span>10:00</span>Stand-up</li><li><span>13:00</span>Lunch with Anna</li><li><span>15:00</span>Design review</li></ul>` };
-  else if (/time/.test(t)) card = { said: text, answer: `It's ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.`, html: `<div class="big">${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>` };
-  else if (/\bopen\b|\blaunch\b|\bstart\b/.test(t)) card = action(text, (t.match(/(?:open|launch|start)\s+(.+)/)?.[1] || "app").replace(/[.?!]$/, ""));
-  else if (/file|download|folder|disk/.test(t)) card = { said: text, answer: "Your 4 biggest files in Downloads:",
-      html: `<ul class="list"><li><span>4.2 GB</span>ubuntu-24.04.iso</li><li><span>1.1 GB</span>project-render.mp4</li><li><span>620 MB</span>photos-backup.zip</li><li><span>310 MB</span>setup-installer.exe</li></ul><p class="demo">Demo data. The app reads your real files.</p>` };
-  else if (/screen|this page|this error/.test(t)) card = { said: text, answer: "In the app I'd take a screenshot and answer about what's on it. The prototype can't see your screen." };
-  else card = { said: text, answer: "In the app this goes to Claude. The prototype knows weather, timers, time, your schedule, opening apps and files." };
-  renderCard(card);
-  openData();
-  show();
-}
-async function weather(city, said) {
+  setS("thinking", "Thinking");
+  const t = text.toLowerCase().trim();
+  let a;
   try {
-    const g = await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=1&name=${encodeURIComponent(city)}`).then((r) => r.json());
-    const p = g.results[0];
-    const w = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${p.latitude}&longitude=${p.longitude}&current=temperature_2m,wind_speed_10m,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=1`).then((r) => r.json());
-    const now = Math.round(w.current.temperature_2m), hi = Math.round(w.daily.temperature_2m_max[0]), lo = Math.round(w.daily.temperature_2m_min[0]), rain = w.daily.precipitation_probability_max[0];
-    return { said, answer: `It's ${now} degrees in ${p.name}, with a high of ${hi}.`,
-      html: `<div class="tiles"><div class="tile"><small>Now</small><b>${now}°</b></div><div class="tile"><small>High / low</small><b>${hi}°/${lo}°</b></div><div class="tile"><small>Rain</small><b>${rain}%</b></div></div>` };
-  } catch { return { said, answer: `I couldn't reach the weather service for ${city}.` }; }
+    if (/^(play|put on)\b|\bspotify\b.*\b(songs?|play)|\bsongs? like\b|\bmusic like\b|\bplaylist\b/.test(t)) a = musicIntent(text, t);
+    else if (/weather|temperature|\brain\b|forecast/.test(t)) a = await weather(text, t);
+    else if (/timer|remind me in/.test(t)) a = startTimer(text, t);
+    else if (/\b(usd|eur|euro|euros|huf|forint|gbp|pound|pounds|dollar|dollars|chf|jpy|yen)\b.*\b(to|in)\b/.test(t)) a = await currency(text, t);
+    else if (/^[\d\s.+\-*/x×()%]+$|% of|percent of|\bplus\b|\bminus\b|\btimes\b|divided by/.test(t)) a = calc(text, t);
+    else if (/^(note|remember|write down)\b/.test(t)) a = note(text);
+    else if (/\b(today|schedule|calendar|agenda)\b/.test(t)) a = schedule(text);
+    else if (/\b(open|launch|start)\b/.test(t)) a = openApp(text, t);
+    else if (/\b(files?|downloads?|folder|disk)\b/.test(t)) a = files(text);
+    else if (/\b(time is it|what time)\b/.test(t)) a = { icon: "timer", kicker: "Time", said: text, html: `<div class="big">${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>` };
+    else a = await webInfo(text, t);
+  } catch (e) { a = { icon: "info", kicker: "Hmm", said: text, title: "Something went wrong", body: String(e.message || e) }; }
+  await new Promise((r) => setTimeout(r, 250)); // let the thinking shimmer read
+  show(a);
 }
-function action(said, app) {   // how a PC action looks: steps tick off, then done (simulated in the prototype)
-  const name = app.replace(/^the /, "").replace(/\b\w/g, (c) => c.toUpperCase());
-  const steps = [`Finding ${name}`, `Opening ${name}`, "Done"];
-  setTimeout(() => document.querySelectorAll("#steps li").forEach((li, i) => setTimeout(() => { li.classList.add("ok"); li.firstElementChild.textContent = "✓"; }, 450 * (i + 1))), 50);
-  return { said, answer: `Opening ${name}.`, html: `<ul class="list steps" id="steps">${steps.map((x) => `<li><span>○</span>${esc(x)}</li>`).join("")}</ul><p class="demo">Simulated. The app really does this on your PC.</p>` };
+
+// --- music: now-playing card + mini player in the island; "Open in Spotify" is real
+const ART = ["linear-gradient(135deg,#ff2d55,#5856d6)", "linear-gradient(135deg,#ff9f0a,#ff375f)", "linear-gradient(135deg,#30d158,#0a84ff)", "linear-gradient(135deg,#bf5af2,#5e5ce6)", "linear-gradient(135deg,#64d2ff,#5856d6)"];
+const spotify = (q) => window.open("https://open.spotify.com/search/" + encodeURIComponent(q), "_blank", "noopener");
+function musicIntent(said, t) {
+  const like = t.match(/(?:songs?|music|tracks?) like (.+)/)?.[1];
+  if (like) {
+    const artist = cap(like.replace(/[.?!]$/, "").replace(/\bon spotify\b/, "").trim());
+    const recs = [[`${artist} radio`, "Similar artists, mixed"], ["Late night drive", `For fans of ${artist}`], ["Fresh finds", "New and close to your taste"], [`This is ${artist}`, "The essentials"]];
+    return { icon: "music", kicker: "Music", said, title: `More like ${artist}`, stay: true,
+      html: `<ul class="list">${recs.map(([a, b], i) => `<li class="play" data-q="${esc(a)}"><span class="art" style="--art:${ART[i % 5]}"></span><span class="v"><b style="color:var(--fg);font-weight:500">${esc(a)}</b> · ${esc(b)}</span><span>▶</span></li>`).join("")}</ul>`,
+      chips: [{ label: "Open in Spotify", run: () => spotify(artist + " radio") }], note: "Preview picks. The app uses your real Spotify history.",
+      after: () => document.querySelectorAll("#card .play").forEach((li) => (li.onclick = () => play(li.dataset.q, li.dataset.q))) };
+  }
+  if (/playlist/.test(t)) {
+    const name = cap((t.match(/(?:play )?(?:my )?(.+?) playlist/)?.[1] || "daily mix").replace(/^the /, ""));
+    const tracks = ["Opening track", "Second wind", "Middle of the night", "Golden hour", "Last one"];
+    music = { title: tracks[0], artist: `${name} playlist`, art: ART[2], dur: 200, pos: 0, playing: true, queue: tracks, q: name + " playlist" };
+    tick();
+    return nowPlaying(said, { list: tracks });
+  }
+  const q = t.replace(/^(play|put on)\s+/, "").replace(/\bon spotify\b/, "").replace(/[.?!]$/, "").trim() || "something good";
+  return play(q, q, said, true);
 }
-let timerInt = null, timerEnd = 0;
-function timer(t, said) {
+function play(q, title, said, ret) {
+  music = { title: cap(title), artist: "Spotify", art: ART[Math.floor(Math.random() * 5)], dur: 214, pos: 0, playing: true, q };
+  tick();
+  const a = nowPlaying(said || "");
+  if (ret) return a; show(a);
+}
+function nowPlaying(said, extra = {}) {
+  const m = music;
+  return { icon: "music", kicker: "Now playing", said, stay: true,
+    html: `<div class="np"><div class="cover" style="--art:${m.art}"></div><div class="meta"><b>${esc(m.title)}</b><span>${esc(m.artist)}</span></div></div>
+      <div class="prog"><i id="mProg"></i></div><div class="times"><span id="mPos">0:00</span><span>${fmt(m.dur)}</span></div>
+      <div class="ctrls"><button id="mPrev" title="Previous"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button><button id="mPlay" title="Play / pause"><svg viewBox="0 0 24 24" id="mPlayIcon"></svg></button><button id="mNext" title="Next"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button></div>
+      ${extra.list ? `<ul class="list">${extra.list.map((x, i) => `<li><span class="k">${i + 1}</span><span class="v">${esc(x)}</span></li>`).join("")}</ul>` : ""}`,
+    chips: [{ label: "Open in Spotify", run: () => spotify(m.q || m.title) }], note: "Preview player. The app controls your real Spotify.",
+    after: () => { $("mPlay").onclick = () => { music.playing = !music.playing; tick(); }; $("mNext").onclick = () => skip(1); $("mPrev").onclick = () => skip(-1); tick(); } };
+}
+function skip(d) {
+  if (!music) return;
+  if (music.queue) { const i = Math.max(0, Math.min(music.queue.length - 1, music.queue.indexOf(music.title) + d)); music.title = music.queue[i]; }
+  music.pos = 0; music.art = ART[(ART.indexOf(music.art) + 1) % 5];
+  render(nowPlaying(lastAnswer?.said || "", music.queue ? { list: music.queue } : {}));
+}
+let musicInt = null;
+function tick() {
+  clearInterval(musicInt);
+  const upd = () => {
+    if (!music) return;
+    if (music.playing) music.pos = Math.min(music.dur, music.pos + .5);
+    if (music.pos >= music.dur) skip(1);
+    const p = $("mProg"); if (p) p.style.width = (100 * music.pos / music.dur) + "%";
+    const t = $("mPos"); if (t) t.textContent = fmt(music.pos);
+    const ic = $("mPlayIcon"); if (ic) ic.innerHTML = music.playing ? '<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>' : '<path d="M7 4v16l13-8z"/>';
+    $("mArt").style.setProperty("--art", music.art);
+    $("lMusic").classList.toggle("paused", !music.playing);
+  };
+  upd(); musicInt = setInterval(upd, 500);
+}
+
+// --- web info: real summary from Wikipedia
+async function webInfo(said, t) {
+  const q = t.replace(/^(search( for)?|look up|google|tell me about|who (is|was|are)|what (is|are|was)|what's|define)\s+/, "").replace(/[?.!]$/, "").trim();
+  const web = { label: "Search the web", run: () => window.open("https://www.google.com/search?q=" + encodeURIComponent(q), "_blank", "noopener") };
+  const s1 = await fetch(`https://en.wikipedia.org/w/api.php?action=opensearch&limit=1&namespace=0&format=json&origin=*&search=${encodeURIComponent(q)}`).then((r) => r.json());
+  const title = s1?.[1]?.[0];
+  if (!title) return { icon: "web", kicker: "Web", said, title: `Nothing quick for “${q}”`, body: "In the app, Claude researches this properly across the web.", chips: [web] };
+  const sm = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`).then((r) => r.json());
+  const text = (sm.extract || "").split(/(?<=\.)\s/).slice(0, 3).join(" ");
+  return { icon: "web", kicker: "From the web", said, title: sm.title, stay: true,
+    html: `<div class="body">${sm.thumbnail ? `<img class="thumb" src="${esc(sm.thumbnail.source)}" alt="">` : ""}${esc(text)}</div>`,
+    chips: [{ label: "Read more", run: () => window.open(sm.content_urls?.desktop?.page, "_blank", "noopener") }, web], note: "Source: Wikipedia" };
+}
+
+// --- weather: real
+async function weather(said, t) {
+  const city = t.match(/\bin ([a-zà-ž .'-]+)/i)?.[1]?.replace(/\b(today|tomorrow|now)\b/g, "").trim() || "Budapest";
+  const g = await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=1&name=${encodeURIComponent(city)}`).then((r) => r.json());
+  const p = g.results?.[0]; if (!p) return { icon: "weather", kicker: "Weather", said, title: `I couldn't find ${city}` };
+  const w = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${p.latitude}&longitude=${p.longitude}&current=temperature_2m,apparent_temperature&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=1`).then((r) => r.json());
+  const r = Math.round;
+  return { icon: "weather", kicker: `Weather · ${p.name}`, said, html: `<div class="big">${r(w.current.temperature_2m)}°</div><div class="tiles"><div class="tile"><small>Feels like</small><b>${r(w.current.apparent_temperature)}°</b></div><div class="tile"><small>High / low</small><b>${r(w.daily.temperature_2m_max[0])}° / ${r(w.daily.temperature_2m_min[0])}°</b></div><div class="tile"><small>Rain</small><b>${w.daily.precipitation_probability_max[0]}%</b></div></div>` };
+}
+
+// --- timer: split pill while running
+function startTimer(said, t) {
   const n = parseFloat(t.match(/(\d+(\.\d+)?)/)?.[1] || "5"), secs = Math.round(/second/.test(t) ? n : /hour/.test(t) ? n * 3600 : n * 60);
-  const end = Date.now() + secs * 1000; timerEnd = end;
-  clearInterval(timerInt);
-  timerInt = setInterval(() => {
-    const left = Math.max(0, Math.ceil((end - Date.now()) / 1000)), el = document.querySelector("#tLeft"), bar = document.querySelector("#tBar");
-    const txt = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
-    if (el) el.textContent = txt;
-    $("splitTime").textContent = txt;
-    if (bar) bar.style.width = (100 * left / secs) + "%";
-    if (!left) { clearInterval(timerInt); timerEnd = 0; renderCard({ said: "", answer: "⏱ Time's up." }); openData(); }
+  if (timer) clearInterval(timer.int);
+  timer = { end: Date.now() + secs * 1000, secs };
+  timer.int = setInterval(() => {
+    if (!timer) return;
+    const left = Math.max(0, Math.ceil((timer.end - Date.now()) / 1000));
+    $("tCompact").textContent = fmt(left);
+    const big = $("tBig"), bar = $("tBar");
+    if (big) big.textContent = fmt(left);
+    if (bar) bar.style.width = (100 * left / timer.secs) + "%";
+    if (!left) { clearInterval(timer.int); timer = null; show({ icon: "timer", kicker: "Timer", title: "Time's up" }); }
   }, 250);
-  return { said, answer: `Timer set for ${secs >= 60 ? Math.round(secs / 60) + " minutes" : secs + " seconds"}.`, html: `<div class="big" id="tLeft"></div><div class="bar2"><i id="tBar" style="width:100%"></i></div>` };
+  $("tCompact").textContent = fmt(secs);
+  return { icon: "timer", kicker: "Timer", said, html: `<div class="big" id="tBig">${fmt(secs)}</div><div class="prog"><i id="tBar" style="width:100%;background:var(--orange)"></i></div>`,
+    chips: [{ label: "Cancel", run: () => { clearInterval(timer?.int); timer = null; cardOpen = false; } }] };
 }
+
+// --- currency: real rates
+async function currency(said, t) {
+  const map = { euro: "EUR", euros: "EUR", eur: "EUR", forint: "HUF", huf: "HUF", dollar: "USD", dollars: "USD", usd: "USD", pound: "GBP", pounds: "GBP", gbp: "GBP", chf: "CHF", yen: "JPY", jpy: "JPY" };
+  const m = t.match(/([\d.,]+)\s*([a-z]+)\s+(?:to|in)\s+([a-z]+)/);
+  if (!m || !map[m[2]] || !map[m[3]]) throw new Error("Say it like “100 euro to forint”.");
+  const amt = parseFloat(m[1].replace(",", ".")), from = map[m[2]], to = map[m[3]];
+  const d = await fetch(`https://api.frankfurter.app/latest?amount=${amt}&from=${from}&to=${to}`).then((r) => r.json());
+  const v = d.rates[to];
+  return { icon: "calc", kicker: "Currency", said, html: `<div class="big">${v.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${to}</div>`, body: `${amt} ${from} · rate ${(v / amt).toFixed(4)} · ${d.date}` };
+}
+
+// --- math
+function calc(said, t) {
+  const e = t.replace(/what('s| is)/, "").replace(/(\d+(\.\d+)?)\s*(%|percent) of\s*(\d+(\.\d+)?)/g, "($1/100*$4)")
+    .replace(/\bplus\b/g, "+").replace(/\bminus\b/g, "-").replace(/\btimes\b|×|\bx\b/g, "*").replace(/divided by/g, "/").replace(/[?=]/g, "").trim();
+  if (!/^[\d\s.+\-*/()]+$/.test(e)) throw new Error("I can do + − × ÷ and percentages.");
+  const v = Function(`"use strict";return (${e})`)();
+  return { icon: "calc", kicker: "Calculator", said, html: `<div class="big">${(+v.toFixed(6)).toLocaleString()}</div>` };
+}
+
+// --- notes (kept in this browser)
+function notes() { try { return JSON.parse(localStorage.getItem("island-notes") || "[]"); } catch { return []; } }
+function note(said) {
+  const text = said.replace(/^(note|remember|write down)( that)?[:,]?\s*/i, "");
+  const all = [{ text, at: Date.now() }, ...notes()].slice(0, 6);
+  try { localStorage.setItem("island-notes", JSON.stringify(all)); } catch {}
+  return { icon: "note", kicker: "Notes", said, title: "Saved", html: `<ul class="list">${all.map((n) => `<li><span class="k">${new Date(n.at).toLocaleDateString([], { month: "short", day: "numeric" })}</span><span class="v">${esc(n.text)}</span></li>`).join("")}</ul>` };
+}
+
+// --- previews of PC actions (the app does these for real)
+function openApp(said, t) {
+  const name = cap((t.match(/(?:open|launch|start)\s+(.+)/)?.[1] || "app").replace(/[.?!]$/, "").replace(/^the /, ""));
+  const steps = [`Find ${name}`, `Open ${name}`, "Bring to front"];
+  return { icon: "pc", kicker: "On your PC", said, title: `Opening ${name}`, html: `<ul class="list" id="steps">${steps.map((x) => `<li><span class="k">○</span><span class="v">${esc(x)}</span></li>`).join("")}</ul>`,
+    note: "Preview. The app does this on your PC.",
+    after: () => document.querySelectorAll("#steps li").forEach((li, i) => setTimeout(() => { const k = li.querySelector(".k"); k.textContent = "✓"; k.classList.add("ok"); li.style.color = "var(--fg)"; }, 400 * (i + 1))) };
+}
+function files(said) {
+  const f = [["4.2 GB", "ubuntu-24.04.iso"], ["1.1 GB", "project-render.mp4"], ["620 MB", "photos-backup.zip"], ["310 MB", "setup-installer.exe"]];
+  return { icon: "pc", kicker: "Downloads", said, title: "Biggest files", html: `<ul class="list">${f.map(([a, b]) => `<li><span class="k">${a}</span><span class="v">${b}</span></li>`).join("")}</ul>`,
+    chips: [{ label: "Open folder", run: () => {} }, { label: "Clean up", run: () => {} }], note: "Preview data. The app reads your real files." };
+}
+function schedule(said) {
+  const ev = [["10:00", "Stand-up"], ["13:00", "Lunch with Anna"], ["15:00", "Design review"]];
+  return { icon: "cal", kicker: "Today", said, title: "3 events", html: `<ul class="list">${ev.map(([a, b]) => `<li><span class="k">${a}</span><span class="v">${b}</span></li>`).join("")}</ul>`, note: "Preview data. The app connects to your calendar." };
+}
+
+const fmt = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
+const cap = (x) => String(x).replace(/\b\w/g, (c) => c.toUpperCase());
 </script>
 </body>
 </html>
