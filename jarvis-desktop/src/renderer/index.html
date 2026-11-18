@@ -7,103 +7,118 @@
 <link rel="stylesheet" href="island.css">
 </head>
 <body>
-<div id="island" data-mode="compact" data-state="idle">
 
-  <!-- the pill: idle clock, activity, timers -->
-  <div class="bar" id="bar">
+<!-- Liquid "goo": black shapes are blurred then alpha-thresholded so the pill melts out of the screen edge. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="goo" x="-50%" y="-50%" width="200%" height="200%">
+    <feGaussianBlur in="SourceGraphic" stdDeviation="7" result="b"/>
+    <feColorMatrix in="b" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 24 -11" result="g"/>
+    <feComposite in="SourceGraphic" in2="g" operator="atop"/>
+  </filter>
+</svg>
+
+<div id="goo"><div class="anchor"></div><div class="blob" id="blob"></div></div>
+<div class="hotzone" id="hotzone"></div>
+
+<div id="island" data-mode="hidden" data-state="idle">
+  <!-- pill row -->
+  <div class="bar">
     <span class="orb" aria-hidden="true"></span>
     <span class="bar-label" id="barLabel"></span>
-    <span class="wave" id="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+    <span class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
     <span class="bar-right" id="barRight"></span>
+    <span class="progress" id="progress"><i id="progressFill"></i></span>
   </div>
 
-  <!-- short reply shown when the panel is closed -->
-  <div class="toast" id="toast"><p id="toastText"></p><small id="toastHint"></small></div>
+  <!-- below the pill row: answer text, cards, approvals, settings, memory, setup -->
+  <div class="body" id="body">
+    <section id="answerView" class="view">
+      <p class="answer" id="answer"></p>
+      <div id="extras"></div>
+    </section>
 
-  <!-- full panel -->
-  <div class="panel" id="panel">
-    <div class="ph">
-      <span class="orb" aria-hidden="true"></span>
-      <b>Jarvis</b><span class="status" id="status">Ready</span>
-      <span class="spacer"></span>
-      <button class="ib" id="btnNew" title="New conversation"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
-      <button class="ib" id="btnMem" title="Memory"><svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0-6 6c0 2.2 1.2 3.6 2 4.5.6.7 1 1.5 1 2.5h6c0-1 .4-1.8 1-2.5.8-.9 2-2.3 2-4.5a6 6 0 0 0-6-6zM9.5 19h5M10.5 22h3"/></svg></button>
-      <button class="ib" id="btnSet" title="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
-      <button class="ib" id="btnClose" title="Close (Esc)"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
-    </div>
-
-    <div class="view" id="chatView">
-      <div class="thread" id="thread">
-        <div class="empty" id="empty">
-          <p class="hello" id="hello">Hello.</p>
-          <p class="sub">Press <kbd id="kTalk">Alt+J</kbd> anywhere to talk.</p>
-          <div class="chips">
-            <button class="chip" data-screen="1">What's on my screen?</button>
-            <button class="chip">Research the best budget mechanical keyboards</button>
-            <button class="chip">Find the 10 largest files in my Downloads</button>
-            <button class="chip">Set a 25 minute focus timer</button>
-            <button class="chip">Pause the music</button>
-            <button class="chip">How's my battery and disk space?</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="view" id="memView" hidden>
-      <p class="vh">What I remember <button class="link" data-back>Done</button></p>
+    <section id="memView" class="view" hidden>
+      <p class="vh">What I remember <button class="link" data-close>Done</button></p>
       <ul class="mem" id="memList"></ul>
-    </div>
+    </section>
 
-    <div class="view" id="setView" hidden>
-      <p class="vh">Settings <button class="link" data-back>Done</button></p>
+    <section id="setView" class="view" hidden>
+      <p class="vh">Settings <button class="link" data-close>Done</button></p>
       <form class="settings" id="setForm">
         <label>Brain<select name="backend">
-          <option value="claude">My Claude account (Pro / Max, via Claude Code)</option>
+          <option value="claude">My Claude account (via Claude Code)</option>
           <option value="api">Anthropic API key (pay per use)</option>
         </select></label>
-        <div class="acct" id="acctBox">
-          <p id="acctStatus">Checking for Claude Code…</p>
-          <button type="button" class="ghost" id="btnSignIn">Connect Claude account</button>
-        </div>
-        <label id="keyRow">Anthropic API key<input name="apiKey" type="password" placeholder="sk-ant-…" autocomplete="off"><small>Get one at console.anthropic.com</small></label>
+        <div class="acct" id="acctBox"><p id="acctStatus">Checking…</p><button type="button" class="ghost" id="btnSignIn">Sign in</button></div>
+        <label id="keyRow">Anthropic API key<input name="apiKey" type="password" placeholder="sk-ant-…" autocomplete="off"></label>
         <div class="row">
           <label>Model<select name="model">
             <option value="claude-opus-5-5">Opus 5.5 (smartest)</option>
-            <option value="claude-sonnet-5-5">Sonnet 5.5 (faster, cheaper)</option>
+            <option value="claude-sonnet-5-5">Sonnet 5.5 (faster)</option>
             <option value="claude-haiku-5-5">Haiku 5.5 (fastest)</option>
           </select></label>
-          <label id="effortRow">Thinking<select name="effort">
-            <option value="low">Quick</option><option value="medium">Balanced</option><option value="high">Thorough</option>
-          </select></label>
-        </div>
-        <div class="row">
           <label>Speech model<select name="speechModel">
             <option value="onnx-community/whisper-tiny">Whisper tiny (75 MB)</option>
             <option value="onnx-community/whisper-base">Whisper base (290 MB)</option>
             <option value="onnx-community/whisper-small">Whisper small (970 MB, best)</option>
           </select></label>
+        </div>
+        <div class="row">
           <label>Speech language<input name="language" placeholder="auto, english, hungarian…"></label>
+          <label>Call me<input name="name"></label>
         </div>
         <div class="row">
           <label>Talk hotkey<input name="hotkeyTalk"></label>
-          <label>Open hotkey<input name="hotkeyPanel"></label>
+          <label>Spare hotkey<input name="hotkeyPanel"></label>
         </div>
-        <label>Call me<input name="name"></label>
-        <label class="tg"><input type="checkbox" name="voice"> Speak replies out loud</label>
+        <label class="tg"><input type="checkbox" name="voice"> Speak answers out loud</label>
+        <label class="tg"><input type="checkbox" name="allowControl"> Let Jarvis use my mouse and keyboard when I ask (asks once per task)</label>
         <label class="tg"><input type="checkbox" name="confirmCommands"> Ask before running commands on my PC</label>
         <label class="tg"><input type="checkbox" name="openAtLogin"> Start Jarvis with Windows</label>
-        <div class="actions"><span id="setMsg"></span><button type="button" class="ghost" id="btnQuit">Quit Jarvis</button><button class="primary">Save</button></div>
+        <div class="actions"><span id="setMsg"></span><button type="button" class="ghost" id="btnQuit">Quit</button><button class="primary">Save</button></div>
       </form>
-    </div>
+    </section>
 
-    <div class="timers" id="timers"></div>
-
-    <form class="composer" id="composer">
-      <button type="button" class="ib eye" id="btnEye" aria-pressed="false" title="Include my screen with the next message"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
-      <textarea id="input" rows="1" placeholder="Ask Jarvis…"></textarea>
-      <button type="button" class="ib mic" id="btnMic" title="Talk"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
-      <button class="send" id="btnSend" disabled title="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
-    </form>
+    <section id="setupView" class="view" hidden>
+      <div class="steps" id="steps">
+        <div class="step" data-step="0">
+          <h2>Hi, I'm Jarvis.</h2>
+          <p>I live at the top of your screen. Let's get me connected. It takes about a minute.</p>
+          <div class="btns"><button class="primary" data-next>Start</button></div>
+        </div>
+        <div class="step" data-step="1">
+          <h2>1 · Connect your Claude account</h2>
+          <p id="acctStep">Press Sign in. A window opens, installs Claude Code if needed, and your browser asks you to log in. No API key needed: I use your Claude plan.</p>
+          <div class="btns"><span class="ok" id="acctOk"></span><button class="ghost" data-next id="acctSkip">Skip</button><button class="primary" id="btnSetupSignIn">Sign in</button></div>
+        </div>
+        <div class="step" data-step="2">
+          <h2>2 · Microphone</h2>
+          <p>So I can hear you. Say something after pressing Allow; the bar should move.</p>
+          <div class="meter"><i id="micMeter"></i></div>
+          <p class="hint" id="micHint"></p>
+          <div class="btns"><button class="ghost" data-next>Skip</button><button class="primary" id="btnMic">Allow microphone</button></div>
+        </div>
+        <div class="step" data-step="3">
+          <h2>3 · Your screen</h2>
+          <p>When you ask, I can look at your screen, point things out with my own cursor, and use your mouse and keyboard to do things for you. You'll be asked once per task, and <kbd>Esc</kbd> stops me instantly.</p>
+          <label class="tg"><input type="checkbox" id="setupControl" checked> Allow mouse and keyboard control when I ask</label>
+          <div class="btns"><button class="primary" data-next>Continue</button></div>
+        </div>
+        <div class="step" data-step="4">
+          <h2>4 · Getting my voice ready</h2>
+          <p>Speech recognition runs on your PC, so your audio never leaves it. This downloads once.</p>
+          <div class="meter big"><i id="dlMeter"></i></div>
+          <p class="hint" id="dlHint">Starting…</p>
+          <div class="btns"><button class="primary" data-next>Continue</button></div>
+        </div>
+        <div class="step" data-step="5">
+          <h2>All set.</h2>
+          <p>Move your mouse to the top of the screen and <b>click me</b>, or press <kbd id="kTalk">Alt+J</kbd> anywhere, then just talk.</p>
+          <p class="hint">Try: “What's on my screen?” · “Show me where the Wi-Fi settings are” · “Go through my unread emails” · “Set a 25 minute focus timer”. Right-click me for settings.</p>
+          <div class="btns"><button class="primary" id="btnFinish">Done</button></div>
+        </div>
+      </div>
+    </section>
   </div>
 </div>
 <script src="island.js" defer></script>

@@ -31,14 +31,26 @@ export async function findClaude() {
 }
 
 // Opens a visible terminal that installs Claude Code if needed and starts it so the user can sign in.
+// Is the CLI signed in? (`claude auth status` prints JSON with loggedIn.)
+export function claudeAuthStatus(bin) {
+  return new Promise((resolve) => {
+    const cmd = /\.(cmd|bat)$/i.test(bin) ? ["cmd.exe", ["/d", "/s", "/c", `"${bin}" auth status --json`]] : [bin, ["auth", "status", "--json"]];
+    const env = { ...process.env }; delete env.ANTHROPIC_API_KEY;
+    execFile(cmd[0], cmd[1], { windowsHide: true, timeout: 20000, env }, (err, out) => {
+      try { resolve(!!JSON.parse(out).loggedIn); } catch { resolve(false); }
+    });
+  });
+}
+
+// Opens a visible terminal that installs Claude Code if needed and starts the sign-in.
 export function openSignInTerminal(claudePath) {
   if (IS_WIN) {
     const exe = claudePath ? `'${claudePath.replace(/'/g, "''")}'` : "(Join-Path $env:USERPROFILE '.local\\bin\\claude.exe')";
-    const install = claudePath ? "" : "irm https://claude.ai/install.ps1 | iex; ";
-    const script = `Write-Host 'Sign in with your Claude account, then close this window and return to Jarvis.' -ForegroundColor Cyan; ${install}& ${exe}`;
+    const install = claudePath ? "" : "Write-Host 'Installing Claude Code…'; irm https://claude.ai/install.ps1 | iex; ";
+    const script = `$Host.UI.RawUI.WindowTitle = 'Jarvis: sign in to Claude'; ${install}Write-Host ''; Write-Host 'A browser window will open. Sign in with your Claude account.' -ForegroundColor Cyan; & ${exe} auth login; Write-Host ''; Write-Host 'Done. You can close this window and go back to Jarvis.' -ForegroundColor Green`;
     spawn("powershell.exe", ["-NoExit", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], { detached: true, stdio: "ignore" }).unref();
   } else {
-    const cmd = claudePath || "curl -fsSL https://claude.ai/install.sh | bash && ~/.local/bin/claude";
+    const cmd = (claudePath || "curl -fsSL https://claude.ai/install.sh | bash && ~/.local/bin/claude") + " auth login";
     const term = process.platform === "darwin"
       ? ["osascript", ["-e", `tell application "Terminal" to do script "${cmd.replace(/"/g, '\\"')}"`]]
       : ["x-terminal-emulator", ["-e", `bash -lc '${cmd}; exec bash'`]];

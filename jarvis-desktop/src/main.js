@@ -13,7 +13,8 @@ import fs from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
-import { ClaudeCodeSession, startMcpServer, findClaude, openSignInTerminal } from "./claude-code.js";
+import { ClaudeCodeSession, startMcpServer, findClaude, openSignInTerminal, claudeAuthStatus } from "./claude-code.js";
+import { InputDriver } from "./input-driver.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const IS_WIN = process.platform === "win32";
@@ -31,6 +32,8 @@ const DEFAULTS = {
   hotkeyPanel: "Alt+Shift+J",
   voice: true,
   confirmCommands: true,
+  allowControl: true,   // may Jarvis use mouse & keyboard when asked (still asks once per task)
+  onboarded: false,
 };
 let settings = { ...DEFAULTS };
 let apiKey = "";
@@ -58,7 +61,7 @@ const publicSettings = async () => {
   return {
   ...settings,
   claudePath,
-  ready: settings.backend === "claude" ? !!claudePath : !!apiKey,
+  ready: settings.backend === "claude" ? (!!claudePath && await claudeAuthStatus(claudePath)) : !!apiKey,
   hasKey: !!apiKey,
   keyHint: apiKey ? "…" + apiKey.slice(-4) : "",
   openAtLogin: app.getLoginItemSettings().openAtLogin,
@@ -105,16 +108,17 @@ function createTray() {
   tray = new Tray(img);
   tray.setToolTip("Jarvis");
   const menu = () => Menu.buildFromTemplate([
-    { label: "Open Jarvis", click: () => send("hotkey:panel") },
     { label: "Talk", click: () => send("hotkey:talk") },
-    { label: "Settings", click: () => send("ui:settings") },
+    { label: "Settings", click: () => send("ui:view", "settings") },
+    { label: "Memory", click: () => send("ui:view", "memory") },
+    { label: "Run setup again", click: () => send("ui:view", "onboarding") },
     { type: "separator" },
     { label: "Start with Windows", type: "checkbox", checked: app.getLoginItemSettings().openAtLogin,
       click: (i) => app.setLoginItemSettings({ openAtLogin: i.checked }) },
     { label: "Quit Jarvis", click: () => app.quit() },
   ]);
   tray.setContextMenu(menu());
-  tray.on("click", () => send("hotkey:panel"));
+  tray.on("click", () => send("hotkey:talk"));
 }
 
 function registerHotkeys() {
@@ -138,7 +142,96 @@ async function captureScreen() {
   });
   const src = sources.find((s) => s.display_id === String(display.id)) || sources[0];
   if (!src) throw new Error("No screen available to capture");
-  return { data: src.thumbnail.toJPEG(80).toString("base64"), label: `${width}×${height} display` };
+  const img = src.thumbnail.getSize();
+  lastShot = { display, w: img.width, h: img.height };
+  return { data: src.thumbnail.toJPEG(80).toString("base64"), label: `display (screenshot is ${img.width}×${img.height} px; give coordinates in these pixels)` };
+}
+
+// ---------------------------------------------------------------- cursor overlay + mouse/keyboard control
+let lastShot = null;          // maps screenshot pixels back to the screen
+let cursorWin = null;
+const input = new InputDriver();
+let controlGranted = false;   // granted once per task, reset when the turn ends
+let injecting = false;        // true while we send synthetic keys (so our own Esc doesn't abort)
+
+function shotToScreen(x, y) {
+  if (!lastShot) throw new Error("Take a screenshot with look_at_screen first, then use its pixel coordinates.");
+  const { display, w, h } = lastShot, b = display.bounds;
+  const dip = { x: Math.round(b.x + (x / w) * b.width), y: Math.round(b.y + (y / h) * b.height) };
+  const phys = IS_WIN ? screen.dipToScreenPoint(dip) : dip;
+  return { dip, phys, display };
+}
+
+function ensureCursorWindow(display) {
+  if (!cursorWin || cursorWin.isDestroyed()) {
+    cursorWin = new BrowserWindow({
+      ...display.bounds, frame: false, transparent: true, resizable: false, movable: false, focusable: false,
+      skipTaskbar: true, hasShadow: false, alwaysOnTop: true, show: false, backgroundColor: "#00000000",
+      webPreferences: { preload: path.join(here, "preload.cjs"), contextIsolation: true, sandbox: true },
+    });
+    cursorWin.setIgnoreMouseEvents(true);
+    cursorWin.setAlwaysOnTop(true, "screen-saver");
+    cursorWin.setContentProtection(true); // never appears in Jarvis's own screenshots
+    cursorWin.loadFile(path.join(here, "renderer", "cursor.html"));
+  } else cursorWin.setBounds(display.bounds);
+  if (!cursorWin.isVisible()) cursorWin.showInactive();
+  return cursorWin;
+}
+
+async function showCursor(x, y, text, { click = false, holdMs = 4000 } = {}) {
+  const { dip, display } = shotToScreen(x, y);
+  const w = ensureCursorWindow(display);
+  if (w.webContents.isLoading()) await new Promise((r) => w.webContents.once("did-finish-load", r));
+  w.webContents.send("cursor", { x: dip.x - display.bounds.x, y: dip.y - display.bounds.y, text, click, holdMs });
+}
+
+function onEscape() { if (!injecting) { controlGranted = false; send("agent", { type: "control", on: false }); stopAll(); } }
+function controlStarted() {
+  send("agent", { type: "control", on: true });
+  if (!globalShortcut.isRegistered("Escape")) globalShortcut.register("Escape", onEscape);
+}
+function controlEnded() {
+  controlGranted = false;
+  if (globalShortcut.isRegistered("Escape")) globalShortcut.unregister("Escape");
+  send("agent", { type: "control", on: false });
+}
+
+async function computerAction(a) {
+  if (!settings.allowControl) return "The user has turned off mouse and keyboard control in Settings. Use point_at to show them instead.";
+  if (!controlGranted) {
+    const ok = await askApproval("", "Let Jarvis use your mouse and keyboard for this task? Press Esc any time to stop.", "control");
+    if (!ok) return "The user didn't allow mouse and keyboard control for this task.";
+    controlGranted = true;
+  }
+  controlStarted();
+  const needsXY = ["click", "double_click", "right_click", "move", "scroll", "drag"].includes(a.action);
+  let p = null;
+  if (needsXY) {
+    p = shotToScreen(a.x, a.y);
+    await showCursor(a.x, a.y, a.label || "", { click: a.action.includes("click"), holdMs: 2500 });
+    await new Promise((r) => setTimeout(r, 560)); // let the user see where it's going
+  }
+  injecting = true;
+  try {
+    switch (a.action) {
+      case "click": await input.click(p.phys.x, p.phys.y, 0, 1); break;
+      case "double_click": await input.click(p.phys.x, p.phys.y, 0, 2); break;
+      case "right_click": await input.click(p.phys.x, p.phys.y, 1, 1); break;
+      case "move": await input.move(p.phys.x, p.phys.y); break;
+      case "drag": { const q = shotToScreen(a.to_x, a.to_y); await input.drag(p.phys.x, p.phys.y, q.phys.x, q.phys.y); break; }
+      case "scroll": await input.scroll(p.phys.x, p.phys.y, a.amount || -3); break;
+      case "type": await input.type(a.text || ""); break;
+      case "key": await input.key(a.keys || ""); break;
+      case "wait": break;
+      default: return `Unknown action ${a.action}`;
+    }
+  } finally { setTimeout(() => (injecting = false), 150); }
+  await new Promise((r) => setTimeout(r, a.action === "wait" ? Math.min(a.amount || 1, 10) * 1000 : 700));
+  const shot = await captureScreen();
+  return [
+    { type: "image", source: { type: "base64", media_type: "image/jpeg", data: shot.data } },
+    { type: "text", text: `Done: ${a.action}. New screenshot of the ${shot.label}. Check it worked before the next step.` },
+  ];
 }
 
 // ---------------------------------------------------------------- shell helpers
@@ -171,11 +264,11 @@ function pressMediaKey(action, times = 1) {
 
 // ---------------------------------------------------------------- approvals
 const pendingApprovals = new Map();
-function askApproval(command, reason) {
+function askApproval(command, reason, kind = "command") {
   return new Promise((resolve) => {
     const id = Math.random().toString(36).slice(2);
     pendingApprovals.set(id, resolve);
-    send("agent", { type: "approval", id, command, reason });
+    send("agent", { type: "approval", id, command, reason, kind });
   });
 }
 ipcMain.on("approval:respond", (_e, { id, approved }) => {
@@ -191,6 +284,19 @@ const TOOLS = [
   { name: "look_at_screen", strict: true,
     description: "Take a screenshot of the user's current screen and look at it. Use whenever the user refers to what they are looking at (this, here, this error, this page, my screen) or when seeing the screen would help.",
     input_schema: s({}) },
+  { name: "point_at",
+    description: "Show the user where something is: moves Jarvis's own glowing cursor (not the real mouse) to a spot with a short label. x, y are pixel coordinates in the most recent screenshot. Use this to show things without touching anything.",
+    input_schema: { type: "object", properties: { x: { type: "integer" }, y: { type: "integer" }, label: { type: "string", description: "Short caption, e.g. 'Settings is here'" } }, required: ["x", "y", "label"], additionalProperties: false } },
+  { name: "computer",
+    description: "Use the real mouse and keyboard to do something on screen for the user (only when they asked you to do or edit something). x, y (and to_x, to_y for drag) are pixel coordinates in the most recent screenshot. Each call returns a fresh screenshot so you can check the result. The user is asked once per task to allow control and can press Esc to stop.",
+    input_schema: { type: "object", properties: {
+      action: { type: "string", enum: ["click", "double_click", "right_click", "move", "drag", "scroll", "type", "key", "wait"] },
+      x: { type: "integer" }, y: { type: "integer" }, to_x: { type: "integer" }, to_y: { type: "integer" },
+      text: { type: "string", description: "For type" },
+      keys: { type: "string", description: "For key, e.g. 'enter', 'ctrl+s', 'alt+tab', 'win+d'" },
+      amount: { type: "integer", description: "For scroll: notches, negative = down. For wait: seconds" },
+      label: { type: "string", description: "Optional caption shown next to Jarvis's cursor" },
+    }, required: ["action"], additionalProperties: false } },
   { name: "run_powershell", strict: true,
     description: "Run a PowerShell command on the user's Windows PC and get its output. Use it to do things for the user: find or organise files, launch apps, check system state, change settings, automate tasks. The user may be asked to approve it first. Prefer safe, read-only commands. Never delete or overwrite data unless the user explicitly asked for exactly that.",
     input_schema: s({ command: { type: "string" }, reason: { type: "string", description: "One short sentence telling the user what this does" } }) },
@@ -263,6 +369,11 @@ async function runTool(name, input) {
         { type: "text", text: `Screenshot of the user's ${shot.label}, taken just now.` },
       ];
     }
+    case "point_at":
+      await showCursor(input.x, input.y, input.label, { holdMs: 6000 });
+      return "Pointed it out to the user.";
+    case "computer":
+      return computerAction(input);
     case "run_powershell": {
       if (settings.confirmCommands && !(await askApproval(input.command, input.reason)))
         return "The user declined to run this command.";
@@ -314,6 +425,9 @@ You can act on this computer:
 - look_at_screen when the user refers to what they're looking at, or when seeing it would help. Describe only what matters.
 - run_powershell to do things: find files, launch or close apps, check settings, automate tasks. Explain in "reason" what it does. Prefer read-only commands. Never delete, overwrite or send anything unless the user clearly asked for exactly that.
 - open for URLs, files, folders and apps; clipboard to read or hand over text; media_control for music and volume; set_timer for timers and reminders; remember for lasting preferences.
+- point_at to show the user where something is on screen (your own cursor with a label; touches nothing). Use it whenever they ask "where is…" or "show me…".
+- computer to use the real mouse and keyboard, only when the user asks you to do or edit something on screen. Take a screenshot first, act in small steps, and check each new screenshot. Prefer keyboard shortcuts where reliable.
+- Email and other websites: open them in the browser (for example https://mail.google.com or https://outlook.live.com), then read them with screenshots and scroll as needed. Never send, delete, buy, or post anything without the user's explicit confirmation of that exact action.
 - web search and web fetch for research and anything current. For research, search several angles, then summarise in a card with sources.
 
 Do the task rather than describing how the user could do it. Never claim to have done something you didn't do with a tool. If a request is ambiguous and acting wrongly would cost something, ask one short question.`;
@@ -348,9 +462,12 @@ async function chatViaClaudeCode(content) {
     }[err.code];
     send("agent", { type: "error", code: err.code === "NO_CLAUDE" || err.code === "NO_LOGIN" ? "SETUP" : undefined, message: msg || "Claude Code ran into a problem.", detail: err.message });
   } finally {
+    controlEnded();
     send("agent", { type: "end" });
   }
 }
+
+function stopAll() { abort?.abort(); cc?.interrupt(); }
 
 async function chat({ text, withScreen }) {
   const mem = await loadMemory();
@@ -419,6 +536,7 @@ async function chat({ text, withScreen }) {
     send("agent", { type: "error", message, detail: String(err.message || err) });
   } finally {
     abort = null;
+    controlEnded();
     send("agent", { type: "end" });
   }
 }
@@ -456,10 +574,23 @@ ipcMain.handle("stt:warmup", () => getAsr().then(() => true).catch((e) => { send
 
 // ---------------------------------------------------------------- ipc
 ipcMain.handle("chat:send", (_e, payload) => chat(payload));
-ipcMain.on("chat:stop", () => { abort?.abort(); cc?.interrupt(); });
+ipcMain.on("chat:stop", () => stopAll());
 ipcMain.on("chat:reset", () => { messages = []; resetClaudeSession(); });
 ipcMain.handle("settings:get", () => publicSettings());
 ipcMain.handle("claude:signin", async () => { openSignInTerminal(await findClaude()); resetClaudeSession(); return true; });
+ipcMain.handle("claude:status", async () => {
+  const bin = await findClaude();
+  return { installed: !!bin, loggedIn: bin ? await claudeAuthStatus(bin) : false };
+});
+ipcMain.on("ui:menu", () => {
+  Menu.buildFromTemplate([
+    { label: "Settings", click: () => send("ui:view", "settings") },
+    { label: "Memory", click: () => send("ui:view", "memory") },
+    { label: "Stop", click: () => { stopAll(); send("ui:view", "stop"); } },
+    { type: "separator" },
+    { label: "Quit Jarvis", click: () => app.quit() },
+  ]).popup({ window: win });
+});
 ipcMain.handle("settings:set", async (_e, patch) => {
   if (typeof patch.apiKey === "string" && patch.apiKey.trim()) apiKey = patch.apiKey.trim();
   if (typeof patch.openAtLogin === "boolean") app.setLoginItemSettings({ openAtLogin: patch.openAtLogin });
@@ -495,6 +626,6 @@ else {
       win.setPosition(Math.round(workArea.x + (workArea.width - w) / 2), workArea.y);
     });
   });
-  app.on("will-quit", () => { globalShortcut.unregisterAll(); cc?.kill(); mcp?.close(); });
+  app.on("will-quit", () => { globalShortcut.unregisterAll(); cc?.kill(); mcp?.close(); input.stop(); });
   app.on("window-all-closed", () => app.quit());
 }

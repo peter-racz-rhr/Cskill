@@ -1,32 +1,18 @@
-// Jarvis island UI. Talks to the main process through window.jarvis (see preload.cjs).
+// Jarvis island UI: hidden notch → hover drops the pill → click to talk → spoken answer.
+// Talks to the main process through window.jarvis (preload.cjs).
 const J = window.jarvis;
 const $ = (id) => document.getElementById(id);
-const island = $("island"), panel = $("panel"), toastEl = $("toast"), thread = $("thread"), input = $("input");
+const root = document.documentElement, island = $("island");
 
-let settings = {}, mode = "compact", hover = false, busy = false, listening = false;
-let speaking = 0, pendingApprovals = 0, activityLabel = "", toastTimer = null, cur = null;
+let settings = {};
+let view = "answer";            // answer | settings | memory | setup
+let hover = false, listening = false, busy = false, speaking = 0, control = false;
+let answerShown = false, pendingApprovals = 0, flash = "", flashTimer = null, dismissTimer = null, label = "";
+let dl = { active: false, pct: 0, waiting: false };
 
-// ------------------------------------------------------------- icons & labels
+// ------------------------------------------------------------- labels
+const RUN = { web_search: "Searching the web", web_fetch: "Reading a page", look_at_screen: "Looking at your screen", point_at: "Pointing it out", computer: "Using your PC", run_powershell: "Running a command", open: "Opening", clipboard: "Using the clipboard", media_control: "Controlling media", system_status: "Checking your PC", get_weather: "Checking the weather", set_timer: "Setting a timer", remember: "Remembering", forget: "Forgetting", show_card: "Preparing details" };
 const SVG = (d) => `<svg viewBox="0 0 24 24">${d}</svg>`;
-const ICON = {
-  web_search: SVG('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>'),
-  web_fetch: SVG('<path d="M4 4h16v16H4zM4 9h16"/>'),
-  look_at_screen: SVG('<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'),
-  run_powershell: SVG('<path d="m5 8 4 4-4 4M12 16h7"/>'),
-  open: SVG('<path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/>'),
-  clipboard: SVG('<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9z"/>'),
-  media_control: SVG('<path d="M9 18V6l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/>'),
-  system_status: SVG('<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8"/>'),
-  get_weather: SVG('<path d="M7 18a4 4 0 0 1 0-8 6 6 0 0 1 11.5 1.5A3.5 3.5 0 0 1 18 18z"/>'),
-  set_timer: SVG('<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/>'),
-  remember: SVG('<path d="M5 12l5 5L20 7"/>'),
-  forget: SVG('<path d="M6 6l12 12M18 6 6 18"/>'),
-  show_card: SVG('<rect x="4" y="5" width="16" height="14" rx="2"/>'),
-};
-const RUN = { web_search: "Searching the web", web_fetch: "Reading a page", look_at_screen: "Looking at your screen", run_powershell: "Running a command", open: "Opening", clipboard: "Using the clipboard", media_control: "Controlling media", system_status: "Checking your PC", get_weather: "Checking the weather", set_timer: "Setting a timer", remember: "Remembering", forget: "Forgetting", show_card: "Preparing details" };
-const DONE = { web_search: "Searched the web", web_fetch: "Read a page", look_at_screen: "Looked at your screen", run_powershell: "Ran a command", open: "Opened", clipboard: "Used the clipboard", media_control: "Media controlled", system_status: "Checked your PC", get_weather: "Checked the weather", set_timer: "Timer set", remember: "Saved to memory", forget: "Updated memory", show_card: "Details below" };
-
-// ------------------------------------------------------------- helpers
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 function md(src) {
   let h = esc(src);
@@ -38,89 +24,101 @@ function md(src) {
   h = h.replace(/(^|\n)((?:\d+\. .*(?:\n|$))+)/g, (_, p, b) => p + "<ol>" + b.trim().split("\n").map((l) => `<li>${l.replace(/^\d+\. /, "")}</li>`).join("") + "</ol>");
   return h.split(/(<pre>[\s\S]*?<\/pre>)/).map((x) => (x.startsWith("<pre>") ? x : x.replace(/\n/g, "<br>"))).join("").replace(/<\/(ul|ol)><br>/g, "</$1>");
 }
-const scrollDown = () => (thread.scrollTop = thread.scrollHeight);
 const clock = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-// ------------------------------------------------------------- island geometry
-function layout() {
-  let w = 168, h = 34;
-  if (mode === "compact") { w = timers.length ? 230 : 168; if (hover) { w += 16; h = 36; } }
-  else if (mode === "activity") { w = 330; h = 38; }
-  else if (mode === "toast") { w = 400; h = 38 + toastEl.offsetHeight; }
-  else if (mode === "expanded") { w = 520; h = Math.min(panel.offsetHeight, 690); }
-  island.style.width = w + "px";
-  island.style.height = h + "px";
+// ------------------------------------------------------------- mode + geometry
+function currentMode() {
+  if (view !== "answer") return "panel";
+  if (answerShown || pendingApprovals) return "panel";
+  if (listening || busy || speaking || control || flash || dl.waiting) return "active";
+  if (hover) return "peek";
+  return "hidden";
 }
-new ResizeObserver(() => (mode === "expanded" || mode === "toast") && layout()).observe(panel);
-new ResizeObserver(() => mode === "toast" && layout()).observe(toastEl);
+function render() {
+  const mode = currentMode();
+  island.dataset.mode = mode;
+  document.body.classList.toggle("big", mode === "panel");
+  for (const [id, v] of [["answerView", "answer"], ["setView", "settings"], ["memView", "memory"], ["setupView", "setup"]]) $(id).hidden = view !== v;
 
-function setMode(m) { mode = m; island.dataset.mode = m; updateBar(); layout(); }
-function setState(s, label) {
-  island.dataset.state = s;
-  activityLabel = label ?? ({ idle: "", listening: "Listening…", thinking: "Thinking…", speaking: "Speaking", alert: "" })[s];
-  $("status").textContent = label ?? ({ idle: "Ready", listening: "Listening", thinking: "Thinking", speaking: "Speaking", alert: "" })[s];
-  updateBar();
-}
-function updateBar() {
-  const t = timers.find((x) => !x.done) || timers[0];
-  if (mode === "compact") {
-    $("barLabel").textContent = settings.ready === false ? "Set up Jarvis" : (t ? t.label : clock());
-    $("barRight").textContent = t ? (t.done ? "Done" : fmt(remaining(t))) : "";
-  } else if (mode === "activity") {
-    $("barLabel").textContent = activityLabel || "Jarvis";
-    $("barRight").textContent = "";
-  } else if (mode === "toast") {
-    $("barLabel").textContent = "Jarvis";
-    $("barRight").textContent = t && !t.done ? fmt(remaining(t)) : "";
+  let w = 120, h = 30, y = -26;
+  if (mode === "peek") { w = 230; h = 38; y = 14; }
+  if (mode === "active") { w = 340; h = 38; y = 14; }
+  if (mode === "panel") {
+    const sec = { answer: "answerView", settings: "setView", memory: "memView", setup: "setupView" }[view];
+    w = view === "answer" ? ($("extras").children.length ? 480 : 420) : 480;
+    h = Math.min(38 + $(sec).offsetHeight, 680); y = 14;
   }
+  root.style.setProperty("--w", w + "px");
+  root.style.setProperty("--h", h + "px");
+  root.style.setProperty("--y", y + "px");
+  renderBar(mode);
 }
-const idle = () => { if (!busy && !listening && !speaking) { setState("idle"); if (mode === "activity") setMode("compact"); } };
+new ResizeObserver(() => render()).observe($("body"));
+["answerView", "setView", "memView", "setupView"].forEach((id) => new ResizeObserver(() => island.dataset.mode === "panel" && render()).observe($(id)));
 
-function expand(view = "chat") {
-  clearTimeout(toastTimer);
-  showView(view);
-  setMode("expanded");
-  J.focus();
-  if (view === "chat") setTimeout(() => input.focus(), 120);
+function renderBar(mode) {
+  const t = timers.find((x) => !x.done);
+  let text = label, right = "";
+  if (flash) text = flash;
+  else if (dl.waiting) text = `Getting my voice ready · ${dl.pct}%`;
+  else if (control) text = label || "Using your PC · Esc to stop";
+  else if (mode === "peek") text = settings.ready === false ? "Click to set me up" : "Click to talk";
+  else if (mode === "panel" && view !== "answer") text = { settings: "Settings", memory: "Memory", setup: "Setup" }[view];
+  else if (!text) text = "Jarvis";
+  if (mode === "peek" || mode === "active") right = t ? fmt(remaining(t)) : mode === "peek" ? clock() : "";
+  $("barLabel").textContent = text;
+  $("barRight").textContent = right;
+  $("barRight").classList.toggle("timer", !!t);
+  $("progress").classList.toggle("on", dl.active && mode !== "hidden");
 }
-function collapse() {
-  if (pendingApprovals) return;
-  setMode(busy || listening ? "activity" : "compact");
-  J.release();
-}
-function toast(text, hint = "", ms) {
-  if (mode === "expanded") return;
-  $("toastText").textContent = text;
-  $("toastHint").textContent = hint;
-  setMode("toast");
-  clearTimeout(toastTimer);
-  if (ms) toastTimer = setTimeout(endToast, ms);
-}
-function endToast() { if (mode === "toast" && !speaking && !hover) setMode(busy || listening ? "activity" : "compact"); else if (mode === "toast") toastTimer = setTimeout(endToast, 1500); }
 
-// pointer: the window is click-through except over the island
-island.addEventListener("mouseenter", () => { hover = true; J.interactive(true); if (mode === "compact") layout(); });
-island.addEventListener("mouseleave", () => { hover = false; J.interactive(false); if (mode === "compact") layout(); });
-island.addEventListener("click", (e) => {
-  if (mode === "expanded" || e.composedPath().includes(panel)) return; // clicks inside the panel never re-open it
-  expand(settings.ready === false ? "settings" : "chat");
+function setState(s, text = "") { island.dataset.state = s; label = text; render(); }
+function settle() {
+  if (control) return setState("control", "Using your PC · Esc to stop");
+  if (listening) return setState("listening", "Listening…");
+  if (busy) return; // keep the current tool label
+  if (speaking) return setState("speaking", "Jarvis");
+  setState("idle", "");
+}
+function flashBar(text, ms = 2200, state = "alert") {
+  clearTimeout(flashTimer); flash = text; island.dataset.state = state; render();
+  flashTimer = setTimeout(() => { flash = ""; settle(); }, ms);
+}
+
+// ------------------------------------------------------------- pointer
+let inside = 0, leaveTimer = null;
+function enter() { inside++; clearTimeout(leaveTimer); if (!hover) { hover = true; J.interactive(true); render(); } pauseDismiss(); }
+function leave() {
+  inside = Math.max(0, inside - 1);
+  clearTimeout(leaveTimer);
+  leaveTimer = setTimeout(() => { if (inside) return; hover = false; J.interactive(false); render(); resumeDismiss(); }, 300);
+}
+for (const el of [$("hotzone"), island]) { el.addEventListener("mouseenter", enter); el.addEventListener("mouseleave", leave); }
+island.querySelector(".bar").addEventListener("click", () => {
+  if (view === "setup") return;
+  if (settings.ready === false) return openView("setup");
+  if (busy) { J.stop(); hush(); return; }
+  if (speaking) { hush(); settle(); return; }
+  listening ? stopListening() : startListening();
 });
+island.addEventListener("contextmenu", (e) => { e.preventDefault(); J.menu(); });
 
-function showView(v) {
-  $("chatView").hidden = v !== "chat"; $("memView").hidden = v !== "memory"; $("setView").hidden = v !== "settings";
-  $("composer").hidden = v !== "chat"; $("timers").hidden = v !== "chat";
-  if (v === "memory") loadMemory();
-  if (v === "settings") fillSettings();
-}
-document.querySelectorAll("[data-back]").forEach((b) => (b.onclick = () => showView("chat")));
+function openView(v) { view = v; if (v === "memory") loadMemory(); if (v === "settings") fillSettings(); if (v === "setup") startSetup(); J.focus(); render(); }
+function closeView() { view = "answer"; J.release(); render(); }
+document.querySelectorAll("[data-close]").forEach((b) => (b.onclick = closeView));
+
+// answer panel lifecycle: stays while you read it, folds away after
+function showAnswer() { answerShown = true; clearTimeout(dismissTimer); render(); }
+function scheduleDismiss(ms) { clearTimeout(dismissTimer); if (!hover && !pendingApprovals) dismissTimer = setTimeout(dismissAnswer, ms); }
+function pauseDismiss() { clearTimeout(dismissTimer); }
+function resumeDismiss() { if (answerShown && !busy && !speaking) scheduleDismiss($("extras").children.length ? 2500 : 1500); }
+function dismissAnswer() { if (pendingApprovals || busy) return; answerShown = false; render(); }
 
 // ------------------------------------------------------------- speech out
 let voice = null;
 function pickVoice() {
   const vs = speechSynthesis.getVoices();
-  for (const p of [/George/i, /Ryan/i, /Thomas/i, /Daniel/i, /Google UK English Male/i, /en-GB/i, /David/i, /^en/i]) {
-    const v = vs.find((v) => p.test(v.name) || p.test(v.lang)); if (v) return v;
-  }
+  for (const p of [/George/i, /Ryan/i, /Thomas/i, /Daniel/i, /Google UK English Male/i, /en-GB/i, /David/i, /^en/i]) { const v = vs.find((v) => p.test(v.name) || p.test(v.lang)); if (v) return v; }
   return null;
 }
 voice = pickVoice(); speechSynthesis.onvoiceschanged = () => (voice = pickVoice());
@@ -131,148 +129,91 @@ function speak(text) {
   if (voice) u.voice = voice;
   u.rate = 1.05;
   speaking++;
-  u.onstart = () => setState("speaking");
-  u.onend = u.onerror = () => {
-    speaking = Math.max(0, speaking - 1);
-    if (!speaking) { if (busy) setState("thinking"); else { idle(); if (mode === "toast") toastTimer = setTimeout(endToast, 3500); } }
-  };
+  u.onstart = () => { if (!busy && !control) setState("speaking", "Jarvis"); };
+  u.onend = u.onerror = () => { speaking = Math.max(0, speaking - 1); if (!speaking) { settle(); if (!busy) scheduleDismiss(afterReadMs()); } };
   speechSynthesis.speak(u);
 }
 function hush() { speechSynthesis.cancel(); speaking = 0; }
+const afterReadMs = () => ($("extras").children.length ? 14000 : 5000);
 
-// ------------------------------------------------------------- chat
-function addUser(text, withScreen) {
-  $("empty")?.remove();
-  const m = document.createElement("div"); m.className = "msg user";
-  m.textContent = text;
-  if (withScreen) m.insertAdjacentHTML("beforeend", `<span class="shot">+ screenshot</span>`);
-  thread.appendChild(m); scrollDown();
-}
-function addBot() {
-  const m = document.createElement("div"); m.className = "msg bot";
-  m.innerHTML = `<div class="steps"></div><div class="typing"><i></i><i></i><i></i></div><div class="text"></div><div class="extras"></div>`;
-  thread.appendChild(m); scrollDown();
-  return { el: m, text: m.querySelector(".text"), steps: m.querySelector(".steps"), extras: m.querySelector(".extras"), stepEls: {}, out: "", spoken: 0, card: false };
-}
-const stopTyping = () => cur?.el.querySelector(".typing")?.remove();
-
+// ------------------------------------------------------------- asking
+let out = "", spoken = 0;
 function flushSpeech(final) {
   for (;;) {
-    const pending = cur.out.slice(cur.spoken);
+    const pending = out.slice(spoken);
     const s = final ? pending : pending.match(/^[\s\S]*?[.!?…](?=\s)/)?.[0];
-    if (!s || !s.trim()) { if (final) cur.spoken = cur.out.length; return; }
-    speak(s); cur.spoken += s.length; if (final) return;
+    if (!s || !s.trim()) { if (final) spoken = out.length; return; }
+    speak(s); spoken += s.length; if (final) return;
   }
 }
-
-async function ask(text, withScreen = false) {
+async function ask(text) {
   text = text.trim();
   if (!text || busy) return;
-  hush(); busy = true;
-  setEye(false);
-  addUser(text, withScreen);
-  cur = addBot();
-  setState("thinking", withScreen ? "Looking at your screen" : "Thinking…");
-  if (mode !== "expanded") setMode("activity");
-  setSendMode();
-  await J.send(text, withScreen);
-  // finished
-  for (const [name, el] of Object.entries(cur.stepEls)) if (el.classList.contains("running")) setStep(name, "done");
-  stopTyping(); flushSpeech(true);
-  busy = false; setSendMode();
-  if (mode !== "expanded" && cur.out.trim()) {
-    toast(cur.out.trim(), cur.card ? "Details in the panel · click to open" : "", settings.voice ? 0 : 6000 + cur.out.length * 40);
-  } else if (mode === "activity") setMode("compact");
-  if (!speaking) idle();
-}
-
-function setStep(name, status) {
-  let el = cur.stepEls[name];
-  if (!el) { el = cur.stepEls[name] = document.createElement("div"); cur.steps.appendChild(el); }
-  el.className = "step " + status;
-  el.innerHTML = (ICON[name] || "") + `<span>${esc(status === "running" ? RUN[name] || name : status === "error" ? `${RUN[name] || name} failed` : DONE[name] || name)}</span>`;
+  hush(); busy = true; out = ""; spoken = 0;
+  answerShown = false; $("answer").textContent = ""; $("extras").innerHTML = "";
+  setState("thinking", `“${text.length > 38 ? text.slice(0, 36) + "…" : text}”`);
+  await J.send(text, false);
+  flushSpeech(true);
+  busy = false;
+  settle();
+  if (answerShown && !speaking) scheduleDismiss(settings.voice ? afterReadMs() : 6000 + out.length * 45);
 }
 
 J.onAgent((ev) => {
-  if (!cur) return;
   switch (ev.type) {
     case "text":
-      stopTyping(); cur.out += ev.text; cur.text.textContent = cur.out; flushSpeech(false); scrollDown(); break;
+      out += ev.text; $("answer").textContent = out.trim(); if (out.trim()) showAnswer(); flushSpeech(false); break;
     case "tool":
-      setStep(ev.name, ev.status);
-      if (ev.status === "running") { setState("thinking", ev.detail || RUN[ev.name] || "Working…"); if (cur.out && !/\s$/.test(cur.out)) cur.out += " "; }
-      scrollDown(); break;
+      if (ev.status === "running" && !control) { setState("thinking", ev.detail || RUN[ev.name] || "Working…"); if (out && !/\s$/.test(out)) out += " "; }
+      break;
     case "action":
       if (ev.name === "set_timer") addTimer(ev.input.seconds, ev.input.label);
-      if (ev.name === "show_card") { addCard(ev.input.title, ev.input.body); cur.card = true; }
+      if (ev.name === "show_card") addCard(ev.input.title, ev.input.body);
       break;
     case "approval": approvalCard(ev); break;
+    case "control":
+      control = ev.on; settle(); break;
     case "error":
-      stopTyping(); cur.el.classList.add("error");
-      cur.out += (cur.out ? "\n" : "") + ev.message; cur.text.textContent = cur.out;
-      if (ev.code === "SETUP") expand("settings");
+      out += (out ? "\n" : "") + ev.message; $("answer").textContent = out.trim(); showAnswer();
+      if (ev.code === "SETUP") setTimeout(() => openView("setup"), 1800);
       if (ev.detail) console.warn(ev.detail);
       break;
   }
 });
-
 function addCard(title, body) {
   const c = document.createElement("div"); c.className = "card";
-  c.innerHTML = `<h4>${esc(title)}</h4><div class="body">${md(body)}</div>`;
-  cur.extras.appendChild(c); scrollDown();
+  c.innerHTML = `<h4>${esc(title)}</h4><div class="md">${md(body)}</div>`;
+  $("extras").appendChild(c); showAnswer();
 }
-function approvalCard({ id, command, reason }) {
+function approvalCard({ id, command, reason, kind }) {
   pendingApprovals++;
-  const c = document.createElement("div"); c.className = "approve";
-  c.innerHTML = `<p><b>Run this on your PC?</b> ${esc(reason || "")}</p><pre>${esc(command)}</pre><div class="btns"><button class="ghost" data-a="0">Don't run</button><button class="primary" data-a="1">Run</button></div>`;
+  const c = document.createElement("div"); c.className = "approve" + (kind === "control" ? " control" : "");
+  c.innerHTML = kind === "control"
+    ? `<p><b>${esc(reason)}</b></p><div class="btns"><button class="ghost" data-a="0">Not now</button><button class="primary" data-a="1">Allow</button></div>`
+    : `<p><b>Run this on your PC?</b> ${esc(reason || "")}</p><pre>${esc(command)}</pre><div class="btns"><button class="ghost" data-a="0">Don't run</button><button class="primary" data-a="1">Run</button></div>`;
   c.onclick = (e) => {
     const b = e.target.closest("button[data-a]"); if (!b) return;
     const ok = b.dataset.a === "1";
-    J.approve(id, ok); pendingApprovals--;
-    c.classList.add("done"); c.querySelector("p b").textContent = ok ? "Approved:" : "Declined:";
+    J.approve(id, ok); pendingApprovals--; c.classList.add("done");
+    c.querySelector("p b").textContent = ok ? (kind === "control" ? "Control allowed for this task. Esc stops me." : "Approved.") : "Declined.";
+    J.release(); render();
   };
-  cur.extras.appendChild(c);
-  setState("alert", "Waiting for your approval");
-  expand(); scrollDown();
-  speak("I need your go-ahead for that.");
+  $("extras").appendChild(c); showAnswer();
+  setState("alert", "Needs your OK");
+  J.focus();
+  speak(kind === "control" ? "May I use your mouse and keyboard for this?" : "I need your go-ahead for that.");
 }
 
-// ------------------------------------------------------------- composer
-const grow = () => { input.style.height = "auto"; input.style.height = input.scrollHeight + "px"; setSendMode(); };
-function setSendMode() {
-  const b = $("btnSend");
-  if (busy) { b.disabled = false; b.innerHTML = SVG('<rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/>'); b.title = "Stop"; }
-  else { b.disabled = !input.value.trim(); b.innerHTML = SVG('<path d="M12 19V5M5 12l7-7 7 7"/>'); b.title = "Send"; }
-}
-let eye = false;
-function setEye(on) { eye = on; $("btnEye").setAttribute("aria-pressed", on); }
-$("btnEye").onclick = () => setEye(!eye);
-input.oninput = grow;
-input.onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("composer").requestSubmit(); } };
-$("composer").onsubmit = (e) => {
-  e.preventDefault();
-  if (busy) { J.stop(); hush(); return; }
-  const t = input.value; input.value = ""; grow(); ask(t, eye);
-};
-document.querySelectorAll(".chip").forEach((c) => (c.onclick = () => ask(c.textContent, !!c.dataset.screen)));
-$("btnClose").onclick = collapse;
-$("btnNew").onclick = () => { if (busy) return; J.reset(); hush(); location.reload(); };
-$("btnMem").onclick = () => showView($("memView").hidden ? "memory" : "chat");
-$("btnSet").onclick = () => showView($("setView").hidden ? "settings" : "chat");
-$("btnMic").onclick = () => (listening ? stopListening() : startListening());
-
-// ------------------------------------------------------------- speech in (local Whisper via main process)
-let rec = null;
-// The worklet streams raw 16 kHz mic samples to the page (inline so it loads from file:// in the packaged app).
+// ------------------------------------------------------------- listening (local Whisper in the main process)
 const WORKLET_URL = URL.createObjectURL(new Blob([`
   class Recorder extends AudioWorkletProcessor {
     process(inputs) { const ch = inputs[0] && inputs[0][0]; if (ch) this.port.postMessage(ch.slice(0)); return true; }
   }
   registerProcessor("recorder", Recorder);`], { type: "text/javascript" }));
+let rec = null;
 async function startListening() {
-  if (listening) return stopListening();
-  if (busy) return;
-  hush();
+  if (listening || busy) return;
+  hush(); answerShown = false;
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     const ctx = new AudioContext({ sampleRate: 16000 });
@@ -281,72 +222,68 @@ async function startListening() {
     src.connect(node);
     rec = { stream, ctx, node, chunks: [], samples: 0, started: performance.now(), speechAt: 0, lastVoice: 0, floor: 0, floorN: 0 };
     node.port.onmessage = ({ data }) => onAudio(data);
-  } catch (e) {
-    toast("I can't access the microphone. Check Windows Settings → Privacy → Microphone.", "", 6000);
+  } catch {
+    flashBar("Microphone blocked · Windows Settings → Privacy → Microphone", 5000);
     return;
   }
-  listening = true;
-  $("btnMic").classList.add("on");
-  setState("listening");
-  if (mode !== "expanded") setMode("activity");
+  listening = true; settle();
 }
 function onAudio(chunk) {
   if (!rec) return;
   rec.chunks.push(chunk); rec.samples += chunk.length;
   let sum = 0; for (const x of chunk) sum += x * x;
   const rms = Math.sqrt(sum / chunk.length), now = performance.now(), t = now - rec.started;
-  if (t < 300) { rec.floor = (rec.floor * rec.floorN + rms) / ++rec.floorN; }
-  const threshold = Math.max(0.012, rec.floor * 2.5);
-  if (rms > threshold) { rec.lastVoice = now; if (!rec.speechAt) rec.speechAt = now; }
-  // waveform
-  document.querySelectorAll("#wave i").forEach((b, i) => (b.style.height = 4 + Math.min(12, rms * 260 * (0.6 + 0.4 * Math.sin(now / 90 + i))) + "px"));
-  if (rec.speechAt && now - rec.lastVoice > 1300) stopListening();          // pause after speaking → done
-  else if (!rec.speechAt && t > 8000) stopListening(true);                   // never spoke
-  else if (t > 45000) stopListening();                                       // hard cap
+  if (t < 300) rec.floor = (rec.floor * rec.floorN + rms) / ++rec.floorN;
+  if (rms > Math.max(0.012, rec.floor * 2.5)) { rec.lastVoice = now; if (!rec.speechAt) rec.speechAt = now; }
+  document.querySelectorAll(".wave i").forEach((b, i) => (b.style.height = 4 + Math.min(12, rms * 260 * (0.6 + 0.4 * Math.sin(now / 90 + i))) + "px"));
+  if (rec.speechAt && now - rec.lastVoice > 1300) stopListening();
+  else if (!rec.speechAt && t > 8000) stopListening(true);
+  else if (t > 45000) stopListening();
 }
 async function stopListening(cancel = false) {
   if (!rec) return;
   const r = rec; rec = null; listening = false;
-  $("btnMic").classList.remove("on");
   r.node.port.onmessage = null; r.stream.getTracks().forEach((t) => t.stop()); r.ctx.close();
-  document.querySelectorAll("#wave i").forEach((b) => (b.style.height = "4px"));
-  if (cancel || !r.speechAt || r.samples < 16000 * 0.4) { setState("idle"); if (mode === "activity") toast("Didn't catch that.", "", 1800); return; }
+  document.querySelectorAll(".wave i").forEach((b) => (b.style.height = "4px"));
+  if (cancel || !r.speechAt || r.samples < 16000 * 0.4) { settle(); flashBar("Didn't catch that", 1800, "idle"); return; }
   const audio = new Float32Array(r.samples);
   let o = 0; for (const c of r.chunks) { audio.set(c, o); o += c.length; }
   setState("thinking", "Transcribing…");
+  if (dl.active) { dl.waiting = true; render(); }
   try {
     const text = await J.transcribe(audio);
-    if (!text || /^\[.*\]$|^\(.*\)$/.test(text)) { setState("idle"); if (mode !== "expanded") toast("Didn't catch that.", "", 1800); return; }
-    ask(text, eye);
+    dl.waiting = false;
+    if (!text || /^\[.*\]$|^\(.*\)$/.test(text)) { settle(); flashBar("Didn't catch that", 1800, "idle"); return; }
+    ask(text);
   } catch (e) {
-    setState("idle");
-    toast("Speech recognition failed: " + (e.message || e).toString().replace(/^Error invoking remote method '[^']+': /, ""), "", 6000);
+    dl.waiting = false; settle();
+    flashBar("Speech recognition failed: " + String(e.message || e).replace(/^Error invoking remote method '[^']+': /, ""), 6000);
   }
 }
+
+// voice model download: one steady, monotonic progress line
 J.onSttProgress((p) => {
-  if (p.error) { toast("Couldn't load the voice model: " + p.error, "", 6000); return; }
-  if (!p.ready) { setState("thinking", `Downloading voice model ${p.pct}% (one time)`); }
+  if (p.error) { dl = { active: false, pct: 0, waiting: false }; flashBar("Couldn't download the voice model. Check your internet.", 6000); setupDl(); return; }
+  if (p.ready) { dl.active = false; dl.pct = 100; dl.waiting = false; }
+  else { dl.active = true; const pct = Math.min(99, Math.max(dl.pct, Math.floor(p.pct))); if (pct === dl.pct && island.dataset.mode !== "hidden") return; dl.pct = pct; }
+  $("progressFill").style.width = dl.pct + "%";
+  setupDl(); render();
 });
 
 // ------------------------------------------------------------- timers
 const timers = [];
 const remaining = (t) => Math.max(0, Math.ceil((t.end - Date.now()) / 1000));
 function fmt(r) { const h = Math.floor(r / 3600), m = Math.floor(r / 60) % 60, s = r % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0"); }
-function addTimer(seconds, label) { timers.push({ id: String(Math.random()), end: Date.now() + seconds * 1000, label, done: false }); renderTimers(); layout(); }
-function renderTimers() {
-  $("timers").innerHTML = timers.map((t) => `<span class="timer ${t.done ? "done" : ""}">${esc(t.label)} <b>${t.done ? "Done" : fmt(remaining(t))}</b><button data-id="${t.id}" title="Dismiss">${SVG('<path d="M6 6l12 12M18 6 6 18"/>')}</button></span>`).join("");
-  updateBar();
-}
-$("timers").onclick = (e) => { const b = e.target.closest("button[data-id]"); if (!b) return; timers.splice(timers.findIndex((t) => t.id === b.dataset.id), 1); renderTimers(); layout(); };
+function addTimer(seconds, lbl) { timers.push({ end: Date.now() + seconds * 1000, label: lbl, done: false }); }
 setInterval(() => {
   for (const t of timers) if (!t.done && Date.now() >= t.end) {
     t.done = true;
     J.notify("Jarvis", `${t.label}: time's up`);
     speak(`Your ${t.label} timer is done.`);
-    setState("alert"); toast(`⏱  ${t.label}: time's up`, "", 8000);
-    setTimeout(() => { const i = timers.indexOf(t); if (i >= 0) { timers.splice(i, 1); renderTimers(); layout(); } idle(); }, 60000);
+    flashBar(`⏱  ${t.label}: time's up`, 9000);
   }
-  if (timers.length) renderTimers(); else if (mode === "compact") updateBar();
+  for (let i = timers.length - 1; i >= 0; i--) if (timers[i].done) timers.splice(i, 1);
+  if (island.dataset.mode !== "hidden") renderBar(island.dataset.mode);
 }, 500);
 
 // ------------------------------------------------------------- memory
@@ -354,7 +291,7 @@ async function loadMemory() { renderMemory(await J.getMemory()); }
 function renderMemory(mem) {
   $("memList").innerHTML = mem.notes.length
     ? mem.notes.map((n, i) => `<li><div>${esc(n.note)}<small>${new Date(n.at).toLocaleDateString()}</small></div><button data-i="${i}" title="Forget">${SVG('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>')}</button></li>`).reverse().join("")
-    : `<li class="none">Nothing yet. Say “remember that…” and it will appear here.</li>`;
+    : `<li class="none">Nothing yet. Say “remember that…” and it shows up here.</li>`;
 }
 $("memList").onclick = async (e) => { const b = e.target.closest("button[data-i]"); if (b) renderMemory(await J.deleteMemory(+b.dataset.i)); };
 J.onMemory(renderMemory);
@@ -367,10 +304,23 @@ function fillSettings() {
     if (el.type === "checkbox") el.checked = !!settings[el.name]; else el.value = settings[el.name] ?? "";
   }
   form.apiKey.value = "";
-  syncBackend();
   form.apiKey.placeholder = settings.hasKey ? `Saved (${settings.keyHint}). Paste a new key to replace it` : "sk-ant-…";
   $("setMsg").textContent = "";
+  syncBackend();
 }
+async function syncBackend() {
+  const acct = form.backend.value === "claude";
+  $("acctBox").hidden = !acct; $("keyRow").hidden = acct;
+  if (!acct) return;
+  $("acctStatus").textContent = "Checking…";
+  const st = await J.claudeStatus();
+  $("acctStatus").innerHTML = st.loggedIn ? "<b>Connected</b> to your Claude account."
+    : st.installed ? "<b>Not signed in.</b> Press Sign in and log in with your Claude account."
+    : "<b>Claude Code isn't installed.</b> Sign in installs it first.";
+  $("btnSignIn").textContent = st.loggedIn ? "Switch account" : "Sign in";
+}
+form.backend.onchange = syncBackend;
+$("btnSignIn").onclick = async () => { await J.claudeSignIn(); $("setMsg").textContent = "Finish signing in in the window that opened."; pollUntilSignedIn(() => syncBackend()); };
 form.onsubmit = async (e) => {
   e.preventDefault();
   const patch = {};
@@ -381,48 +331,113 @@ form.onsubmit = async (e) => {
   const bad = (res.hotkeys || []).filter((h) => /\(/.test(h));
   $("setMsg").textContent = bad.length ? `Hotkey problem: ${bad.join(", ")}` : "Saved";
   $("setMsg").style.color = bad.length ? "var(--warn)" : "";
-  fillSettings();
-  if (patch.speechModel) J.warmup(); // start downloading the voice model in the background
+  if (patch.speechModel) J.warmup();
 };
 $("btnQuit").onclick = () => J.quit();
-function syncBackend() {
-  const acct = form.backend.value === "claude";
-  $("acctBox").hidden = !acct; $("keyRow").hidden = acct; $("effortRow").hidden = acct;
-  $("acctStatus").innerHTML = settings.claudePath
-    ? `<b>Claude Code found.</b> If you haven't signed in yet, press Connect and log in with your Claude account.`
-    : `<b>Claude Code isn't installed.</b> Press Connect: a window opens that installs it, then asks you to sign in.`;
-  $("btnSignIn").textContent = settings.claudePath ? "Sign in" : "Connect Claude account";
-}
-form.backend.onchange = syncBackend;
-$("btnSignIn").onclick = async () => {
-  await J.claudeSignIn();
-  $("setMsg").textContent = "Finish signing in in the window that opened, then press Save.";
-};
-function applySettings(s) {
-  settings = s;
-  $("kTalk").textContent = s.hotkeyTalk;
-  if (!s.voice) hush();
-  updateBar(); layout();
+function applySettings(s) { settings = s; $("kTalk").textContent = s.hotkeyTalk; if (!s.voice) hush(); render(); }
+
+let pollTimer = null;
+function pollUntilSignedIn(onDone) {
+  clearInterval(pollTimer);
+  const started = Date.now();
+  pollTimer = setInterval(async () => {
+    const st = await J.claudeStatus();
+    if (st.loggedIn || Date.now() - started > 10 * 60000) { clearInterval(pollTimer); if (st.loggedIn) { applySettings(await J.getSettings()); onDone(st); } }
+  }, 2500);
 }
 
+// ------------------------------------------------------------- first-run setup
+let step = 0, micTest = null;
+function startSetup() { goStep(0); }
+function goStep(n) {
+  step = n;
+  document.querySelectorAll(".step").forEach((s) => s.classList.toggle("on", +s.dataset.step === n));
+  if (n !== 2) stopMicTest();
+  if (n === 1) checkAccount();
+  if (n === 4) { J.warmup(); setupDl(); }
+  render();
+}
+document.querySelectorAll("[data-next]").forEach((b) => (b.onclick = () => goStep(step + 1)));
+
+async function checkAccount() {
+  if (settings.backend === "api" && settings.hasKey) return markConnected("Using your API key.");
+  const st = await J.claudeStatus();
+  if (st.loggedIn) markConnected("Connected to your Claude account.");
+  else $("acctStep").innerHTML = st.installed
+    ? "Press <b>Sign in</b>. Your browser opens and asks you to log in to your Claude account. No API key needed: I use your Claude plan."
+    : "Press <b>Sign in</b>. A window installs Claude Code (about a minute), then your browser asks you to log in to your Claude account. No API key needed: I use your Claude plan.";
+}
+function markConnected(msg) {
+  $("acctOk").textContent = "✓ " + msg;
+  $("acctSkip").hidden = true;
+  const b = $("btnSetupSignIn"); b.textContent = "Continue"; b.onclick = () => goStep(2);
+}
+$("btnSetupSignIn").onclick = async () => {
+  await J.claudeSignIn();
+  $("acctOk").textContent = "Waiting for you to sign in…";
+  pollUntilSignedIn(() => markConnected("Connected to your Claude account."));
+};
+
+$("btnMic").onclick = async () => {
+  if (micTest) return goStep(3);
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const ctx = new AudioContext(), an = ctx.createAnalyser(); an.fftSize = 512;
+    ctx.createMediaStreamSource(stream).connect(an);
+    const buf = new Uint8Array(an.fftSize); let heard = false;
+    micTest = { stream, ctx, raf: 0 };
+    $("micHint").textContent = "Say something…";
+    const loop = () => {
+      an.getByteTimeDomainData(buf); let sum = 0; for (const v of buf) { const x = (v - 128) / 128; sum += x * x; }
+      const lvl = Math.min(1, Math.sqrt(sum / buf.length) * 5);
+      $("micMeter").style.width = lvl * 100 + "%";
+      if (lvl > 0.15 && !heard) { heard = true; $("micHint").textContent = "✓ I can hear you."; $("btnMic").textContent = "Continue"; }
+      micTest.raf = requestAnimationFrame(loop);
+    };
+    loop();
+    $("btnMic").textContent = "Continue";
+  } catch {
+    $("micHint").textContent = "Blocked. Open Windows Settings → Privacy & security → Microphone, and turn on “Let desktop apps access your microphone”.";
+  }
+};
+function stopMicTest() { if (!micTest) return; cancelAnimationFrame(micTest.raf); micTest.stream.getTracks().forEach((t) => t.stop()); micTest.ctx.close(); micTest = null; }
+
+function setupDl() {
+  if (view !== "setup") return;
+  $("dlMeter").style.width = dl.pct + "%";
+  $("dlHint").textContent = dl.pct >= 100 && !dl.active ? "✓ Voice ready." : dl.active ? `Downloading · ${dl.pct}%  (you can continue; it finishes in the background)` : "Starting…";
+}
+$("btnFinish").onclick = async () => {
+  applySettings(await J.setSettings({ onboarded: true, allowControl: $("setupControl").checked }));
+  view = "answer"; J.release(); render();
+  flashBar(`Ready · click me or press ${settings.hotkeyTalk}`, 4000, "speaking");
+};
+
 // ------------------------------------------------------------- global events
-J.onHotkeyTalk(() => (listening ? stopListening() : startListening()));
-J.onHotkeyPanel(() => (mode === "expanded" ? collapse() : expand()));
-J.onSettingsOpen(() => expand("settings"));
-J.onBlur(() => { if (mode === "expanded" && !pendingApprovals) collapse(); });
+J.onHotkeyTalk(() => {
+  if (settings.ready === false || !settings.onboarded) return openView("setup");
+  if (busy) { J.stop(); hush(); return; }
+  listening ? stopListening() : startListening();
+});
+J.onHotkeyPanel(() => { if ($("answer").textContent || $("extras").children.length) { answerShown = !answerShown; render(); if (answerShown) scheduleDismiss(10000); } });
+J.onView((v) => {
+  if (v === "stop") { hush(); if (listening) stopListening(true); return; }
+  openView(v === "onboarding" ? "setup" : v);
+});
+J.onSettingsOpen(() => openView("settings"));
+J.onBlur(() => { if (view === "settings" || view === "memory") closeView(); });
 addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (listening) stopListening(true);
-  else if (speaking) { hush(); idle(); }
-  else if (mode === "expanded") collapse();
+  else if (speaking) { hush(); settle(); }
+  else if (view !== "answer" && view !== "setup") closeView();
+  else if (answerShown) dismissAnswer();
 });
 
 // ------------------------------------------------------------- start
 (async () => {
-  const hr = new Date().getHours();
-  $("hello").textContent = `Good ${hr < 5 ? "evening" : hr < 12 ? "morning" : hr < 18 ? "afternoon" : "evening"}.`;
   applySettings(await J.getSettings());
-  setState("idle"); setMode("compact");
-  if (!settings.ready) setTimeout(() => toast("Welcome. Click here to connect your Claude account.", "", 9000), 800);
-  else J.warmup(); // preload the voice model so the first "Alt+J" is quick
+  settle();
+  if (!settings.onboarded) setTimeout(() => openView("setup"), 600);
+  else J.warmup(); // make sure the voice model is ready before the first click
 })();

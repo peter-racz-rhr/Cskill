@@ -2,18 +2,18 @@
 
 A small "Dynamic Island" at the top of your screen, powered by Claude. Talk to it, show it your screen, and let it do things on your PC.
 
-- **Idle:** a small black pill with the clock, or your running timer.
-- **Working:** the pill widens to show what it's doing: listening, searching the web, looking at your screen…
-- **Reply:** a short bubble drops down while it speaks. Click it to open the full panel.
-- **Panel:** click the pill or press `Alt+Shift+J` to open the conversation, cards, approvals, memory and settings.
+- **Hidden:** only a thin notch shows at the top of your screen.
+- **Hover:** the pill drips down out of the notch. Click it and start talking.
+- **Working:** it shows what it's doing: listening, searching, looking at your screen, using your PC.
+- **Answer:** it speaks, and the answer (plus any details or approvals) drops down below the pill, then folds away.
+- **Right-click** the pill for Settings, Memory, Stop and Quit.
 
 ## Install
 
 1. Download **Jarvis-Setup-x.y.z.exe** (installer) or **Jarvis-x.y.z-portable.exe** (no install) from this repo's
    **Actions → Build Jarvis for Windows → latest run → Artifacts → Jarvis-Windows**.
 2. Run it. Windows SmartScreen will warn that the app is unsigned. Click **More info → Run anyway**.
-3. Click the pill → **Connect Claude account**. A PowerShell window opens that installs Claude Code (if needed) and asks you to log in with your Claude account (Pro or Max). Log in, close the window, then press **Save**.
-4. The first time you talk, it downloads the speech model once (about 290 MB). After that, speech recognition runs on your PC.
+3. Setup opens by itself: **Sign in** (a window installs Claude Code if needed and your browser asks you to log in to your Claude account; Jarvis notices when you're done), then **microphone**, **screen and control**, and the one-time **voice model download** (about 290 MB).
 
 ### How the "no API key" mode works
 
@@ -25,12 +25,11 @@ If you prefer an API key instead, choose **Brain → Anthropic API key** in Sett
 
 | | |
 |---|---|
-| `Alt+J` | Talk. It listens until you pause, then answers. Press again to stop |
-| `Alt+Shift+J` | Open or close the panel |
-| Click the pill | Open the panel |
-| 👁 button | Attach your screen to the next message |
-| `Esc` | Stop listening, stop talking, or close |
-| Tray icon | Open, settings, start with Windows, quit |
+| Hover the top of the screen, click the pill | Talk. It listens until you pause, then answers |
+| `Alt+J` | Talk from anywhere |
+| Click while it's working or talking | Stop |
+| `Esc` | Stop listening, stop talking, or stop controlling your PC |
+| Right-click the pill / tray icon | Settings, Memory, Run setup again, Quit |
 
 Hotkeys, model, voice and speech language can be changed in **Settings**.
 
@@ -39,6 +38,9 @@ Hotkeys, model, voice and speech language can be changed in **Settings**.
 | Ask | Tool |
 |---|---|
 | "What's this error on my screen?" / "Summarise this page" | **Sees your screen** (screenshot of the display under your mouse) |
+| "Show me where the Wi-Fi settings are" | **Points** with its own glowing cursor and a label. Touches nothing |
+| "Rename these files", "Fill in this form", "Fix the typo in this paragraph" | **Uses your mouse and keyboard.** Asks once per task, and `Esc` stops it instantly |
+| "Go through my unread emails" | Opens your mail in the browser and **reads it from the screen**. Never sends or deletes without asking |
 | "Research the best budget monitors and compare them" | **Web search and page reading**, with a summary card and sources |
 | "Find the biggest files in Downloads", "Open Spotify", "Turn on dark mode", "Close Chrome" | **Runs PowerShell.** You approve every command first (can be turned off) |
 | "Open my Documents folder", "Open youtube.com" | **Opens** files, folders, apps and URLs |
