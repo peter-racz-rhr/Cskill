@@ -6,18 +6,19 @@
 <title>Island Prototype</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Inter:wght@400;500;600&family=Manrope:wght@400;500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --font:"Geist";
+    --font:"Inter";
     --ink:#000; --fg:#f5f5f7; --fg2:#c9c9cf; --muted:#8a8a92; --faint:#55555c; --line:rgba(255,255,255,.08); --tile:#121214;
     --red:#ff3b30; --green:#30d158; --orange:#ff9f0a; --blue:#0a84ff;
     --ease:cubic-bezier(.2,.8,.2,1);
   }
   *{box-sizing:border-box;margin:0;padding:0}
   [hidden]{display:none!important}
-  html,body{height:100%}
-  body{font:400 14px/1.45 var(--font),system-ui,sans-serif;color:#1d1d1f;overflow:hidden;-webkit-font-smoothing:antialiased;
+  html{background:#c4cdd8}
+  body{min-height:100%}
+  body{font:400 14px/1.45 var(--font),system-ui,sans-serif;color:#1d1d1f;overflow-x:hidden;-webkit-font-smoothing:antialiased;
     background:radial-gradient(1200px 600px at 50% -10%,#f1f4f8,#d7dee7 55%,#c4cdd8)}
   button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 
@@ -109,21 +110,31 @@
   .w-hint{text-align:center;color:var(--faint);font-size:12px;margin:10px 0 0}
 
   /* page chrome (outside the island) */
-  .hint{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);z-index:0;color:#4b5563;font-size:12.5px;text-align:center;line-height:1.75;width:min(760px,94vw)}
+  .hint{margin:150px auto 0;color:#4b5563;font-size:12.5px;text-align:center;line-height:1.75;width:min(760px,94vw)}
   .hint b{color:#111;font-weight:600}
-  .fonts{position:fixed;left:16px;bottom:16px;z-index:3;display:flex;gap:2px;background:rgba(255,255,255,.7);backdrop-filter:blur(8px);padding:3px;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-  .fonts button{height:28px;padding:0 10px;border-radius:9px;font-size:12px;color:#444}
-  .fonts button.on{background:#111;color:#fff}
-  .fonts span{font-size:11px;color:#777;padding:0 6px 0 8px;align-self:center}
   #typed{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,90vw);display:none;z-index:4}
   #typed.on{display:flex}
   #typed input{flex:1;height:42px;border-radius:14px;border:0;padding:0 14px;font:inherit;font-size:15px;box-shadow:0 8px 30px rgba(0,0,0,.18);outline:none}
-  @media (max-width:900px){.fonts{right:16px;bottom:96px;overflow-x:auto}.hint{font-size:11.5px}}
+  @media (max-width:900px){.hint{font-size:11.5px}}
+
+  /* ---------- gallery: every look, side by side ---------- */
+  #gallery{width:min(1180px,94vw);margin:48px auto 80px}
+  #gallery h2{font-size:13px;font-weight:600;color:#5b6472;text-transform:uppercase;letter-spacing:.08em;margin:36px 0 14px}
+  #gallery h2:first-child{margin-top:0}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:18px}
+  .grid.pills{grid-template-columns:repeat(auto-fill,minmax(340px,1fr))}
+  .frame{background:rgba(255,255,255,.45);border:1px solid rgba(255,255,255,.6);border-radius:22px;padding:16px 16px 18px;display:flex;flex-direction:column;align-items:center;gap:14px;cursor:pointer;transition:transform .15s,background .15s}
+  .frame:hover{background:rgba(255,255,255,.65);transform:translateY(-2px)}
+  .frame .cap{align-self:stretch;display:flex;justify-content:space-between;font-size:12.5px;font-weight:600;color:#1f2937}
+  .frame .cap span{font-weight:400;color:#6b7280}
+  .isl{position:relative;background:var(--ink);color:var(--fg);overflow:hidden;box-shadow:0 12px 32px rgba(0,0,0,.16),0 2px 6px rgba(0,0,0,.08)}
+  .isl .layer{position:absolute;inset:0;opacity:1;pointer-events:none}
+  .isl.cardy .layer{position:relative;inset:auto}
+  .isl .w-top{display:flex}
 </style>
 </head>
 <body>
 
-<div class="fonts" id="fonts"><span>Font</span></div>
 
 <div id="island" data-s="idle">
   <div class="layer" id="lStatus"><div class="status"><span class="light"></span><span class="text" id="statusText"></span><span class="bars"><i></i><i></i><i></i><i></i><i></i></span></div></div>
@@ -134,10 +145,12 @@
 
 <form id="typed"><input id="typedIn" placeholder="Type what you'd say…" autocomplete="off"></form>
 
-<div class="hint">
+<div class="hint" id="hint">
   <b>Click</b> the island and talk · try “play Blinding Lights”, “songs like Fejezz”, “play my workout playlist”, “who is Ada Lovelace”, “weather in Budapest”, “100 euro to forint”, “15% of 80”, “note buy milk”, “5 minute timer”, “open Spotify”<br>
   <b>Pull it down</b> to snap it into a widget · drag it back to the top to dock · <b>T</b> to type · <b>Esc</b> to close
 </div>
+
+<main id="gallery"></main>
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -154,17 +167,6 @@ const ICON = {
   cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v5h1"/>',
 };
-
-// ---------------- fonts (compare alternatives live) ----------------
-const FONTS = ["Geist", "Inter", "Manrope", "DM Sans", "Instrument Sans"];
-let font = "Geist"; try { font = localStorage.getItem("island-font") || font; } catch {}
-function setFont(f) {
-  font = f; document.documentElement.style.setProperty("--font", `"${f}"`);
-  try { localStorage.setItem("island-font", f); } catch {}
-  document.querySelectorAll("#fonts button").forEach((b) => b.classList.toggle("on", b.textContent === f));
-}
-for (const f of FONTS) { const b = document.createElement("button"); b.textContent = f; b.style.fontFamily = `"${f}"`; b.onclick = () => setFont(f); $("fonts").appendChild(b); }
-setFont(font);
 
 // ---------------- state ----------------
 let s = "idle", hover = false, cardOpen = false, mode = "dock", pulling = null, widgetPos = null;
@@ -262,8 +264,7 @@ addEventListener("keydown", (e) => {
 
 // ---------------- one card layout for every answer ----------------
 let lastAnswer = null, closeT = null;
-function render(a) {
-  lastAnswer = a;
+function cardHTML(a) {
   const parts = [
     `<div class="kicker"><svg viewBox="0 0 24 24">${ICON[a.icon] || ICON.info}</svg>${esc(a.kicker)}${a.said ? `<span class="said">“${esc(a.said)}”</span>` : ""}</div>`,
     a.title ? `<div class="title">${esc(a.title)}</div>` : "",
@@ -272,7 +273,11 @@ function render(a) {
     a.chips?.length ? `<div class="chips">${a.chips.map((c, i) => `<button class="chip ${i === 0 ? "primary" : ""}" data-chip="${i}">${esc(c.label)}</button>`).join("")}</div>` : "",
     a.note ? `<div class="note">${esc(a.note)}</div>` : "",
   ].filter(Boolean);
-  $("card").innerHTML = parts.map((p, i) => p.replace(/^<(\w+)/, `<$1 style="--i:${i}"`)).join("");
+  return parts.map((p, i) => p.replace(/^<(\w+)/, `<$1 style="--i:${i}"`)).join("");
+}
+function render(a) {
+  lastAnswer = a;
+  $("card").innerHTML = cardHTML(a);
   $("card").querySelectorAll(".list li").forEach((li, j) => li.style.setProperty("--j", j));
   $("card").querySelectorAll("[data-chip]").forEach((b) => (b.onclick = () => a.chips[+b.dataset.chip].run()));
   a.after?.();
@@ -461,8 +466,61 @@ function schedule(said) {
   return { icon: "cal", kicker: "Today", said, title: "3 events", html: `<ul class="list">${ev.map(([a, b]) => `<li><span class="k">${a}</span><span class="v">${b}</span></li>`).join("")}</ul>`, note: "Preview data. The app connects to your calendar." };
 }
 
+// ---------------- gallery ----------------
+const STATUS = (st, text, extra = "") => `<div class="layer"><div class="status"><span class="light"></span><span class="text">${esc(text)}</span>${extra}<span class="bars"><i></i><i></i><i></i><i></i><i></i></span></div></div>`;
+const PILLS = [
+  ["Idle", "always there", 126, 36, "idle", ""],
+  ["Hover", "move the mouse near it", 170, 40, "idle", STATUS("idle", "Click to talk")],
+  ["Listening", "red · your words appear live", 300, 48, "listening", STATUS("listening", "play blinding lights")],
+  ["Thinking", "shimmer", 240, 42, "thinking", STATUS("thinking", "Thinking")],
+  ["Timer running", "split pill", 180, 38, "idle", `<div class="layer"><div class="split"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#ff9f0a" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg><span class="tval">4:59</span></div></div>`],
+  ["Music playing", "mini player", 180, 38, "idle", `<div class="layer"><div class="split"><span class="art" style="--art:${ART[0]}"></span><span class="eq"><i></i><i></i><i></i><i></i></span></div></div>`],
+];
+const sampleMusic = { title: "Blinding Lights", artist: "The Weeknd", art: ART[0], dur: 200, pos: 0, q: "Blinding Lights" };
+const CARDS = [
+  ["Music", "Now playing", "play blinding lights", () => { const m = music; music = sampleMusic; const a = nowPlaying("play blinding lights"); music = m; return a; }],
+  ["Music", "Songs like…", "songs like fejezz", () => musicIntent("songs like fejezz", "songs like fejezz")],
+  ["Music", "Playlist", "play my workout playlist", () => { const m = music; const a = musicIntent("play my workout playlist", "play my workout playlist"); music = m; return a; }],
+  ["Web", "Answer from the web", "who is ada lovelace", () => ({ icon: "web", kicker: "From the web", said: "who is ada lovelace", title: "Ada Lovelace", body: "Augusta Ada King, Countess of Lovelace, was an English mathematician and writer chiefly known for her work on Charles Babbage's proposed mechanical general-purpose computer, the Analytical Engine.", chips: [{ label: "Read more" }, { label: "Search the web" }], note: "Source: Wikipedia" })],
+  ["Weather", "Weather", "weather in budapest", () => ({ icon: "weather", kicker: "Weather · Budapest", said: "weather in budapest", html: `<div class="big">9°</div><div class="tiles"><div class="tile"><small>Feels like</small><b>6°</b></div><div class="tile"><small>High / low</small><b>12° / 4°</b></div><div class="tile"><small>Rain</small><b>10%</b></div></div>` })],
+  ["Timer", "Timer set", "5 minute timer", () => ({ icon: "timer", kicker: "Timer", said: "5 minute timer", html: `<div class="big">4:59</div><div class="prog"><i style="width:98%;background:var(--orange)"></i></div>`, chips: [{ label: "Cancel" }] })],
+  ["Timer", "Time's up", "", () => ({ icon: "timer", kicker: "Timer", title: "Time's up" })],
+  ["Money", "Currency", "100 euro to forint", () => ({ icon: "calc", kicker: "Currency", said: "100 euro to forint", html: `<div class="big">39,412 HUF</div>`, body: "100 EUR · rate 394.12 · today" })],
+  ["Math", "Calculator", "15% of 80", () => calc("15% of 80", "15% of 80")],
+  ["Notes", "Note saved", "note buy milk", () => ({ icon: "note", kicker: "Notes", said: "note buy milk", title: "Saved", html: `<ul class="list"><li><span class="k">Today</span><span class="v">buy milk</span></li><li><span class="k">Nov 17</span><span class="v">call the dentist</span></li></ul>` })],
+  ["Calendar", "Today", "what's on today", () => schedule("what's on today")],
+  ["PC", "Opening an app", "open spotify", () => { const a = openApp("open spotify", "open spotify"); a.html = a.html.replace(/○/g, "✓").replace(/class="k"/g, 'class="k ok"'); a.after = null; return a; }],
+  ["PC", "Files", "biggest files in downloads", () => files("biggest files in downloads")],
+  ["Time", "Clock", "what time is it", () => ({ icon: "timer", kicker: "Time", said: "what time is it", html: `<div class="big">${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>` })],
+];
+function buildGallery() {
+  const g = $("gallery");
+  let html = `<h2>Island states</h2><div class="grid pills">`;
+  PILLS.forEach(([name, sub, w, h, st, inner], i) => {
+    html += `<div class="frame" data-pill="${i}"><div class="cap">${name}<span>${sub}</span></div><div class="isl" data-s="${st}" style="width:${w}px;height:${h}px;border-radius:${h / 2}px">${inner}</div></div>`;
+  });
+  html += `</div><h2>Answers</h2><div class="grid">`;
+  CARDS.forEach(([group, name, said, make], i) => {
+    const a = make();
+    html += `<div class="frame" data-card="${i}"><div class="cap">${name}<span>${said ? "“" + esc(said) + "” · click to try" : group}</span></div><div class="isl cardy" style="width:400px;max-width:100%;border-radius:28px"><div class="layer"><div class="card">${cardHTML(a)}</div></div></div></div>`;
+  });
+  const w = { icon: "info", kicker: "Ready", title: "Ask anything", body: "Press the button below and talk." };
+  html += `</div><h2>Widget</h2><div class="grid"><div class="frame" data-widget><div class="cap">Pulled-off widget<span>drag by the handle · drop on the top edge to dock</span></div><div class="isl cardy" style="width:360px;border-radius:28px"><div class="layer"><div class="w-top"><i></i></div><div class="card">${cardHTML(w)}<button class="w-mic"></button><p class="w-hint">Drag the handle · drop on the top edge to dock</p></div></div></div></div></div>`;
+  g.innerHTML = html;
+  g.querySelectorAll("[data-card]").forEach((f) => (f.onclick = () => { const said = CARDS[+f.dataset.card][2]; if (said) { scrollTo({ top: 0, behavior: "smooth" }); handle(said); } }));
+  g.querySelectorAll("[data-pill]").forEach((f) => (f.onclick = () => {
+    scrollTo({ top: 0, behavior: "smooth" });
+    const i = +f.dataset.pill;
+    if (i === 2) { cardOpen = false; setS("listening", "play blinding lights"); setTimeout(() => setS("idle"), 2500); }
+    if (i === 3) { cardOpen = false; setS("thinking", "Thinking"); setTimeout(() => setS("idle"), 2500); }
+    if (i === 4) { startTimer("", "5 minute timer"); cardOpen = false; }
+    if (i === 5) { music = { ...sampleMusic, playing: true }; tick(); cardOpen = false; }
+  }));
+}
+
 const fmt = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
 const cap = (x) => String(x).replace(/\b\w/g, (c) => c.toUpperCase());
+buildGallery();
 </script>
 </body>
 </html>
