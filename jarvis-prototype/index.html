@@ -16,11 +16,10 @@
   kbd{font:600 11px/1 inherit;background:#fff;border:1px solid #c7ccd3;border-bottom-width:2px;border-radius:5px;padding:2px 6px}
 
   /* liquid layer: black shapes blurred + thresholded so they melt together */
-  #goo{position:fixed;inset:0;z-index:1;filter:url(#gooF);pointer-events:none}
+  #goo{position:fixed;inset:0;z-index:1;pointer-events:none}
   #goo div{position:absolute;background:var(--ink)}
-  #bar{left:50%;top:-24px;width:200px;height:40px;margin-left:-100px;border-radius:20px}
   #neck{border-radius:0}
-  #blob{border-radius:22px}
+  #blob{border-radius:22px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
 
   /* content layer (not blurred), follows the blob */
   #ui{position:fixed;z-index:2;color:var(--fg);cursor:pointer;user-select:none;touch-action:none}
@@ -41,6 +40,10 @@
   .wave i:nth-child(2){animation-delay:.1s}.wave i:nth-child(3){animation-delay:.2s}.wave i:nth-child(4){animation-delay:.3s}
   @keyframes talk{50%{height:14px}}
 
+  .split-row{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 16px;opacity:0;transition:opacity .2s;pointer-events:none}
+  #ui.split .split-row{opacity:1}
+  #ui.split .row{opacity:0!important}
+  .split-row span{color:#ff9f0a;font-weight:600;font-size:14px;font-variant-numeric:tabular-nums}
   .card{position:absolute;left:0;right:0;top:44px;bottom:0;padding:2px 18px 18px;opacity:0;transition:opacity .2s;overflow:hidden}
   #ui.data .card,#ui.widget .card{opacity:1;transition-delay:.15s}
   .said{color:#8e8e96;font-size:12.5px;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -79,17 +82,18 @@
   </filter>
 </svg>
 
-<div id="goo"><div id="bar"></div><div id="neck"></div><div id="blob"></div></div>
+<div id="goo"><div id="neck"></div><div id="blob"></div></div>
 
 <div id="ui" data-s="idle">
   <div class="row"><span class="light"></span><span class="label" id="label">Click to talk</span><span class="wave"><i></i><i></i><i></i><i></i></span></div>
+  <div class="split-row"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#ff9f0a" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6"/></svg><span id="splitTime">0:00</span></div>
   <div class="card" id="card"></div>
 </div>
 
 <form id="typed"><input id="typedIn" placeholder="Type what you'd say…" autocomplete="off"><button>Ask</button></form>
 
 <div class="hint">
-  <b>Hover</b> the black bar at the top · <b>click</b> it and talk (“weather in Budapest”, “set a 5 minute timer”, “what's on today”)<br>
+  <b>Hover</b> the black island at the top · <b>click</b> it and talk (“weather in Budapest”, “set a 5 minute timer”, “what's on today”)<br>
   <b>Pull it down hard</b> to snap it off into a widget · drag the widget back to the top to merge · no mic? press <kbd>T</kbd> to type
 </div>
 
@@ -105,31 +109,37 @@ let target = null, mode = "dock", hover = false, s = "idle", dataOpen = false, p
 const TEAR = 170;
 
 function dockBox() {
-  const cx = W() / 2;
-  if (dataOpen) return { x: cx - 200, y: 8, w: 400, h: cardHeight() + 44 };
-  if (s !== "idle") return { x: cx - 170, y: 8, w: 340, h: 44 };
-  if (hover) return { x: cx - 150, y: 8, w: 300, h: 44 };
-  return { x: cx - 100, y: -30, w: 200, h: 40 };     // tucked into the top edge
+  const cx = W() / 2, at = (w, h) => ({ x: cx - w / 2, y: 10, w, h });
+  if (dataOpen) return at(400, cardHeight() + 48);
+  if (s === "listening") return at(310, 54);
+  if (s === "speaking") return at(280, 48);
+  if (s === "thinking") return at(210, 40);
+  if (timerEnd) return at(hover ? 236 : 220, 38);   // split pill: icon left, countdown right
+  return hover ? at(148, 40) : at(126, 36);
 }
 function widgetBox() { return { x: widgetPos.x, y: widgetPos.y, w: 340, h: Math.max(250, cardHeight() + 44 + 92) }; }
-function cardHeight() { const c = $("card"); return c.firstElementChild ? Math.min(c.scrollHeight, 360) : 0; }
+function cardHeight() {   // height of the visible content only (not the card box itself, which would feed back)
+  let bottom = 0;
+  for (const el of $("card").children) if (el.offsetParent !== null) bottom = Math.max(bottom, el.offsetTop + el.offsetHeight);
+  return bottom ? Math.min(bottom + 16, 380) : 0;
+}
 
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(.033, (now - last) / 1000); last = now;
   if (!pulling) target = mode === "widget" ? widgetBox() : dockBox();
-  const k = pulling ? 520 : 210, c = pulling ? 34 : 17;
+  const k = pulling ? 520 : 300, c = pulling ? 34 : 24;      // smooth, slight overshoot
   for (const [p, v] of [["x", "vx"], ["y", "vy"], ["w", "vw"], ["h", "vh"]]) {
     box[v] += (k * (target[p] - box[p]) - c * box[v]) * dt; box[p] += box[v] * dt;
   }
   draw(); requestAnimationFrame(frame);
 }
 function draw() {
-  const r = mode === "widget" ? 30 : dataOpen ? 28 : 22;
+  const r = mode === "widget" ? 32 : dataOpen ? 36 : Math.min(box.h / 2, 30);
   Object.assign(blobEl.style, { left: box.x + "px", top: box.y + "px", width: box.w + "px", height: box.h + "px", borderRadius: r + "px" });
   Object.assign(ui.style, { left: box.x + "px", top: box.y + "px", width: box.w + "px", height: box.h + "px" });
   // neck: only while pulling — it thins as the blob moves away, then snaps
-  if (pulling && mode === "dock") {
+  if (false) {
     const top = 6, bottom = box.y + 6, len = Math.max(0, bottom - top);
     // hourglass: wide where it meets the bar and the blob, pinched in the middle like stretched honey
     const t = Math.min(1, len / TEAR), nw = 150 - 40 * t, waist = Math.max(4, 70 * (1 - t) ** 1.6);
@@ -141,7 +151,8 @@ function draw() {
     const poly = pts.map(([x, y]) => `${x}% ${y}%`).concat(pts.slice().reverse().map(([x, y]) => `${(100 - x).toFixed(1)}% ${y}%`)).join(",");
     Object.assign(neckEl.style, { display: "block", left: (box.x + box.w / 2 - nw / 2) + "px", top: top + "px", width: nw + "px", height: len + 10 + "px", clipPath: `polygon(${poly})` });
   } else neckEl.style.display = "none";
-  ui.classList.toggle("show", mode === "widget" || box.y > -2);
+  ui.classList.toggle("show", mode === "widget" || s !== "idle" || dataOpen || !!timerEnd);
+  ui.classList.toggle("split", mode === "dock" && !!timerEnd && s === "idle" && !dataOpen);
 }
 requestAnimationFrame(frame);
 
@@ -168,10 +179,11 @@ function onPull(e) {
     widgetPos = { x: target.x, y: target.y };
     return;
   }
-  const pull = Math.max(0, dy);                                // pull the blob down: it stretches
+  const pull = Math.max(0, dy);                                // pull down: the island stretches like rubber
   const stretch = Math.min(1, pull / TEAR);
   const base = dockBox();
-  target = { x: base.x + dx * .4 + base.w * .12 * stretch, y: base.y + pull, w: base.w * (1 - .24 * stretch), h: base.h + 6 * stretch };
+  const h = base.h + pull * .55, w = Math.max(110, base.w * (1 - .18 * stretch));
+  target = { x: W() / 2 - w / 2 + dx * .25, y: base.y + pull * .25, w, h };
   if (pull > TEAR) snapOff(e);
 }
 function snapOff(e) {
@@ -264,16 +276,18 @@ async function weather(city, said) {
       html: `<div class="tiles"><div class="tile"><small>Now</small><b>${now}°</b></div><div class="tile"><small>High / low</small><b>${hi}°/${lo}°</b></div><div class="tile"><small>Rain</small><b>${rain}%</b></div></div>` };
   } catch { return { said, answer: `I couldn't reach the weather service for ${city}.` }; }
 }
-let timerInt = null;
+let timerInt = null, timerEnd = 0;
 function timer(t, said) {
   const n = parseFloat(t.match(/(\d+(\.\d+)?)/)?.[1] || "5"), secs = Math.round(/second/.test(t) ? n : /hour/.test(t) ? n * 3600 : n * 60);
-  const end = Date.now() + secs * 1000;
+  const end = Date.now() + secs * 1000; timerEnd = end;
   clearInterval(timerInt);
   timerInt = setInterval(() => {
     const left = Math.max(0, Math.ceil((end - Date.now()) / 1000)), el = document.querySelector("#tLeft"), bar = document.querySelector("#tBar");
-    if (el) el.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+    const txt = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+    if (el) el.textContent = txt;
+    $("splitTime").textContent = txt;
     if (bar) bar.style.width = (100 * left / secs) + "%";
-    if (!left) { clearInterval(timerInt); renderCard({ said: "", answer: "Time's up." }); openData(); say("Pardon me, your timer is done."); }
+    if (!left) { clearInterval(timerInt); timerEnd = 0; renderCard({ said: "", answer: "Time's up." }); openData(); say("Pardon me, your timer is done."); }
   }, 250);
   return { said, answer: `Timer set for ${secs >= 60 ? Math.round(secs / 60) + " minutes" : secs + " seconds"}.`, html: `<div class="big" id="tLeft"></div><div class="bar2"><i id="tBar" style="width:100%"></i></div>` };
 }
