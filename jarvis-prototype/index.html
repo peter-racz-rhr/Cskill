@@ -32,7 +32,7 @@
   @media (prefers-reduced-motion:no-preference){.layer{filter:blur(6px);scale:.94;transition:opacity .22s var(--ease),filter .28s var(--ease),scale .4s linear(0, 0.45 15%, 1.08 35%, 0.97 55%, 1.01 75%, 1)}.layer.on{filter:none;scale:1}}
   #lStatus,#lTimer,#lMusic{bottom:0}
   .layer.on{opacity:1;pointer-events:auto;transition-delay:.05s}
-  #lHud{bottom:0}
+  #lHud,#lTask,#lNotif,#lDrop{bottom:0}
 
   /* status row (listening / thinking / hover) */
   .status{display:flex;align-items:center;gap:10px;padding:0 18px;height:100%}
@@ -142,11 +142,16 @@
   .notif .txt{flex:1;min-width:0}
   .notif .from{font-size:13.5px;font-weight:600;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .notif .msg{font-size:13px;color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .notif .when{font-size:12px;color:var(--muted);align-self:flex-start;margin-top:14px}
+  .notif .when{font-size:12px;color:var(--muted)}
   .count{position:absolute;right:12px;top:50%;translate:0 -50%;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--red);color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center;opacity:0;scale:.5;transition:opacity .2s,scale .35s linear(0, 0.45 15%, 1.08 35%, 0.97 55%, 1.01 75%, 1)}
   .count.on{opacity:1;scale:1}
   .nlist{list-style:none;margin-top:10px}
-  .nlist li{display:flex;gap:12px;align-items:center;padding:10px 0;border-top:.5px solid var(--line)}
+  .nlist li{display:flex;gap:12px;align-items:center;padding:10px 0;border-top:.5px solid var(--line);cursor:pointer;border-radius:10px;transition:background .15s}
+  .nlist li:hover{background:rgba(255,255,255,.04)}
+  .nfull{display:flex;gap:12px;align-items:flex-start;margin-top:4px}
+  .nfull .app{width:40px;height:40px;border-radius:10px}
+  .nfull .from{font-size:16px;font-weight:600;color:var(--fg)}
+  .nfull .msg{font-size:14px;line-height:1.5;color:var(--fg2);margin-top:2px;white-space:normal}
   .nlist .app{width:32px;height:32px;border-radius:8px}
   .nlist .app svg{width:17px;height:17px}
   .nlist .txt{flex:1;min-width:0}
@@ -287,7 +292,7 @@ function shape() {                               // which size + layer the islan
   if (s === "listening") return at(300, 48, "lStatus");
   if (s === "thinking") return at(240, 42, "lStatus");
   if (hud && performance.now() < hud.until) return at(220, 40, "lHud");
-  if (performance.now() < notifShow) return at(360, 60, "lNotif");                 // a notification drops in
+  if (performance.now() < notifShow) { if (hover) notifShow = Math.max(notifShow, performance.now() + 800); return at(360, 60, "lNotif"); }   // a notification drops in
   if (task && performance.now() < flashTask) return at(240, 44, "lTask");          // "Ready" / "Needs your OK" moment
   if (cardOpen) return at(400, contentH(), "lCard", 28);
   if (task && task.status !== "done") return hover || taskPinned ? at(400, contentTaskH(), "lCard", 28) : at(330, 44, "lTask");   // Claude working
@@ -360,6 +365,7 @@ addEventListener("pointerup", () => {
   if (!pulling) return;
   const p = pulling; pulling = null;
   if (!p.moved) {
+    if (mode === "dock" && performance.now() < notifShow && notifs[0]) { notifShow = 0; unread = Math.max(0, unread - 1); show(notifDetail(notifs[0])); return; }
     if (mode === "dock" && task && task.status !== "done") { taskPinned = !taskPinned; if (!taskPinned) $("card").dataset.task = ""; return; }
     if (mode === "dock" && unread && !cardOpen && s === "idle" && !task) { show(notifCenter()); unread = 0; return; }
     if (mode === "dock" || p.mic) talk();
@@ -726,9 +732,9 @@ const APPS = {
   claude: { bg: "#d97757", icon: '<path d="M12 4l1.5 5.5L19 8l-4 4 4 4-5.5-1.5L12 20l-1.5-5.5L5 16l4-4-4-4 5.5 1.5z"/>' },
 };
 const DEMO = [
-  { app: "messages", from: "Anna", msg: "Dinner Friday at 8? I booked the place we liked" },
-  { app: "mail", from: "GitHub", msg: "Build passed · Jarvis for Windows #7" },
-  { app: "calendar", from: "Design review", msg: "Starts in 10 minutes · Room 3" },
+  { app: "messages", from: "Anna", msg: "Dinner Friday at 8? I booked the place we liked", full: "Dinner Friday at 8? I booked the place we liked last time, the little Italian one near the river. They only had the table by the window left, so I grabbed it. Let me know if 8 is too early and I'll move it to 8:30." },
+  { app: "mail", from: "GitHub", msg: "Build passed · Jarvis for Windows #7", full: "Build passed · Jarvis for Windows #7. All 3 jobs finished in 3m 12s on branch ccr-49856555-cycj2h. The installer Jarvis-Setup-2.0.1.exe was uploaded to the release." },
+  { app: "calendar", from: "Design review", msg: "Starts in 10 minutes · Room 3", full: "Design review starts in 10 minutes in Room 3. Attendees: you, Anna, Mark and Zoe. Agenda: island animations, notification cards, and the music player." },
 ];
 let demoI = 0;
 function notify(n = DEMO[demoI++ % DEMO.length]) {
@@ -739,11 +745,23 @@ function notify(n = DEMO[demoI++ % DEMO.length]) {
   notifShow = performance.now() + 4200;
   $("live").textContent = `${n.from}: ${n.msg}`;
 }
+function notifDetail(n) {
+  const a = APPS[n.app], ago = Math.floor((Date.now() - n.at) / 60000);
+  const name = { messages: "Messages", mail: "Mail", calendar: "Calendar", claude: "Claude" }[n.app] || "Notification";
+  return { icon: "info", kicker: `${name} · ${ago < 1 ? "now" : ago + "m ago"}`, stay: true,
+    html: `<div class="nfull"><span class="app" style="background:${a.bg}"><svg viewBox="0 0 24 24">${a.icon}</svg></span><div style="flex:1;min-width:0"><div class="from">${esc(n.from)}</div><div class="msg">${esc(n.full || n.msg)}</div></div></div>`,
+    chips: [
+      ...(n.app === "messages" || n.app === "mail" ? [{ label: "Reply", run: () => { $("typedIn").value = `reply to ${n.from}: `; $("typed").classList.add("on"); $("typedIn").focus(); } }] : []),
+      { label: "Mark as read", run: () => { cardOpen = false; } },
+      { label: "Dismiss", run: () => { notifs = notifs.filter((x) => x !== n); cardOpen = false; } },
+    ] };
+}
 function notifCenter() {
   const ago = (t) => { const m = Math.floor((Date.now() - t) / 60000); return m < 1 ? "now" : m + "m"; };
   return { icon: "info", kicker: "Notifications", title: notifs.length ? `${notifs.length} notification${notifs.length > 1 ? "s" : ""}` : "You're all caught up",
-    html: notifs.length ? `<ul class="nlist">${notifs.map((n) => `<li><span class="app" style="background:${APPS[n.app].bg}"><svg viewBox="0 0 24 24">${APPS[n.app].icon}</svg></span><span class="txt"><div class="from" style="font-size:13.5px;font-weight:600;color:var(--fg)">${esc(n.from)}</div><div style="font-size:13px;color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(n.msg)}</div></span><span style="font-size:12px;color:var(--muted)">${ago(n.at)}</span></li>`).join("")}</ul>` : "",
-    chips: notifs.length ? [{ label: "Clear all", run: () => { notifs = []; cardOpen = false; } }] : [], stay: true };
+    html: notifs.length ? `<ul class="nlist">${notifs.map((n, i) => `<li data-n="${i}"><span class="app" style="background:${APPS[n.app].bg}"><svg viewBox="0 0 24 24">${APPS[n.app].icon}</svg></span><span class="txt"><div class="from" style="font-size:13.5px;font-weight:600;color:var(--fg)">${esc(n.from)}</div><div style="font-size:13px;color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(n.msg)}</div></span><span style="font-size:12px;color:var(--muted)">${ago(n.at)}</span></li>`).join("")}</ul>` : "",
+    chips: notifs.length ? [{ label: "Clear all", run: () => { notifs = []; cardOpen = false; } }] : [], stay: true,
+    after: () => document.querySelectorAll("#card .nlist li").forEach((li) => (li.onclick = () => show(notifDetail(notifs[+li.dataset.n])))) };
 }
 
 // ---------------- gallery ----------------
@@ -779,6 +797,7 @@ const CARDS = [
   ["Safety", "Asks before anything risky", "delete my old downloads", () => { const a = confirmRisky("delete my old downloads", "delete my old downloads"); a.chips = [{ label: "Cancel" }, { label: "Delete" }]; return a; }],
   ["Shelf", "File shelf", "drag files onto the page", () => { const keep = shelf; shelf = [{ name: "contract-final.pdf", size: "1.2 MB" }, { name: "IMG_2041.jpg", size: "3.4 MB" }]; const a = shelfCard(""); shelf = keep; return a; }],
   ["Claude", "Task in progress (hover the island)", "research the best laptop for students", () => ({ icon: "info", kicker: "Claude is working", said: "research the best laptop for students", title: "Research the best laptop for students", html: `<ul class="steps2"><li class="done"><span class="ic">✓</span>Understanding the request</li><li class="done"><span class="ic">✓</span>Searching the web</li><li class="cur"><span class="ic">${SPIN}</span>Comparing 6 sources</li><li><span class="ic">○</span>Writing the summary</li></ul><div class="prog"><i style="width:50%;background:#d97757"></i></div>`, chips: [{ label: "Cancel" }] })],
+  ["Notifications", "Notification, read in full (click it)", "", () => notifDetail({ ...DEMO[0], at: Date.now() })],
   ["Notifications", "Notification list", "", () => { const keep = notifs; notifs = DEMO.map((d, i) => ({ ...d, at: Date.now() - i * 4 * 60000 })); const a = notifCenter(); notifs = keep; return a; }],
   ["Errors", "When something fails", "", () => ({ icon: "info", kicker: "Couldn't finish", title: "No internet connection", body: "I'll try again when you're back online.", chips: [{ label: "Retry" }] })],
   ["Timer", "Time's up", "", () => ({ icon: "timer", kicker: "Timer", title: "Time's up" })],
