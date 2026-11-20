@@ -16,6 +16,8 @@ import fs from "node:fs/promises";
 import http from "node:http";
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
+import fsSyncMod from "node:fs";
+const require_fs = () => fsSyncMod;
 import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
 import { ClaudeCodeSession, startMcpServer, findClaude, openSignInTerminal, claudeAuthStatus } from "./claude-code.js";
@@ -379,12 +381,20 @@ function startFullscreenWatch() {
 // It posts to this listener on 127.0.0.1 only; responses are empty so nothing is added to Claude's context.
 const HOOK_PORT = 47823;
 const HOOK_EVENTS = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Notification", "Stop", "SessionEnd"];
-const hookCmd = (ev) => `curl -s -m 2 -X POST --data-binary @- http://127.0.0.1:${HOOK_PORT}/cc-hook/${ev} || exit 0`;
+// On Windows Claude Code runs hook commands in PowerShell unless Git Bash is installed, where `curl` and
+// `|| exit 0` mean something else. So there we use the exec form: Windows' own curl.exe, started
+// directly with its arguments and no shell in between. It works the same with or without Git Bash.
+const CURL_EXE = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "curl.exe");
+function hookEntry(url, maxS, timeout) {
+  if (IS_WIN) return { type: "command", command: CURL_EXE, args: ["-s", "-m", String(maxS), "-X", "POST", "--data-binary", "@-", url], timeout };
+  return { type: "command", command: `curl -s -m ${maxS} -X POST --data-binary @- ${url} || exit 0`, timeout };
+}
+const isJarvisHook = (h, mark) => JSON.stringify(h || {}).includes(mark);
 // Permission requests: Claude Code waits on this curl while the island shows Allow / Deny. We answer
 // with the hook's decision JSON; an empty answer (timeout, "Answer in Claude", Jarvis off) means
 // Claude Code shows its own permission dialog as usual.
 const PERM_HOLD_S = 110;
-const permCmd = () => `curl -s -m ${PERM_HOLD_S + 5} -X POST --data-binary @- http://127.0.0.1:${HOOK_PORT}/cc-perm || exit 0`;
+
 const pendingPerms = new Map();   // id → { res, timer }
 function answerPerm(id, decision, message) {
   const p = pendingPerms.get(id); if (!p) return;
@@ -397,6 +407,41 @@ function answerPerm(id, decision, message) {
   send("cc:permDone", { id, decision });
 }
 ipcMain.on("cc:permAnswer", (_e, { id, decision }) => answerPerm(id, decision));
+// Token use per session, read from the session's transcript (each assistant message carries its usage).
+// Read incrementally from where we stopped, so it stays cheap on long sessions.
+const hookSeen = new Set(), usageBySession = new Map();
+function sessionUsage(id, file) {
+  let u = usageBySession.get(id);
+  if (!u) { u = { offset: 0, tokens: 0, model: "", ids: new Set(), rest: "" }; usageBySession.set(id, u); }
+  if (!file) return u;
+  try {
+    const fsSync = require_fs();
+    const size = fsSync.statSync(file).size;
+    if (size < u.offset) { u.offset = 0; u.tokens = 0; u.ids.clear(); u.rest = ""; }
+    if (size > u.offset) {
+      const fd = fsSync.openSync(file, "r");
+      try {
+        const buf = Buffer.alloc(Math.min(size - u.offset, 32e6));
+        fsSync.readSync(fd, buf, 0, buf.length, u.offset);
+        u.offset += buf.length;
+        const lines = (u.rest + buf.toString("utf8")).split("\n");
+        u.rest = lines.pop();
+        for (const line of lines) {
+          if (!line.includes('"usage"')) continue;
+          let e; try { e = JSON.parse(line); } catch { continue; }
+          const msg = e.message, us = msg?.usage;
+          if (e.type !== "assistant" || !us) continue;
+          const key = msg.id || e.requestId || e.uuid;
+          if (key && u.ids.has(key)) continue;   // one message can span several lines
+          if (key) u.ids.add(key);
+          u.tokens += (us.input_tokens || 0) + (us.output_tokens || 0) + (us.cache_creation_input_tokens || 0);
+          if (msg.model) u.model = msg.model;
+        }
+      } finally { fsSync.closeSync(fd); }
+    }
+  } catch {}
+  return u;
+}
 let hookServer = null;
 function startHookListener() {
   if (hookServer) return;
@@ -428,7 +473,9 @@ function startHookListener() {
       let j; try { j = JSON.parse(body); } catch { return; }
       if (cc?.sessionId && j.session_id === cc.sessionId) return;   // Jarvis's own background Claude: already shown
       const cwd = j.cwd || "";
-      send("cc:event", {
+      if (!hookSeen.has(j.session_id)) { hookSeen.add(j.session_id); logLine("hooks", `receiving events from a Claude Code session (${m[1]})`); }
+      const usage = sessionUsage(j.session_id, j.transcript_path);
+      send("cc:event", { tokens: usage.tokens, model: usage.model,
         event: m[1], session: j.session_id, project: cwd.split(/[\\/]/).filter(Boolean).pop() || "Claude",
         tool: j.tool_name, input: j.tool_input, prompt: j.prompt ? String(j.prompt).slice(0, 300) : undefined,
         message: j.message ? String(j.message).slice(0, 300) : undefined, kind: j.notification_type,
@@ -448,14 +495,14 @@ async function setClaudeHooks(on) {
   try { await fs.copyFile(file, file + ".jarvis-backup", fs.constants?.COPYFILE_EXCL ?? 1); } catch {}
   cfg.hooks ||= {};
   for (const ev of HOOK_EVENTS) {
-    const kept = (cfg.hooks[ev] || []).filter((g) => !(g.hooks || []).some((h) => String(h.command || "").includes("/cc-hook/")));
-    cfg.hooks[ev] = on ? [...kept, { matcher: "*", hooks: [{ type: "command", command: hookCmd(ev), timeout: 5 }] }] : kept;
+    const kept = (cfg.hooks[ev] || []).filter((g) => !(g.hooks || []).some((h) => isJarvisHook(h, "/cc-hook/")));
+    cfg.hooks[ev] = on ? [...kept, { matcher: "*", hooks: [hookEntry(`http://127.0.0.1:${HOOK_PORT}/cc-hook/${ev}`, 2, 5)] }] : kept;
     if (!cfg.hooks[ev].length) delete cfg.hooks[ev];
   }
   {
     const ev = "PermissionRequest";
-    const kept = (cfg.hooks[ev] || []).filter((g) => !(g.hooks || []).some((h) => String(h.command || "").includes("/cc-perm")));
-    cfg.hooks[ev] = on && settings.approveFromIsland ? [...kept, { matcher: "*", hooks: [{ type: "command", command: permCmd(), timeout: PERM_HOLD_S + 10 }] }] : kept;
+    const kept = (cfg.hooks[ev] || []).filter((g) => !(g.hooks || []).some((h) => isJarvisHook(h, "/cc-perm")));
+    cfg.hooks[ev] = on && settings.approveFromIsland ? [...kept, { matcher: "*", hooks: [hookEntry(`http://127.0.0.1:${HOOK_PORT}/cc-perm`, PERM_HOLD_S + 5, PERM_HOLD_S + 10)] }] : kept;
     if (!cfg.hooks[ev].length) delete cfg.hooks[ev];
   }
   if (!Object.keys(cfg.hooks).length) delete cfg.hooks;

@@ -90,6 +90,7 @@ function frame(now) {
   for (const [p, v] of [["x", "vx"], ["y", "vy"], ["w", "vw"], ["h", "vh"]]) { box[v] += (k * (target[p] - box[p]) - c * box[v]) * dt; box[p] += box[v] * dt; }
   Object.assign(island.style, { left: box.x + "px", top: box.y + "px", width: box.w + "px", height: box.h + "px", borderRadius: sh.bump ? "0 0 50% 50% / 0 0 64% 64%" : Math.min(sh.r, box.h / 2) + "px" });
   island.classList.toggle("bump", !!sh.bump);
+  island.classList.toggle("busy", !!sh.bump && (!!activeExt() || (task && task.status !== "done")));   // Claude working while tucked: an orange dot
   for (const id of ["lStatus", "lTimer", "lMusic", "lCard", "lHud", "lDrop", "lTask", "lNotif", "lMeet", "lDl"]) $(id).classList.toggle("on", id === sh.layer);
   curLayer = sh.layer;
   if (sh.layer === "lMeet") setRow("meetRow", meetRowHtml(meetingSoon()));
@@ -489,15 +490,17 @@ J.onCcEvent((e) => {
   const now = Date.now();
   if (e.event === "SessionEnd") { ext.delete(e.session); return; }
   if (e.event === "UserPromptSubmit") {
-    x = { id: e.session, project: e.project, prompt: e.prompt || "", steps: [{ label: "Thinking", done: false }], status: "working", start: now, updated: now };
+    x = { id: e.session, project: e.project, prompt: e.prompt || "", steps: [{ label: "Thinking", done: false }], status: "working", start: now, updated: now, tokens0: e.tokens || 0, tokens: e.tokens || 0, model: e.model };
     ext.set(e.session, x); return;
   }
   if (!x) {                                     // joined mid-task (Jarvis started after the prompt)
     if (!["PreToolUse", "PostToolUse", "Notification"].includes(e.event)) return;
-    x = { id: e.session, project: e.project, prompt: "", steps: [], status: "working", start: now, updated: now };
+    x = { id: e.session, project: e.project, prompt: "", steps: [], status: "working", start: now, updated: now, tokens0: e.tokens || 0, tokens: e.tokens || 0 };
     ext.set(e.session, x);
   }
   x.updated = now;
+  if (e.tokens != null) x.tokens = e.tokens;
+  if (e.model) x.model = e.model;
   if (e.event === "PreToolUse") { if (x.status === "approval") x.status = "working"; pushStep(x, stepLabel(e.tool, e.input || {}), e.tool); }
   if (e.event === "PostToolUse") { x.status = "working"; const st = [...x.steps].reverse().find((s) => s.name === e.tool && !s.done); if (st) st.done = true; }
   if (e.event === "Notification") {
@@ -509,7 +512,7 @@ J.onCcEvent((e) => {
   if (e.event === "Stop") {
     x.status = "done"; x.steps.forEach((s) => (s.done = true));
     extDone = x; extFlash = performance.now() + 2200; rowHtml = "";
-    const took = fmt(Math.floor((now - x.start) / 1000));
+    const took = fmt(Math.floor((now - x.start) / 1000)) + (turnTokens(x) ? ` · ${kTok(turnTokens(x))} tokens` : "");
     try { const log = JSON.parse(localStorage.getItem("jarvis-cc-log") || "[]"); log.unshift({ project: x.project, prompt: x.prompt, last: (e.last || "Done").split("\n")[0].slice(0, 160), at: now }); localStorage.setItem("jarvis-cc-log", JSON.stringify(log.slice(0, 30))); } catch {}
     notify({ app: "claude", from: `Claude finished · ${x.project}`, msg: (e.last || "Done").split("\n")[0], full: e.last || "Done",
       answer: { icon: "claude", kicker: `Claude Code · ${x.project} · ${took}`, said: x.prompt, html: `<div class="body md">${md(e.last || "Done.")}</div>`, stay: true } });
@@ -525,11 +528,15 @@ function extRowHtml() {
   const lead = x.status === "done" ? '<span class="badge ok">✓</span>' : x.status === "approval" ? '<span class="badge wait">!</span>' : SPIN;
   const label = x.status === "done" ? "Done" : x.status === "approval" ? "Needs your OK" : (x.steps.at(-1)?.label || "Working");
   const more = [...ext.values()].filter((e) => e.status === "working" || e.status === "approval").length - 1;
-  return `${lead}<span class="who">${esc(clip(x.project, 18))}</span><span class="what">${esc(label)}</span><span class="step">${more > 0 ? `+${more}` : x.status === "working" ? fmt(Math.floor((Date.now() - x.start) / 1000)) : ""}</span>`;
+  const tok = turnTokens(x) ? ` · ${kTok(turnTokens(x))}` : "";
+  return `${lead}<span class="who">${esc(clip(x.project, 18))}</span><span class="what">${esc(label)}</span><span class="step">${more > 0 ? `+${more}` : x.status === "working" ? fmt(Math.floor((Date.now() - x.start) / 1000)) + tok : ""}</span>`;
 }
+// tokens this request has used so far (Claude Code's own count, from the session transcript)
+const turnTokens = (x) => Math.max(0, (x.tokens || 0) - (x.tokens0 || 0));
+const kTok = (n) => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1000 ? (n / 1000).toFixed(n >= 1e4 ? 0 : 1) + "k" : String(n);
 function renderExtCard(force) {
   const x = activeExt(); if (!x) return;
-  if (!force && $("card").dataset.task === "ext" && $("card").dataset.ext === x.id + x.steps.length + x.status + (x.perm?.id || "")) return;
+  if (!force && $("card").dataset.task === "ext" && $("card").dataset.ext === x.id + x.steps.length + x.status + (x.perm?.id || "") + kTok(turnTokens(x))) return;
   const steps = `<ul class="steps2">${x.steps.slice(-6).map((s, i, a) => { const st = s.done ? "done" : i === a.length - 1 ? "cur" : ""; return `<li class="${st}"><span class="ic">${st === "done" ? "✓" : SPIN}</span>${esc(s.label)}</li>`; }).join("")}</ul>`;
   if (x.status === "approval" && x.perm) {
     const p = x.perm;
@@ -539,9 +546,10 @@ function renderExtCard(force) {
     $("card").dataset.task = "ext"; $("card").dataset.ext = x.id + x.steps.length + x.status + p.id;
     return;
   }
-  render({ icon: "claude", kicker: `Claude Code · ${x.project}`, said: x.prompt, title: x.status === "approval" ? "Needs your OK" : "Working",
+  const meta = `${fmt(Math.floor((Date.now() - x.start) / 1000))}${turnTokens(x) ? ` · ${kTok(turnTokens(x))} tokens` : ""}${x.model ? ` · ${String(x.model).replace(/^claude-/, "").replace(/-\d.*$/, "").replace(/^\w/, (c) => c.toUpperCase())}` : ""}`;
+  render({ icon: "claude", kicker: `Claude Code · ${x.project}`, said: x.prompt, title: x.status === "approval" ? "Needs your OK" : `Working · ${meta}`,
     html: x.status === "approval" ? `<div class="body">${esc(x.message || "Claude is waiting for your permission.")}</div><div class="note">Answer it in Claude Code.</div>` : steps });
-  $("card").dataset.task = "ext"; $("card").dataset.ext = x.id + x.steps.length + x.status;
+  $("card").dataset.task = "ext"; $("card").dataset.ext = x.id + x.steps.length + x.status + kTok(turnTokens(x));
 }
 // ---- Allow / Deny for Claude Code's permission requests (PermissionRequest hook)
 function permTitle(p) {

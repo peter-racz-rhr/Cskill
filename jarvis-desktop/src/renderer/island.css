@@ -252,3 +252,4 @@
   #island.bump{box-shadow:0 4px 12px rgba(0,0,0,.35),inset 0 -1px 0 rgba(255,255,255,.22),0 0 0 .5px rgba(255,255,255,.28)}
   #island.bump .layer{opacity:0!important}
   #island.bump .count{opacity:0!important}
+  #island.bump.busy::after{content:"";position:absolute;left:50%;bottom:5px;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:#d97757;box-shadow:0 0 8px #d97757;animation:pulse 1.2s ease-in-out infinite}
