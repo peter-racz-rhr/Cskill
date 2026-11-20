@@ -1,7 +1,7 @@
 {
   "name": "jarvis-desktop",
   "productName": "Jarvis",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "Jarvis: a liquid voice assistant for Windows, powered by your Claude account. Talk to it, show it your screen, let it do things.",
   "main": "src/main.js",
   "type": "module",

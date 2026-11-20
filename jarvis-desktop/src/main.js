@@ -378,31 +378,58 @@ function registerHotkeys() {
 }
 
 // ---------------------------------------------------------------- screen
-async function captureScreen() {
-  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-  const { width, height } = display.size;
-  const scale = Math.min(1, 1568 / Math.max(width, height));
+// All monitors, left to right. Each screenshot is labelled "Screen N" so Claude can say which one it means.
+function orderedDisplays() {
+  return screen.getAllDisplays().sort((a, b) => a.bounds.x - b.bounds.x || a.bounds.y - b.bounds.y);
+}
+async function captureScreens(only) {
+  const displays = orderedDisplays();
+  const primary = screen.getPrimaryDisplay().id, cursor = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id;
+  const biggest = displays.reduce((m, d) => Math.max(m, d.size.width, d.size.height), 0);
+  const scale = Math.min(1, 1568 / biggest);
   const sources = await desktopCapturer.getSources({
     types: ["screen"],
-    thumbnailSize: { width: Math.round(width * scale), height: Math.round(height * scale) },
+    thumbnailSize: { width: Math.round(biggest * scale), height: Math.round(biggest * scale) },
   });
-  const src = sources.find((s) => s.display_id === String(display.id)) || sources[0];
-  if (!src) throw new Error("No screen available to capture");
-  const img = src.thumbnail.getSize();
-  lastShot = { display, w: img.width, h: img.height };
-  return { data: src.thumbnail.toJPEG(80).toString("base64"), label: `display (screenshot is ${img.width}×${img.height} px; give coordinates in these pixels)` };
+  if (!sources.length) throw new Error("No screen available to capture");
+  const shots = [];
+  displays.forEach((display, i) => {
+    if (only && only !== i + 1) return;
+    // match by id; Windows sometimes leaves display_id empty, then fall back to the same position in the list
+    const src = sources.find((x) => x.display_id && x.display_id === String(display.id)) || sources[i] || sources[0];
+    let img = src.thumbnail;
+    const want = { width: Math.round(display.size.width * scale), height: Math.round(display.size.height * scale) };
+    const got = img.getSize();
+    if (got.width !== want.width || got.height !== want.height) img = img.resize(want);
+    const size = img.getSize();
+    lastShots[i + 1] = { display, w: size.width, h: size.height };
+    const tags = [display.id === primary ? "main" : "", display.id === cursor ? "mouse is here" : "", displays.length > 1 ? (i === 0 ? "leftmost" : i === displays.length - 1 ? "rightmost" : "middle") : ""].filter(Boolean).join(", ");
+    shots.push({ n: i + 1, data: img.toJPEG(80).toString("base64"),
+      label: `Screen ${i + 1}${tags ? ` (${tags})` : ""}, ${size.width}×${size.height} px` });
+  });
+  return shots;
+}
+// image + caption blocks for one or more screenshots
+function shotBlocks(shots, prefix = "") {
+  const out = [];
+  for (const sh of shots) {
+    out.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: sh.data } });
+    out.push({ type: "text", text: `${prefix}${sh.label}. Give coordinates in this screenshot's pixels and pass screen: ${sh.n}.` });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- cursor overlay + mouse/keyboard control
-let lastShot = null;          // maps screenshot pixels back to the screen
+const lastShots = {};         // screen number → how to map that screenshot's pixels back to the screen
 let cursorWin = null;
 const input = new InputDriver();
 let controlGranted = false;   // granted once per task, reset when the turn ends
 let injecting = false;        // true while we send synthetic keys (so our own Esc doesn't abort)
 
-function shotToScreen(x, y) {
-  if (!lastShot) throw new Error("Take a screenshot with look_at_screen first, then use its pixel coordinates.");
-  const { display, w, h } = lastShot, b = display.bounds;
+function shotToScreen(x, y, n) {
+  const shot = lastShots[n || 1] || (n ? null : Object.values(lastShots)[0]);
+  if (!shot) throw new Error(n ? `No screenshot of screen ${n} yet: call look_at_screen first.` : "Take a screenshot with look_at_screen first, then use its pixel coordinates.");
+  const { display, w, h } = shot, b = display.bounds;
   const dip = { x: Math.round(b.x + (x / w) * b.width), y: Math.round(b.y + (y / h) * b.height) };
   const phys = IS_WIN ? screen.dipToScreenPoint(dip) : dip;
   return { dip, phys, display };
@@ -424,8 +451,8 @@ function ensureCursorWindow(display) {
   return cursorWin;
 }
 
-async function showCursor(x, y, text, { click = false, holdMs = 4000 } = {}) {
-  const { dip, display } = shotToScreen(x, y);
+async function showCursor(x, y, text, { click = false, holdMs = 4000, screen: n } = {}) {
+  const { dip, display } = shotToScreen(x, y, n);
   const w = ensureCursorWindow(display);
   if (w.webContents.isLoading()) await new Promise((r) => w.webContents.once("did-finish-load", r));
   w.webContents.send("cursor", { x: dip.x - display.bounds.x, y: dip.y - display.bounds.y, text, click, holdMs });
@@ -453,8 +480,8 @@ async function computerAction(a) {
   const needsXY = ["click", "double_click", "right_click", "move", "scroll", "drag"].includes(a.action);
   let p = null;
   if (needsXY) {
-    p = shotToScreen(a.x, a.y);
-    await showCursor(a.x, a.y, a.label || "", { click: a.action.includes("click"), holdMs: 2500 });
+    p = shotToScreen(a.x, a.y, a.screen);
+    await showCursor(a.x, a.y, a.label || "", { click: a.action.includes("click"), holdMs: 2500, screen: a.screen });
     await new Promise((r) => setTimeout(r, 560)); // let the user see where it's going
   }
   injecting = true;
@@ -464,7 +491,7 @@ async function computerAction(a) {
       case "double_click": await input.click(p.phys.x, p.phys.y, 0, 2); break;
       case "right_click": await input.click(p.phys.x, p.phys.y, 1, 1); break;
       case "move": await input.move(p.phys.x, p.phys.y); break;
-      case "drag": { const q = shotToScreen(a.to_x, a.to_y); await input.drag(p.phys.x, p.phys.y, q.phys.x, q.phys.y); break; }
+      case "drag": { const q = shotToScreen(a.to_x, a.to_y, a.screen); await input.drag(p.phys.x, p.phys.y, q.phys.x, q.phys.y); break; }
       case "scroll": await input.scroll(p.phys.x, p.phys.y, a.amount || -3); break;
       case "type": await input.type(a.text || ""); break;
       case "key": await input.key(a.keys || ""); break;
@@ -473,11 +500,8 @@ async function computerAction(a) {
     }
   } finally { setTimeout(() => (injecting = false), 150); }
   await new Promise((r) => setTimeout(r, a.action === "wait" ? Math.min(a.amount || 1, 10) * 1000 : 700));
-  const shot = await captureScreen();
-  return [
-    { type: "image", source: { type: "base64", media_type: "image/jpeg", data: shot.data } },
-    { type: "text", text: `Done: ${a.action}. New screenshot of the ${shot.label}. Check it worked before the next step.` },
-  ];
+  const target = a.screen || (p ? orderedDisplays().findIndex((d) => d.id === p.display.id) + 1 : 0) || undefined;
+  return shotBlocks(await captureScreens(target), `Done: ${a.action}. New screenshot: `);
 }
 
 // ---------------------------------------------------------------- shell helpers
@@ -531,17 +555,18 @@ const s = (props, required = Object.keys(props)) => ({ type: "object", propertie
 const TOOLS = [
   { type: "web_search_20260209", name: "web_search", max_uses: 5 },
   { type: "web_fetch_20260209", name: "web_fetch", max_uses: 5 },
-  { name: "look_at_screen", strict: true,
-    description: "Take a screenshot of the user's current screen and look at it. Use whenever the user refers to what they are looking at (this, here, this error, this page, my screen) or when seeing the screen would help.",
-    input_schema: s({}) },
+  { name: "look_at_screen",
+    description: "Take screenshots of the user's monitors and look at them. With several monitors you get one labelled image per screen (Screen 1, Screen 2… left to right; the label says which is the main one and where the mouse is); pass screen to look at just one. Use it whenever the user refers to what they're looking at (this, here, this error, my screen, my second monitor).",
+    input_schema: { type: "object", properties: { screen: { type: "integer", description: "Optional: only this screen number" } }, additionalProperties: false } },
   { name: "point_at",
     description: "Show the user where something is: moves Jarvis's own glowing cursor (not the real mouse) to a spot with a short label. x, y are pixel coordinates in the most recent screenshot. Use this to show things without touching anything.",
-    input_schema: { type: "object", properties: { x: { type: "integer" }, y: { type: "integer" }, label: { type: "string", description: "Short caption, e.g. 'Settings is here'" } }, required: ["x", "y", "label"], additionalProperties: false } },
+    input_schema: { type: "object", properties: { x: { type: "integer" }, y: { type: "integer" }, screen: { type: "integer", description: "Which screen the coordinates are on (from the screenshot label)" }, label: { type: "string", description: "Short caption, e.g. 'Settings is here'" } }, required: ["x", "y", "label"], additionalProperties: false } },
   { name: "computer",
     description: "Use the real mouse and keyboard to do something on screen for the user (only when they asked you to do or edit something). x, y (and to_x, to_y for drag) are pixel coordinates in the most recent screenshot. Each call returns a fresh screenshot so you can check the result. The user is asked once per task to allow control and can press Esc to stop.",
     input_schema: { type: "object", properties: {
       action: { type: "string", enum: ["click", "double_click", "right_click", "move", "drag", "scroll", "type", "key", "wait"] },
       x: { type: "integer" }, y: { type: "integer" }, to_x: { type: "integer" }, to_y: { type: "integer" },
+      screen: { type: "integer", description: "Which screen x, y are on (from the screenshot label)" },
       text: { type: "string", description: "For type" },
       keys: { type: "string", description: "For key, e.g. 'enter', 'ctrl+s', 'alt+tab', 'win+d'" },
       amount: { type: "integer", description: "For scroll: notches, negative = down. For wait: seconds" },
@@ -609,15 +634,10 @@ async function systemStatus() {
 
 async function runTool(name, input) {
   switch (name) {
-    case "look_at_screen": {
-      const shot = await captureScreen();
-      return [
-        { type: "image", source: { type: "base64", media_type: "image/jpeg", data: shot.data } },
-        { type: "text", text: `Screenshot of the user's ${shot.label}, taken just now.` },
-      ];
-    }
+    case "look_at_screen":
+      return shotBlocks(await captureScreens(input.screen), "Taken just now: ");
     case "point_at":
-      await showCursor(input.x, input.y, input.label, { holdMs: 6000 });
+      await showCursor(input.x, input.y, input.label, { holdMs: 6000, screen: input.screen });
       return "Pointed it out to the user.";
     case "computer":
       return computerAction(input);
@@ -723,9 +743,7 @@ async function chat({ text, withScreen }) {
   const content = [{ type: "text", text: context }];
   if (withScreen) {
     try {
-      const shot = await captureScreen();
-      content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: shot.data } });
-      content.push({ type: "text", text: "(Attached: a screenshot of the user's screen right now.)" });
+      content.push(...shotBlocks(await captureScreens(), "Attached, the user's screen right now: "));
     } catch (e) { content.push({ type: "text", text: `(Screen capture failed: ${e.message})` }); }
   }
   content.push({ type: "text", text });
