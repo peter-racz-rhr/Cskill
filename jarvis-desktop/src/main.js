@@ -98,7 +98,7 @@ async function saveSettings() {
   await fs.writeFile(path.join(USER_DIR(), "settings.json"),
     JSON.stringify({ settings, apiKey: stored, encrypted: enc, secrets: sec }, null, 2));
 }
-const SETUP_VERSION = 4;   // 4: the big animated onboarding window
+const SETUP_VERSION = 5;   // 4: the big animated onboarding window
 const publicSettings = async () => {
   const claudePath = await findClaude();
   return {
@@ -244,6 +244,7 @@ ipcMain.handle("pc:openPath", async (_e, p) => {
 // ---- now playing: read the current Windows media session (Spotify, YouTube in a browser, …)
 const MEDIA_PS = `
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 $asTask = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1' })[0]
 function Await($op, [Type]$t) { $task = $asTask.MakeGenericMethod($t).Invoke($null, @($op)); $task.Wait(-1) | Out-Null; $task.Result }
@@ -325,6 +326,7 @@ function startMediaWatch() {
 // screen where the island sits (YouTube full screen, a maximized Chrome…), the island tucks away.
 const FG_PS = `
 $ErrorActionPreference = 'SilentlyContinue'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::InputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8
 Add-Type @'
 using System; using System.Runtime.InteropServices; using System.Text;
 public static class JFg {
@@ -856,13 +858,16 @@ async function computerAction(a) {
 }
 
 // ---------------------------------------------------------------- shell helpers
+// PowerShell writes in the old console code page by default, which mangles á, ő, ű…; make it UTF-8
+const UTF8_PS = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; ";
 function runShell(command, timeoutMs = 60000) {
   return new Promise((resolve) => {
     const child = IS_WIN
-      ? spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", command], { windowsHide: true })
+      ? spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", UTF8_PS + command], { windowsHide: true })
       : spawn("bash", ["-lc", command]);
     let out = "", err = "";
     const timer = setTimeout(() => { child.kill(); err += "\n[timed out]"; }, timeoutMs);
+    child.stdout.setEncoding("utf8"); child.stderr.setEncoding("utf8");   // never split an á across two chunks
     child.stdout.on("data", (d) => (out += d));
     child.stderr.on("data", (d) => (err += d));
     child.on("close", (code) => {
