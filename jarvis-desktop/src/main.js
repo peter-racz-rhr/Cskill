@@ -191,6 +191,7 @@ ipcMain.on("island:menu", () => {
   Menu.buildFromTemplate([
     { label: "Settings", click: () => openPanel("settings") },
     { label: "Memory", click: () => openPanel("memory") },
+    { label: "Run setup again", click: () => openOnboarding() },
     { type: "separator" },
     { label: "Today", click: () => send("island:show", "briefing") },
     { label: "Calendar", click: () => send("island:show", "calendar") },
@@ -581,7 +582,8 @@ function closePanel() { panelView = null; if (panelWin && !panelWin.isDestroyed(
 ipcMain.on("panel:resize", (_e, h) => { if (panelWin && !panelWin.isDestroyed()) panelWin.setSize(PANEL_W, Math.min(Math.max(80, Math.round(h)), 640)); });
 ipcMain.on("panel:close", () => closePanel());
 // ---- onboarding: a big animated window; at the end you drag Jarvis out of it to the top of the screen
-let onboardWin = null;
+let onboardWin = null, quitting = false;
+app.on("before-quit", () => { quitting = true; });
 function openOnboarding() {
   if (onboardWin && !onboardWin.isDestroyed()) { onboardWin.show(); onboardWin.focus(); return; }
   const { workArea } = screen.getPrimaryDisplay();
@@ -591,7 +593,8 @@ function openOnboarding() {
     backgroundColor: "#00000000", title: "Welcome to Jarvis", webPreferences: prefs() });
   onboardWin.loadFile(path.join(here, "renderer", "onboard.html"));
   onboardWin.once("ready-to-show", () => { onboardWin.show(); onboardWin.focus(); });
-  onboardWin.on("closed", () => { onboardWin = null; if ((settings.setupDone || 0) < SETUP_VERSION) finishSetup(false); });
+  // closing the window yourself skips setup; quitting Jarvis halfway doesn't count as done
+  onboardWin.on("closed", () => { onboardWin = null; if (!quitting && (settings.setupDone || 0) < SETUP_VERSION) finishSetup(false); });
   if (islandWin?.isVisible() && (settings.setupDone || 0) < SETUP_VERSION) islandWin.hide();
 }
 async function finishSetup(snapped) {
