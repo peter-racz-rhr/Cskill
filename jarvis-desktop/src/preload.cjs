@@ -31,6 +31,13 @@ contextBridge.exposeInMainWorld("jarvis", {
   onToggleHide: on("island:toggleHide"),
   onShow: on("island:show"),
   onAutoHide: on("island:autoHide"),
+  onCarry: on("island:carry"),
+  onSnap: on("island:snap"),
+  // onboarding window
+  onboardGrab: () => ipcRenderer.send("onboard:grab"),
+  onboardDrop: () => ipcRenderer.invoke("onboard:drop"),
+  onboardPlace: (from) => ipcRenderer.invoke("onboard:place", from),
+  onboardSkip: () => ipcRenderer.send("onboard:skip"),
   mediaKey: (action) => ipcRenderer.send("pc:mediaKey", action),
   openExternal: (url) => ipcRenderer.send("pc:openExternal", url),
   openPath: (p) => ipcRenderer.invoke("pc:openPath", p),

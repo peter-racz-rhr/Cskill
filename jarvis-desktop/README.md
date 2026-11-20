@@ -8,7 +8,7 @@ A black island at the top of your Windows screen, powered by your own Claude acc
 - **Answers** drop down as cards. Click anywhere outside to shrink it back.
 - **Claude working:** a spinner with the current step and a timer. Click it for the step list. **Needs your OK** opens a card with the exact command and **Run it / Don't**. **Ready** shows a green tick, then the answer.
 - **Your Claude Code sessions:** when Claude Code works on a project (in the Claude app, the terminal or VS Code), the island shows it live: project name, each step (Reading…, Editing…, Running the tests), amber when it needs your permission, and a notification with its final message when it's done. Jarvis adds small hooks to `~/.claude/settings.json` for this (backup kept as `settings.json.jarvis-backup`); turn it off in Settings and they're removed.
-- **Music:** whatever plays on Windows (Spotify, YouTube in the browser…) shows as a mini player: the real album cover, progress, equaliser. Click it for the player with ⏮ ⏯ ⏭ (real media keys).
+- **Music:** what plays in a music app (Spotify and others) shows as a mini player: the real album cover, progress, equaliser. Click it for the player with ⏮ ⏯ ⏭ (real media keys). Videos in the browser (YouTube…) don't pop up; turn on "Show music playing in the browser" in Settings for YouTube Music or SoundCloud.
 - **Timers:** an orange ring that drains. With music playing, the timer sits in its own little bubble.
 - **Shelf:** drag files onto the island; click one later to open it.
 - **Notifications:** Claude finishing, timers and approvals drop in from the island; the unread count stays as a red badge. Click the island to see them all.
@@ -33,11 +33,7 @@ Quick things run instantly on your PC without using Claude: weather (with the ne
 
 1. Download **Jarvis-Setup-x.y.z.exe** from the latest release, or from this repo's **Actions → Build Jarvis for Windows → Artifacts**.
 2. Run it. Windows will warn that the app is unsigned: click **More info → Run anyway**.
-3. Setup walks you through four steps:
-   - **Sign in to your Claude account.** Claude Code is installed if needed, and Jarvis notices when you're done.
-   - **Microphone test.**
-   - **Screen and control permission.**
-   - **Voice download.** About 400 MB, one time; it runs in the background.
+3. A black setup window opens. Each page is one question: connect your Claude account, say hi to test the microphone, allow screen control and Claude Code activity, your name and city, then optionally your calendar, email and Spotify. Jarvis isn't on your screen yet: there's an empty slot at the top of the window that fills as you go. At the end Jarvis drops into the slot; **drag it out of the window to the top of your screen** and it snaps into place (or press "Put it there for me"). Hearing (about 290 MB) downloads in the background meanwhile.
 
 ## What you can ask
 

@@ -56,7 +56,8 @@ const DEFAULTS = {
   downloads: true,          // download progress live activity
   morningBriefing: true,
   autoUpdate: true,
-  autoHideFullscreen: true, // tuck into a bump when a full-screen or maximized app is under the island
+  autoHideFullscreen: true,
+  browserMedia: false,      // show media playing in a browser too (off: YouTube videos don't pop up as music) // tuck into a bump when a full-screen or maximized app is under the island
   city: "",
   icalUrl: "",              // private iCal link of the user's calendar
   mailUser: "", mailHost: "",
@@ -95,7 +96,7 @@ async function saveSettings() {
   await fs.writeFile(path.join(USER_DIR(), "settings.json"),
     JSON.stringify({ settings, apiKey: stored, encrypted: enc, secrets: sec }, null, 2));
 }
-const SETUP_VERSION = 3;
+const SETUP_VERSION = 4;   // 4: the big animated onboarding window
 const publicSettings = async () => {
   const claudePath = await findClaude();
   return {
@@ -143,6 +144,7 @@ function createWindows() {
   islandWin.setIgnoreMouseEvents(true, { forward: true }); // click-through except over the island
   islandWin.loadFile(path.join(here, "renderer", "island.html"));
   islandWin.once("ready-to-show", () => {
+    if ((settings.setupDone || 0) < SETUP_VERSION) return;   // Jarvis appears at the end of onboarding
     islandWin.showInactive();
     if (settings.dock === "float") toWidget(settings.floatX, settings.floatY, false);
   });
@@ -557,6 +559,7 @@ ipcMain.handle("lyrics:get", (_e, q) => fetchLyrics(q || {}).catch(() => null));
 // ---- panel: setup, settings, memory, approvals
 let panelView = null;
 function openPanel(view, data) {
+  if (view === "setup") return openOnboarding();
   const { workArea } = screen.getPrimaryDisplay();
   if (!panelWin || panelWin.isDestroyed()) {
     panelWin = new BrowserWindow({ ...overlay, width: PANEL_W, height: 200, focusable: true, webPreferences: prefs() });
@@ -576,6 +579,75 @@ function openPanel(view, data) {
 function closePanel() { panelView = null; if (panelWin && !panelWin.isDestroyed()) panelWin.hide(); }
 ipcMain.on("panel:resize", (_e, h) => { if (panelWin && !panelWin.isDestroyed()) panelWin.setSize(PANEL_W, Math.min(Math.max(80, Math.round(h)), 640)); });
 ipcMain.on("panel:close", () => closePanel());
+// ---- onboarding: a big animated window; at the end you drag Jarvis out of it to the top of the screen
+let onboardWin = null;
+function openOnboarding() {
+  if (onboardWin && !onboardWin.isDestroyed()) { onboardWin.show(); onboardWin.focus(); return; }
+  const { workArea } = screen.getPrimaryDisplay();
+  const w = 940, h = 660;
+  onboardWin = new BrowserWindow({ x: Math.round(workArea.x + (workArea.width - w) / 2), y: Math.round(workArea.y + (workArea.height - h) / 2 + 20), width: w, height: h,
+    frame: false, transparent: true, resizable: false, maximizable: false, fullscreenable: false, hasShadow: false, show: false,
+    backgroundColor: "#00000000", title: "Welcome to Jarvis", webPreferences: prefs() });
+  onboardWin.loadFile(path.join(here, "renderer", "onboard.html"));
+  onboardWin.once("ready-to-show", () => { onboardWin.show(); onboardWin.focus(); });
+  onboardWin.on("closed", () => { onboardWin = null; if ((settings.setupDone || 0) < SETUP_VERSION) finishSetup(false); });
+  if (islandWin?.isVisible() && (settings.setupDone || 0) < SETUP_VERSION) islandWin.hide();
+}
+async function finishSetup(snapped) {
+  settings.setupDone = SETUP_VERSION; settings.onboarded = true; settings.dock = "top";
+  await saveSettings();
+  if (!snapped) { dock = "top"; islandWin.setBounds(dockBounds()); send("island:mode", "dock"); send("island:carry", false); islandWin.showInactive(); }
+  send("setup:done");
+  if (settings.backend === "claude") claudeSession().then((s) => s.proc || s.start()).catch(() => {});
+  setTimeout(() => { if (onboardWin && !onboardWin.isDestroyed()) onboardWin.close(); }, snapped ? 1300 : 0);
+}
+// pick Jarvis up: the island window follows the mouse, showing a small pill under the cursor
+const CARRY = { x: DOCK.w / 2, y: 30 };   // where the pill sits inside the island window
+ipcMain.on("onboard:grab", () => {
+  stopFollow();
+  if (dock !== "top") { dock = "top"; send("island:mode", "dock"); }
+  const c = screen.getCursorScreenPoint();
+  islandWin.setBounds({ x: Math.round(c.x - CARRY.x), y: Math.round(c.y - CARRY.y), width: DOCK.w, height: DOCK.h });
+  islandWin.setIgnoreMouseEvents(true, { forward: true });
+  send("island:carry", true);
+  islandWin.showInactive();
+  startFollow(CARRY.x, CARRY.y);
+});
+function snapToTop(from) {
+  const b = dockBounds();
+  islandWin.setBounds(b);
+  send("island:snap", { x: from.x - b.x, y: from.y - b.y });
+  finishSetup(true);
+}
+// let go: near the top of a screen → snap into the top edge; otherwise back into the window
+ipcMain.handle("onboard:drop", () => {
+  if (!follow) return false;
+  stopFollow();
+  const c = screen.getCursorScreenPoint(), wa = screen.getDisplayNearestPoint(c).workArea;
+  if (c.y < wa.y + Math.max(140, wa.height * .3)) { snapToTop(c); return true; }
+  islandWin.hide(); send("island:carry", false);
+  return false;
+});
+// "Put it there for me": fly from the window to the top edge
+ipcMain.handle("onboard:place", async (_e, from) => {
+  stopFollow();
+  const b = dockBounds(), to = { x: b.x + CARRY.x, y: b.y + CARRY.y };
+  send("island:carry", true);
+  islandWin.setBounds({ x: Math.round(from.x - CARRY.x), y: Math.round(from.y - CARRY.y), width: DOCK.w, height: DOCK.h });
+  islandWin.showInactive();
+  const t0 = Date.now(), dur = 650;
+  await new Promise((resolve) => {
+    const iv = setInterval(() => {
+      const k = Math.min(1, (Date.now() - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      const arc = Math.sin(k * Math.PI) * 40;   // a little arc, like it's being tossed up
+      islandWin.setPosition(Math.round(from.x + (to.x - from.x) * e - CARRY.x - arc * .3), Math.round(from.y + (to.y - from.y) * e - CARRY.y));
+      if (k >= 1) { clearInterval(iv); resolve(); }
+    }, 8);
+  });
+  snapToTop({ x: to.x, y: to.y + 6 });
+  return true;
+});
+ipcMain.on("onboard:skip", () => finishSetup(false));
 ipcMain.on("setup:done", async () => { settings.setupDone = SETUP_VERSION; settings.onboarded = true; await saveSettings(); closePanel(); send("setup:done"); });
 
 function createTray() {
@@ -1145,7 +1217,7 @@ else {
     createTray();
     registerHotkeys();
     if ((settings.setupDone || 0) < SETUP_VERSION) {
-      setTimeout(() => openPanel("setup"), 900);      // first launch of this version: walk through setup
+      setTimeout(() => openOnboarding(), 600);        // first launch of this version: the onboarding window
     } else {
       mlCall("warmup", { speechModel: settings.speechModel, tts: false }).catch(() => {}); // hearing ready before the first click
       if (settings.backend === "claude") claudeSession().then((s) => s.proc || s.start()).catch(() => {});

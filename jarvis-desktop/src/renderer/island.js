@@ -36,6 +36,7 @@ let extPinned = false, extFlash = 0, extDone = null, rowHtml = "";
 let settings = {};
 let hidden = false, peekT = null;
 // tucked into a small bump: flicked up by you, or out of the way of a full-screen / maximized app
+let carry = false;   // being dragged out of the onboarding window
 let autoHidden = false, revealed = false, bumpPull = 0, wobble = 0, lastOver = 0;
 const tucked = () => mode === "dock" && (hidden || autoHidden) && !revealed && !needsYou();
 const perms = new Map();   // Claude Code permission requests waiting for Allow / Deny: id → request
@@ -53,6 +54,7 @@ function needsYou() {   // even when hidden, the island comes out for these
 }
 function shape() {
   const cx = innerWidth / 2, at = (w, h, layer, r) => ({ x: cx - w / 2, y: 10, w, h, layer, r: r ?? h / 2 });
+  if (carry) return at(150, 40, "lStatus");
   if (tucked()) {   // the bump: a little drop hanging from the top edge; pulling stretches it like liquid
     const w = bumpPull ? Math.max(36, 70 - bumpPull * .5) : hover ? 84 : 70, h = bumpPull ? 26 + bumpPull * .85 : hover ? 32 : 26;
     return { x: cx - w / 2, y: -10, w, h, layer: null, r: w / 2, bump: true };
@@ -93,7 +95,7 @@ function frame(now) {
   if (sh.layer === "lMeet") setRow("meetRow", meetRowHtml(meetingSoon()));
   if (sh.layer === "lDl") setRow("dlRow", dlRowHtml());
   document.body.classList.toggle("focusing", !!(timer && timer.focus));
-  if (sh.layer === "lStatus" && s === "idle") $("statusText").textContent = "Click to talk";
+  if (sh.layer === "lStatus" && s === "idle") $("statusText").textContent = carry ? "Jarvis" : "Click to talk";
   $("count").textContent = unread; $("count").classList.toggle("on", unread > 0 && !sh.layer);
   if (task && task.status !== "done" && (hover || taskPinned) && sh.layer === "lCard" && !cardOpen && $("card").dataset.task !== "1") renderTaskCard();
   if (!task && sh.layer === "lTask") { const h = extRowHtml(); if (h !== rowHtml) { rowHtml = h; $("taskRow").innerHTML = h; } }
@@ -112,7 +114,7 @@ let interactive = false;
 function setInteractive(on) { if (on !== interactive) { interactive = on; J.hover(on); } }
 const overIsland = (x, y) => x >= box.x - 8 && x <= box.x + box.w + 8 && y >= box.y - 8 && y <= box.y + box.h + 8;
 addEventListener("mousemove", (e) => {
-  if (pulling) return;
+  if (pulling || carry) return;
   const over = overIsland(e.clientX, e.clientY) || ($("typed").classList.contains("on"));
   setInteractive(over);
   if (mode === "dock") {
@@ -260,6 +262,14 @@ function reveal() {
   wobble = performance.now() + 800; lastOver = performance.now();
   box.vh += 420; box.vw -= 260;
 }
+J.onCarry?.((on) => { carry = !!on; if (on) { box.w = 150; box.h = 40; box.x = innerWidth / 2 - 75; box.y = 10; box.vx = box.vy = box.vw = box.vh = 0; } });
+// dropped at the top of the screen: it lands where you let go and springs into the top edge like a drop of ink
+J.onSnap?.(({ x, y }) => {
+  carry = false;
+  box.x = x - box.w / 2; box.y = y - box.h / 2;
+  box.vy = -500; box.vw = 520; box.vh = -160;
+  wobble = performance.now() + 1100;
+});
 J.onAutoHide?.((on) => { autoHidden = !!on; if (!on) revealed = false; });
 // shown from the bump over a full-screen app: tuck back once you've moved away and nothing is open
 setInterval(() => {
@@ -581,8 +591,11 @@ const ART = ["linear-gradient(135deg,#ff2d55,#5856d6)", "linear-gradient(135deg,
 const artFor = (s) => ART[[...String(s)].reduce((a, c) => a + c.charCodeAt(0), 0) % ART.length];
 const coverCss = (dataUrl) => `url('${dataUrl}') center / cover no-repeat`;   // single quotes: it goes inside a style="…" attribute
 let coverKey = "", cover = "";
+// Browsers report every video (YouTube, Netflix…) as "media", so by default only music apps show the
+// player. Turn on "Show music playing in the browser" in Settings for YouTube Music, SoundCloud…
+const BROWSER = /chrome|msedge|edge|firefox|opera|brave|vivaldi|arc\b|browser/i;
 J.onMedia((m) => {
-  if (!m || !m.title) { music = null; return; }
+  if (!m || !m.title || (BROWSER.test(m.app || "") && !settings.browserMedia)) { music = null; return; }
   const same = music && music.title === m.title;
   if (m.key !== coverKey) { coverKey = m.key; cover = ""; }
   if (m.art) cover = coverCss(m.art);
@@ -1042,4 +1055,4 @@ J.onShow?.((v) => {
   if ((await J.islandMode()) === "widget") applyMode("widget");
   setS("idle");
 })();
-J.onSetupDone(async () => { settings = await J.getSettings(); show({ icon: "info", kicker: "Jarvis", title: "All set", body: `Click me or press ${settings.hotkeyTalk || "Alt+J"} and ask anything.` }); });
+J.onSetupDone(async () => { settings = await J.getSettings(); await new Promise((r) => setTimeout(r, 1000)); show({ icon: "info", kicker: "Jarvis", title: "Hi. I’m here.", body: `Click me or press ${settings.hotkeyTalk || "Alt+J"} and ask anything.` }); });
