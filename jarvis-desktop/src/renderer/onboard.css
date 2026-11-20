@@ -8,14 +8,14 @@
 *{box-sizing:border-box;margin:0;padding:0}
 [hidden]{display:none!important}
 html,body{height:100%;background:transparent;overflow:hidden}
-body{font:400 16px/1.4 "Inter","Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;font-feature-settings:"cv11","ss01","ss03";color:var(--fg);-webkit-font-smoothing:antialiased;padding:14px}
+body{font:400 16px/1.4 "Inter","Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;font-feature-settings:"cv11","ss01","ss03";color:var(--fg);-webkit-font-smoothing:antialiased;padding:2px}
 button,input{font:inherit;color:inherit;background:none;border:0}
 button{cursor:pointer}
 
 /* the window: plain black */
 .win{position:relative;height:100%;border-radius:28px;background:var(--bg);overflow:hidden;
-  box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 .5px rgba(255,255,255,.14) inset;animation:winIn .8s var(--spring) both}
-@keyframes winIn{from{opacity:0;transform:translateY(18px) scale(.96)}}
+  box-shadow:0 0 0 1px rgba(255,255,255,.14) inset;animation:winIn .8s var(--spring) both}   /* no outer shadow: Windows would clip it into a square */
+@keyframes winIn{from{opacity:0;transform:scale(.97)}}
 .win.bye{animation:winOut .5s cubic-bezier(.4,0,.2,1) both}
 @keyframes winOut{to{opacity:0;transform:scale(.95)}}
 .drag{position:absolute;inset:0 0 auto 0;height:64px;-webkit-app-region:drag}

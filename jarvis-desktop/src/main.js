@@ -486,9 +486,10 @@ function startClipboardWatch() {
   const want = settings.clipboardHistory || settings.smartSuggestions;
   if (!want) { clearInterval(clipTimer); clipTimer = null; return; }
   if (clipTimer) return;
-  lastClip = clipboard.readText();
+  try { lastClip = String(clipboard.readText() ?? ""); } catch { lastClip = ""; }
   clipTimer = setInterval(() => {
     let t; try { t = clipboard.readText(); } catch { return; }
+    if (typeof t !== "string") t = t == null ? "" : String(t);   // be defensive: never let a timer crash Jarvis
     if (!t || t === lastClip) return;
     lastClip = t;
     if (t === ownClip || t.length > 20000 || !t.trim()) return;
@@ -1205,6 +1206,9 @@ ipcMain.on("notify", (_e, { title, body }) => { if (Notification.isSupported()) 
 ipcMain.on("app:quit", () => app.quit());
 
 // ---------------------------------------------------------------- lifecycle
+// A background hiccup (a timer, a watcher) gets logged instead of a crash dialog.
+process.on("uncaughtException", (e) => { try { logLine("error", (e?.stack || String(e)).split("\n").slice(0, 4).join(" | ")); } catch {} });
+process.on("unhandledRejection", (e) => { try { logLine("error", "promise: " + String(e?.message || e).slice(0, 300)); } catch {} });
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on("second-instance", () => send("island:talk"));
