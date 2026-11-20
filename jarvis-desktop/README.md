@@ -12,6 +12,17 @@ A black island at the top of your Windows screen, powered by your own Claude acc
 - **Timers:** an orange ring that drains. With music playing, the timer sits in its own little bubble.
 - **Shelf:** drag files onto the island; click one later to open it.
 - **Notifications:** Claude finishing, timers and approvals drop in from the island; the unread count stays as a red badge. Click the island to see them all.
+- **Approve Claude Code from the island:** when Claude Code asks for permission, the island shows the exact command or file with **Allow / Deny / Answer in Claude**. No answer within two minutes and Claude Code asks in its own window as usual.
+- **Other apps' notifications:** WhatsApp, Discord, Outlook, Teams and the rest drop in from the island too (read from Windows' own notification list, read-only). Click one to read it in full.
+- **Next meeting:** paste your calendar's private iCal link in Settings and the island shows "Design review · in 4 min · **Join**" (Meet, Teams, Zoom, Webex), with a heads-up five minutes before.
+- **Morning briefing:** the first time you come to the island each morning: weather, today's meetings, unread email and what your Claude Code sessions finished overnight. Say "brief me" any time.
+- **Email (read-only):** add your address and an app password in Settings. New mail drops in; "check my email" lists it, and "What matters?" asks Claude to triage.
+- **Clipboard history:** "clipboard" or right-click → Clipboard shows the last 20 things you copied. Click one to copy it again; Pin, Explain or Translate it. Password managers' copies are skipped.
+- **Smart suggestions:** copy an error and the island offers "Explain it?"; when a download finishes you get **Open / Show in folder**.
+- **Downloads:** a live pill with the file name, size and speed while Chrome, Edge or Firefox downloads.
+- **Focus mode:** "focus for 45 minutes" starts a purple focus ring and holds notifications until the end (meetings and Claude's questions still come through), then shows what you missed.
+- **Spotify:** connect it in Settings and "play Blinding Lights", "play my Chill playlist", "add this to Gym", "like this song", "more like this" really happen. Synced lyrics show under the mini player when you hover it, and in the player card.
+- **Updates:** Jarvis downloads new versions in the background and shows **Update ready · Restart**.
 - **Flick it up** to hide it (only a faint line stays in the top edge; rest the mouse there, press Alt+J, or use the tray to bring it back). It still pops out for things that need you.
 - **Pull it down hard** to tear it off into a floating widget; drag it back to the top edge to dock. Right-click for Settings, Memory, Float/Dock and Quit.
 
@@ -70,6 +81,17 @@ npm start        # run from source
 npm run dist     # build the installer (on Windows)
 ```
 
+## One-time setup for the extras (all optional, in Settings)
+
+| Feature | What to paste |
+|---|---|
+| Calendar | Google Calendar: Settings → your calendar → **Secret address in iCal format**. Outlook: Settings → Calendar → Shared calendars → Publish → ICS link |
+| Email | Your address + an **app password** (Gmail: Google Account → Security → 2-Step Verification → App passwords). Read-only |
+| Spotify | Create an app at developer.spotify.com, add the redirect URI shown in Settings, paste the **Client ID**, press Connect. Playback needs Premium |
+| Updates | While this repo is private: a fine-grained GitHub token with read-only access to it (Contents: read) |
+
+Passwords and tokens are stored encrypted with Windows' own data protection.
+
 ## Troubleshooting
 
-Jarvis keeps a small diagnostics log at `%APPDATA%\Jarvis\jarvis.log` (cover art and Claude Code hook status, no personal content).
+Jarvis keeps a small diagnostics log at `%APPDATA%\Jarvis\jarvis.log` (cover art, hooks, notifications, calendar, email, update and Spotify status; no message content).

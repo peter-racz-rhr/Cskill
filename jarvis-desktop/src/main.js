@@ -15,10 +15,17 @@ import os from "node:os";
 import fs from "node:fs/promises";
 import http from "node:http";
 import { spawn } from "node:child_process";
+import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
 import { ClaudeCodeSession, startMcpServer, findClaude, openSignInTerminal, claudeAuthStatus } from "./claude-code.js";
 import { InputDriver } from "./input-driver.js";
+import { WinNotifications } from "./features/winnotify.js";
+import { DownloadWatcher } from "./features/downloads.js";
+import { Updater } from "./features/updater.js";
+import { fetchCalendar } from "./features/calendar.js";
+import { fetchUnread, imapHost } from "./features/mail.js";
+import { Spotify, fetchLyrics, SPOTIFY_REDIRECT } from "./features/spotify.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const IS_WIN = process.platform === "win32";
@@ -42,10 +49,24 @@ const DEFAULTS = {
   confirmCommands: true,
   allowControl: true,   // may Jarvis use mouse & keyboard when asked (still asks once per task)
   claudeActivity: true, // show the user's own Claude Code sessions (app, terminal, VS Code) in the island
+  approveFromIsland: true, // Claude Code permission requests get Allow / Deny in the island
+  otherNotifications: true, // mirror WhatsApp, Discord, Outlook… toasts into the island
+  clipboardHistory: true,
+  smartSuggestions: true,   // copied an error → "Explain?"; finished download → Open / Show in folder
+  downloads: true,          // download progress live activity
+  morningBriefing: true,
+  autoUpdate: true,
+  city: "",
+  icalUrl: "",              // private iCal link of the user's calendar
+  mailUser: "", mailHost: "",
+  spotifyClientId: "",
   onboarded: false,
 };
 let settings = { ...DEFAULTS };
 let apiKey = "";
+// secrets live encrypted (Windows DPAPI via safeStorage) next to the settings
+const SECRET_KEYS = ["mailPass", "updateToken", "spotifyRefresh"];
+let secrets = {};
 
 async function loadSettings() {
   try {
@@ -53,6 +74,9 @@ async function loadSettings() {
     settings = { ...DEFAULTS, ...raw.settings };
     if ((raw.settings?.settingsVersion || 1) < 2) { // v1 → v2: faster voice defaults
       settings.model = DEFAULTS.model; settings.effort = "low"; settings.settingsVersion = 2;
+    }
+    for (const [k, v] of Object.entries(raw.secrets || {})) {
+      try { secrets[k] = raw.encrypted && safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(Buffer.from(v, "base64")) : v; } catch {}
     }
     if (raw.apiKey) {
       apiKey = raw.encrypted && safeStorage.isEncryptionAvailable()
@@ -65,8 +89,10 @@ async function loadSettings() {
 async function saveSettings() {
   const enc = safeStorage.isEncryptionAvailable();
   const stored = apiKey ? (enc ? safeStorage.encryptString(apiKey).toString("base64") : apiKey) : "";
+  const sec = {};
+  for (const k of SECRET_KEYS) if (secrets[k]) sec[k] = enc ? safeStorage.encryptString(secrets[k]).toString("base64") : secrets[k];
   await fs.writeFile(path.join(USER_DIR(), "settings.json"),
-    JSON.stringify({ settings, apiKey: stored, encrypted: enc }, null, 2));
+    JSON.stringify({ settings, apiKey: stored, encrypted: enc, secrets: sec }, null, 2));
 }
 const SETUP_VERSION = 3;
 const publicSettings = async () => {
@@ -79,6 +105,12 @@ const publicSettings = async () => {
   keyHint: apiKey ? "…" + apiKey.slice(-4) : "",
   openAtLogin: app.getLoginItemSettings().openAtLogin,
   platform: process.platform,
+  version: app.getVersion(),
+  hasMailPass: !!secrets.mailPass,
+  hasUpdateToken: !!secrets.updateToken,
+  spotifyConnected: !!secrets.spotifyRefresh,
+  spotifyRedirect: SPOTIFY_REDIRECT,
+  updateReady: updater?.ready ? updater.ready.version : "",
   };
 };
 
@@ -156,6 +188,13 @@ ipcMain.on("island:menu", () => {
   Menu.buildFromTemplate([
     { label: "Settings", click: () => openPanel("settings") },
     { label: "Memory", click: () => openPanel("memory") },
+    { type: "separator" },
+    { label: "Today", click: () => send("island:show", "briefing") },
+    { label: "Calendar", click: () => send("island:show", "calendar") },
+    { label: "Email", click: () => send("island:show", "mail") },
+    { label: "Clipboard", click: () => send("island:show", "clipboard") },
+    { label: "Notifications", click: () => send("island:show", "notifications") },
+    { type: "separator" },
     { label: "Hide / show island", click: () => send("island:toggleHide") },
     { label: dock === "top" ? "Float as widget" : "Dock to top", click: () => (dock === "top" ? toWidget() : toDock()) },
     { type: "separator" },
@@ -281,10 +320,44 @@ function startMediaWatch() {
 const HOOK_PORT = 47823;
 const HOOK_EVENTS = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Notification", "Stop", "SessionEnd"];
 const hookCmd = (ev) => `curl -s -m 2 -X POST --data-binary @- http://127.0.0.1:${HOOK_PORT}/cc-hook/${ev} || exit 0`;
+// Permission requests: Claude Code waits on this curl while the island shows Allow / Deny. We answer
+// with the hook's decision JSON; an empty answer (timeout, "Answer in Claude", Jarvis off) means
+// Claude Code shows its own permission dialog as usual.
+const PERM_HOLD_S = 110;
+const permCmd = () => `curl -s -m ${PERM_HOLD_S + 5} -X POST --data-binary @- http://127.0.0.1:${HOOK_PORT}/cc-perm || exit 0`;
+const pendingPerms = new Map();   // id → { res, timer }
+function answerPerm(id, decision, message) {
+  const p = pendingPerms.get(id); if (!p) return;
+  pendingPerms.delete(id); clearTimeout(p.timer);
+  const body = decision === "allow" ? { hookSpecificOutput: { hookEventName: "PermissionRequest", decision: { behavior: "allow" } } }
+    : decision === "deny" ? { hookSpecificOutput: { hookEventName: "PermissionRequest", decision: { behavior: "deny", message: message || "The user said no from the Jarvis island." } } }
+    : null;
+  if (body) { p.res.writeHead(200, { "Content-Type": "application/json" }); p.res.end(JSON.stringify(body)); }
+  else { p.res.writeHead(204); p.res.end(); }
+  send("cc:permDone", { id, decision });
+}
+ipcMain.on("cc:permAnswer", (_e, { id, decision }) => answerPerm(id, decision));
 let hookServer = null;
 function startHookListener() {
   if (hookServer) return;
   hookServer = http.createServer((req, res) => {
+    if (req.method === "POST" && req.url === "/cc-perm") {
+      let body = "";
+      req.on("data", (d) => { body += d; if (body.length > 2e6) req.destroy(); });
+      req.on("end", () => {
+        let j; try { j = JSON.parse(body); } catch { j = null; }
+        if (!j || !settings.approveFromIsland || !settings.claudeActivity || (cc?.sessionId && j.session_id === cc.sessionId)) { res.writeHead(204); return res.end(); }
+        const id = crypto.randomUUID();
+        pendingPerms.set(id, { res, timer: setTimeout(() => answerPerm(id, "ask"), PERM_HOLD_S * 1000) });
+        res.on("close", () => {   // curl gave up or Claude Code was interrupted: drop the card
+          if (!res.writableEnded && pendingPerms.has(id)) { clearTimeout(pendingPerms.get(id).timer); pendingPerms.delete(id); send("cc:permDone", { id, decision: "gone" }); }
+        });
+        const cwd = j.cwd || "";
+        send("cc:perm", { id, session: j.session_id, project: cwd.split(/[\\/]/).filter(Boolean).pop() || "Claude", tool: j.tool_name, input: j.tool_input || {}, at: Date.now(), holdS: PERM_HOLD_S });
+        islandWin?.showInactive();
+      });
+      return;
+    }
     const m = req.url.match(/^\/cc-hook\/([A-Za-z]+)$/);
     if (req.method !== "POST" || !m) { res.writeHead(404); return res.end(); }
     let body = "";
@@ -319,12 +392,110 @@ async function setClaudeHooks(on) {
     cfg.hooks[ev] = on ? [...kept, { matcher: "*", hooks: [{ type: "command", command: hookCmd(ev), timeout: 5 }] }] : kept;
     if (!cfg.hooks[ev].length) delete cfg.hooks[ev];
   }
+  {
+    const ev = "PermissionRequest";
+    const kept = (cfg.hooks[ev] || []).filter((g) => !(g.hooks || []).some((h) => String(h.command || "").includes("/cc-perm")));
+    cfg.hooks[ev] = on && settings.approveFromIsland ? [...kept, { matcher: "*", hooks: [{ type: "command", command: permCmd(), timeout: PERM_HOLD_S + 10 }] }] : kept;
+    if (!cfg.hooks[ev].length) delete cfg.hooks[ev];
+  }
   if (!Object.keys(cfg.hooks).length) delete cfg.hooks;
   await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.writeFile(file, JSON.stringify(cfg, null, 2));
   logLine("hooks", on ? "installed" : "removed");
   return true;
 }
+
+// ---------------------------------------------------------------- live features
+// other apps' notifications · downloads · clipboard · calendar · email · updates · Spotify
+let winNotif = null, downloads = null, updater = null, spotify = null;
+let calEvents = [], calTimer = null, calError = "", mailState = null, mailTimer = null;
+function startFeatures() {
+  if (settings.otherNotifications && !winNotif) {
+    winNotif = new WinNotifications({ onToast: (t) => send("win:toast", t), log: (m) => logLine("notify", m) });
+    winNotif.start().catch((e) => logLine("notify", e.message));
+  } else if (!settings.otherNotifications && winNotif) { winNotif.stop(); winNotif = null; }
+  if (settings.downloads && !downloads) {
+    downloads = new DownloadWatcher({ dir: app.getPath("downloads"), onUpdate: (d) => send("dl:update", d), onDone: (d) => send("dl:done", d), log: (m) => logLine("downloads", m) });
+    downloads.start();
+  } else if (!settings.downloads && downloads) { downloads.stop(); downloads = null; }
+  startClipboardWatch();
+}
+
+// clipboard: history + smart suggestions. Password managers mark secrets as "don't record"; we respect that.
+let clipTimer = null, lastClip = "", ownClip = "";
+function startClipboardWatch() {
+  const want = settings.clipboardHistory || settings.smartSuggestions;
+  if (!want) { clearInterval(clipTimer); clipTimer = null; return; }
+  if (clipTimer) return;
+  lastClip = clipboard.readText();
+  clipTimer = setInterval(() => {
+    let t; try { t = clipboard.readText(); } catch { return; }
+    if (!t || t === lastClip) return;
+    lastClip = t;
+    if (t === ownClip || t.length > 20000 || !t.trim()) return;
+    const formats = clipboard.availableFormats().join(" ");
+    if (/ExcludeClipboardContentFromMonitorProcessing|CanIncludeInClipboardHistory|Clipboard Viewer Ignore/i.test(formats)) return;
+    send("clip:new", { text: t, at: Date.now() });
+  }, 800);
+}
+ipcMain.on("clip:write", (_e, t) => { ownClip = lastClip = String(t ?? ""); clipboard.writeText(ownClip); });
+ipcMain.on("pc:showInFolder", (_e, p) => { if (typeof p === "string") shell.showItemInFolder(p); });
+
+async function refreshCalendar() {
+  clearTimeout(calTimer);
+  if (!settings.icalUrl) { calEvents = []; calError = ""; send("cal:events", { events: [] }); return calEvents; }
+  try { calEvents = await fetchCalendar(settings.icalUrl); calError = ""; }
+  catch (e) { calError = e.message; logLine("calendar", e.message); }
+  send("cal:events", { events: calEvents, error: calError });
+  calTimer = setTimeout(refreshCalendar, 10 * 60e3);
+  return calEvents;
+}
+async function refreshMail() {
+  clearTimeout(mailTimer);
+  if (!settings.mailUser || !secrets.mailPass) { mailState = null; send("mail:update", null); return null; }
+  try {
+    mailState = { ...(await fetchUnread({ user: settings.mailUser, pass: secrets.mailPass, host: settings.mailHost || imapHost(settings.mailUser) })), at: Date.now() };
+  } catch (e) {
+    const msg = e.authenticationFailed ? "Email sign-in failed. Check the address and app password in Settings." : `Couldn't reach your email (${String(e.message || e).slice(0, 120)})`;
+    logLine("mail", msg); mailState = { error: msg, at: Date.now() };
+  }
+  send("mail:update", mailState);
+  mailTimer = setTimeout(refreshMail, 5 * 60e3);
+  return mailState;
+}
+ipcMain.handle("cal:get", () => ({ events: calEvents, error: calError }));
+ipcMain.handle("cal:refresh", async () => ({ events: await refreshCalendar(), error: calError }));
+ipcMain.handle("mail:get", () => mailState);
+ipcMain.handle("mail:refresh", () => refreshMail());
+
+function initUpdater() {
+  updater = new Updater({ version: app.getVersion(), token: () => secrets.updateToken, onReady: (r) => send("update:ready", r), log: (m) => logLine("update", m) });
+  if (settings.autoUpdate) updater.start();
+}
+ipcMain.handle("update:check", async () => { const r = await updater?.check(); return r ? r.version : ""; });
+ipcMain.on("update:install", () => { if (updater?.install()) setTimeout(() => app.quit(), 400); });
+
+spotify = new Spotify({
+  clientId: () => settings.spotifyClientId,
+  getRefresh: () => secrets.spotifyRefresh || "",
+  setRefresh: (t) => { secrets.spotifyRefresh = t; saveSettings().catch(() => {}); },
+  openUrl: (u) => shell.openExternal(u), openUri: (u) => shell.openExternal(u),
+  log: (m) => logLine("spotify", m),
+});
+async function spotifyDo(action, query) {
+  try {
+    if (!spotify.connected) return { error: "Spotify isn't connected. Right-click the island → Settings → Connect Spotify.", code: "NO_SPOTIFY" };
+    if (action === "play") return await spotify.play(query);
+    if (action === "add_to_playlist") return await spotify.addToPlaylist(query);
+    if (action === "like") { const c = await spotify.like(); return c ? { track: c, playlist: "Liked Songs" } : { error: "Nothing is playing in Spotify." }; }
+    if (action === "more_like_this") return await spotify.moreLikeThis();
+    return { error: "Unknown Spotify action" };
+  } catch (e) { logLine("spotify", e.message); return { error: e.message, code: e.code }; }
+}
+ipcMain.handle("spotify:connect", async () => { try { await spotify.connect(); return { ok: true }; } catch (e) { return { ok: false, error: e.message }; } });
+ipcMain.handle("spotify:disconnect", async () => { spotify.disconnect(); await saveSettings(); return true; });
+ipcMain.handle("spotify:do", (_e, { action, query }) => spotifyDo(action, query));
+ipcMain.handle("lyrics:get", (_e, q) => fetchLyrics(q || {}).catch(() => null));
 
 // ---- panel: setup, settings, memory, approvals
 let panelView = null;
@@ -599,6 +770,15 @@ const TOOLS = [
   { name: "forget", strict: true,
     description: "Delete saved notes containing the given text.",
     input_schema: s({ match: { type: "string" } }) },
+  { name: "spotify", strict: true,
+    description: "Control Spotify for real (works once the user connected Spotify in Jarvis Settings): play a song, album, playlist or artist; add the current song to a playlist or Liked Songs; play more like the current song.",
+    input_schema: s({ action: { type: "string", enum: ["play", "add_to_playlist", "like", "more_like_this"] }, query: { type: "string", description: "For play: what to play, e.g. 'Blinding Lights The Weeknd', 'Chill Vibes playlist', 'something by Daft Punk'. For add_to_playlist: the playlist name. Empty otherwise." } }) },
+  { name: "calendar", strict: true,
+    description: "The user's meetings today and tomorrow (from the calendar link in Jarvis Settings), with times and join links.",
+    input_schema: s({}) },
+  { name: "unread_email", strict: true,
+    description: "The user's unread emails (sender, subject, time). Read-only; it can't open, send or delete mail.",
+    input_schema: s({}) },
 ];
 const UI_TOOLS = new Set(["set_timer"]);
 
@@ -675,6 +855,26 @@ async function runTool(name, input) {
       m.notes = m.notes.filter((x) => !x.note.toLowerCase().includes(input.match.toLowerCase()));
       await saveMemory(m); send("memory", m); return `Removed ${n - m.notes.length} note(s).`;
     }
+    case "spotify": {
+      const r = await spotifyDo(input.action, input.query);
+      if (r.error) return r.error;
+      if (r.notFound) return `Nothing on Spotify matched "${input.query}".`;
+      if (r.fallback === "premium") return `Opened "${r.title}" in the Spotify app. One-click playback needs Spotify Premium, so the user may need to press play.`;
+      if (r.fallback === "device") return `Opened "${r.title}" in Spotify; no active Spotify device was found to start it on.`;
+      if (r.playlist) return `Added "${r.track.title}" to ${r.playlist}.`;
+      if (input.action === "more_like_this") return `Playing more from ${r.artist} on shuffle.`;
+      return `Playing ${r.title}${r.artist ? " by " + r.artist : ""}.`;
+    }
+    case "calendar": {
+      if (!settings.icalUrl) return "No calendar is connected. The user can paste their calendar's private iCal link in Jarvis Settings.";
+      const ev = calEvents.length ? calEvents : await refreshCalendar();
+      return ev.length ? JSON.stringify(ev.map((e) => ({ title: e.title, start: new Date(e.start).toString(), end: new Date(e.end).toString(), allDay: e.allDay, location: e.location || undefined, join: e.join || undefined }))) : "No meetings today or tomorrow.";
+    }
+    case "unread_email": {
+      if (!settings.mailUser || !secrets.mailPass) return "No email account is connected. The user can add their address and an app password in Jarvis Settings.";
+      const m = await refreshMail();
+      return m?.error || JSON.stringify(m);
+    }
     default:
       if (UI_TOOLS.has(name)) { send("agent", { type: "action", name, input }); return "Shown to the user."; }
       return `Unknown tool ${name}`;
@@ -696,6 +896,7 @@ You can act on this computer:
 - point_at to show the user where something is on screen (your own cursor with a label; touches nothing). Use it whenever they ask "where is…" or "show me…".
 - computer to use the real mouse and keyboard, only when the user asks you to do or edit something on screen. Take a screenshot first, act in small steps, and check each new screenshot. Prefer keyboard shortcuts where reliable.
 - Email and other websites: open them in the browser (for example https://mail.google.com or https://outlook.live.com), then read them with screenshots and scroll as needed. Never send, delete, buy, or post anything without the user's explicit confirmation of that exact action.
+- spotify to really play music (songs, albums, playlists, artists), add the current song to a playlist, or play more like it. calendar for the user's meetings; unread_email for their inbox (read-only).
 - web search and web fetch for research and anything current. For research, search several angles, then summarise in a card with sources.
 
 Do the task rather than describing how the user could do it. Never claim to have done something you didn't do with a tool. If a request is ambiguous and acting wrongly would cost something, ask one short question.`;
@@ -850,10 +1051,20 @@ ipcMain.on("panel:open", (_e, v) => openPanel(v));
 ipcMain.handle("settings:set", async (_e, patch) => {
   if (typeof patch.apiKey === "string" && patch.apiKey.trim()) apiKey = patch.apiKey.trim();
   if (typeof patch.openAtLogin === "boolean") app.setLoginItemSettings({ openAtLogin: patch.openAtLogin });
-  const hooksChanged = "claudeActivity" in patch && patch.claudeActivity !== settings.claudeActivity;
+  const changed = (k) => k in patch && patch[k] !== settings[k];
+  const hooksChanged = changed("claudeActivity") || changed("approveFromIsland");
+  const calChanged = changed("icalUrl"), mailChanged = changed("mailUser") || changed("mailHost") || !!(patch.mailPass || "").trim();
+  const tokenChanged = !!(patch.updateToken || "").trim(), updChanged = changed("autoUpdate");
   for (const k of Object.keys(DEFAULTS)) if (k in patch) settings[k] = patch[k];
+  for (const k of ["mailPass", "updateToken"]) if (typeof patch[k] === "string" && patch[k].trim()) secrets[k] = patch[k].trim() === "-" ? "" : patch[k].trim();
+  if (!settings.mailUser) secrets.mailPass = "";
   if (hooksChanged) await setClaudeHooks(!!settings.claudeActivity);
   await saveSettings();
+  startFeatures();
+  if (calChanged) refreshCalendar();
+  if (mailChanged) refreshMail();
+  if (updChanged) settings.autoUpdate ? updater?.start() : updater?.stop();
+  if (tokenChanged) updater?.check();
   resetClaudeSession(); // pick up model / name changes
   const hotkeys = registerHotkeys();
   return { ...(await publicSettings()), hotkeys };
@@ -884,8 +1095,11 @@ else {
     startMediaWatch();
     startHookListener();
     if (settings.claudeActivity) setClaudeHooks(true).catch(() => {});
+    startFeatures();
+    initUpdater();
+    setTimeout(() => { refreshCalendar(); refreshMail(); }, 3000);
     screen.on("display-metrics-changed", () => { if (dock === "top") islandWin?.setBounds(dockBounds()); });
   });
-  app.on("will-quit", () => { globalShortcut.unregisterAll(); cc?.kill(); mcp?.close(); input.stop(); ml?.kill(); mediaProc?.kill(); hookServer?.close(); });
+  app.on("will-quit", () => { globalShortcut.unregisterAll(); cc?.kill(); mcp?.close(); input.stop(); ml?.kill(); mediaProc?.kill(); hookServer?.close(); winNotif?.stop(); downloads?.stop(); updater?.stop(); for (const id of [...pendingPerms.keys()]) answerPerm(id, "ask"); });
   app.on("window-all-closed", () => app.quit());
 }

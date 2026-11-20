@@ -117,12 +117,31 @@ async function fillSettings() {
     if (el.type === "checkbox") el.checked = !!settings[el.name]; else el.value = settings[el.name] ?? "";
   }
   $("saved").textContent = "";
+  $("mailPass").value = ""; $("mailPass").placeholder = settings.hasMailPass ? "Saved (type to change)" : "16 letters";
+  $("updToken").value = ""; $("updToken").placeholder = settings.hasUpdateToken ? "Saved (type to change)" : "github_pat_…";
+  $("verHint").textContent = `You're on Jarvis ${settings.version || ""}.${settings.updateReady ? ` Version ${settings.updateReady} is ready: it installs when you restart.` : ""}`;
+  renderSpotify();
   $("acctState").textContent = "Checking…";
   const st = await J.claudeStatus();
   $("acctState").innerHTML = st.loggedIn ? "<b>Connected</b> to your Claude account." : st.installed ? "<b>Not signed in.</b>" : "<b>Claude Code isn't installed.</b>";
   $("acctSwitch").textContent = st.loggedIn ? "Switch account" : "Sign in";
 }
 $("acctSwitch").onclick = () => J.claudeSignIn();
+function renderSpotify(msg) {
+  $("spHint").innerHTML = `Make a free app at <b>developer.spotify.com</b> → Dashboard → Create app, add the redirect URI <b>${esc(settings.spotifyRedirect || "")}</b>, tick Web API, and paste its Client ID here. One-click playback needs Premium.`;
+  $("spState").innerHTML = msg ? esc(msg) : settings.spotifyConnected ? "<b>Connected</b>. Say “play …”, “add this to …”, “more like this”." : "Not connected.";
+  $("spBtn").textContent = settings.spotifyConnected ? "Disconnect" : "Connect";
+}
+$("spBtn").onclick = async () => {
+  if (settings.spotifyConnected) { await J.spotifyDisconnect(); settings = await J.getSettings(); return renderSpotify(); }
+  const id = form.elements.spotifyClientId.value.trim();
+  if (!id) return renderSpotify("Paste the Client ID first.");
+  settings = await J.setSettings({ spotifyClientId: id });
+  renderSpotify("Finish in your browser…");
+  const r = await J.spotifyConnect();
+  settings = await J.getSettings();
+  renderSpotify(r.ok ? "" : r.error);
+};
 form.onsubmit = async (e) => {
   e.preventDefault();
   const patch = {};

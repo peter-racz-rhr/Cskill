@@ -215,3 +215,35 @@
   #peek.on{opacity:1}
   .player .cover,.mini .art{background-color:#1c1c1e}
   .player .cover.photo::after{display:none}
+
+  /* ---- 3.2: meetings, downloads, lyrics, clipboard, briefing, focus, other apps */
+  #lMeet,#lDl{bottom:0}
+  .rowic{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;flex:none}
+  .rowic svg{width:14px;height:14px;fill:none;stroke:#fff;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+  .rowic.cal{background:var(--red)} .rowic.dl{background:var(--green)}
+  .join{height:26px;padding:0 12px;border-radius:13px;background:var(--green);color:#000;font-size:12.5px;font-weight:600;flex:none;transition:transform .1s,filter .15s}
+  .join:hover{filter:brightness(1.1)} .join:active{transform:scale(.95)}
+  #dlRow{position:relative}
+  .dlbar{position:absolute;left:14px;right:14px;bottom:5px;height:2px;border-radius:1px;background:rgba(48,209,88,.18);overflow:hidden}
+  .dlbar::after{content:"";position:absolute;top:0;bottom:0;width:30%;border-radius:1px;background:var(--green);animation:dlrun 1.3s ease-in-out infinite}
+  @keyframes dlrun{from{left:-30%}to{left:100%}}
+  @media (prefers-reduced-motion:reduce){.dlbar::after{animation:none;left:0;width:100%;opacity:.5}}
+  #lMusic .mini{height:56px}
+  .mlyr{height:28px;padding:0 22px 0 60px;font-size:13px;font-weight:500;color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lyr{margin-top:14px;text-align:center;min-height:44px}
+  .lyr p{transition:opacity .3s}
+  .lyr .cur{font-size:15px;font-weight:600;color:var(--fg);line-height:1.35}
+  @media (prefers-reduced-motion:no-preference){.lyr .cur{animation:up .45s var(--spring) both,fade .3s ease-out both}}
+  .lyr .nxt{font-size:13px;color:var(--faint);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .np .cover.photo::after{display:none}
+  .np .cover{background:var(--art);background-color:#1c1c1e}
+  .clips li .acts{display:none;gap:4px;flex:none}
+  .clips li:hover .acts,.clips li:focus-within .acts{display:flex}
+  .clips li .acts button{height:24px;padding:0 9px;border-radius:12px;background:var(--tile2);font-size:11.5px;font-weight:500;color:var(--fg)}
+  .clips li .acts button:hover{background:#3a3a3c}
+  .clips li.pinned .k{color:var(--orange)}
+  .agenda li .v small{color:var(--muted);font-size:11.5px}
+  .sec{font-size:11.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:14px 0 -4px}
+  .app.letter{font-weight:700;font-size:16px;color:#fff}
+  .nlist .app.letter{font-size:14px}
+  .focusing .ring .fg{stroke:#bf5af2}.focusing .ring .bg{stroke:rgba(191,90,242,.25)}.focusing .tval{color:#bf5af2}

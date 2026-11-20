@@ -48,5 +48,7 @@ jobs:
             Windows may warn that the app is unsigned: click **More info → Run anyway**.
 
             Jarvis is a black island at the top of your screen. Click it (or press Alt+J) and ask anything; answers drop down as cards. Flick it up to hide it, pull it down to tear it off into a widget. It runs on your own Claude account (no API key).
+
+            New in 3.2: Allow / Deny Claude Code from the island, other apps' notifications, next meeting with Join, morning briefing, read-only email, clipboard history, smart suggestions, download progress, focus mode, real Spotify control with synced lyrics, and auto-update.
           files: jarvis-desktop/dist/Jarvis-Setup-*.exe
           make_latest: true

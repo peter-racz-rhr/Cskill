@@ -94,7 +94,34 @@
       <label class="tg"><input type="checkbox" name="allowControl"> Let me use your mouse and keyboard when asked</label>
       <label class="tg"><input type="checkbox" name="confirmCommands"> Ask before running commands</label>
       <label class="tg"><input type="checkbox" name="claudeActivity"> Show my Claude Code sessions in the island</label>
+      <label class="tg"><input type="checkbox" name="approveFromIsland"> Allow / Deny Claude Code's permission requests from the island</label>
+      <label class="tg"><input type="checkbox" name="otherNotifications"> Show other apps' notifications (WhatsApp, Discord, Outlook…)</label>
+      <label class="tg"><input type="checkbox" name="clipboardHistory"> Keep a clipboard history (last 20, only on this PC)</label>
+      <label class="tg"><input type="checkbox" name="smartSuggestions"> Suggestions (copied an error → Explain, finished download → Open)</label>
+      <label class="tg"><input type="checkbox" name="downloads"> Show download progress</label>
+      <label class="tg"><input type="checkbox" name="morningBriefing"> Morning briefing the first time I come by each day</label>
+      <label class="tg"><input type="checkbox" name="autoUpdate"> Update Jarvis automatically</label>
       <label class="tg"><input type="checkbox" name="openAtLogin"> Start with Windows</label>
+
+      <div class="grp">Your day</div>
+      <label>Weather city<input name="city" placeholder="Budapest"></label>
+      <label>Calendar link (private iCal address)<input name="icalUrl" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"></label>
+      <p class="hint">Google Calendar: Settings → your calendar → <b>Secret address in iCal format</b>. Outlook: Settings → Calendar → Shared calendars → Publish → ICS.</p>
+      <div class="row">
+        <label>Email address<input name="mailUser" placeholder="you@gmail.com" autocomplete="off"></label>
+        <label>App password<input name="mailPass" type="password" id="mailPass" autocomplete="new-password"></label>
+      </div>
+      <p class="hint">Read-only. Gmail: Google Account → Security → 2-Step Verification → <b>App passwords</b>. iCloud and Yahoo work the same way.</p>
+      <label>Mail server (leave empty to detect)<input name="mailHost" placeholder="imap.gmail.com"></label>
+
+      <div class="grp">Spotify</div>
+      <label>Spotify Client ID<input name="spotifyClientId" placeholder="From developer.spotify.com → your app" autocomplete="off"></label>
+      <p class="hint" id="spHint"></p>
+      <div class="acct"><p id="spState">Not connected.</p><button type="button" class="ghost" id="spBtn">Connect</button></div>
+
+      <div class="grp">Updates</div>
+      <label>GitHub token (read-only, while the project is private)<input name="updateToken" type="password" id="updToken" autocomplete="new-password"></label>
+      <p class="hint" id="verHint"></p>
       <div class="btns"><span class="ok" id="saved"></span><button type="button" class="ghost" id="quit">Quit Jarvis</button><button class="primary">Save</button></div>
     </form>
   </section>

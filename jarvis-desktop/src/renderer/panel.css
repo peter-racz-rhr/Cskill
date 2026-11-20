@@ -42,6 +42,10 @@ pre:empty{display:none}
 .acct{display:flex;align-items:center;gap:10px;background:var(--raise);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
 .acct p{flex:1;font-size:12.5px}
 .acct b{color:var(--fg)}
+.form{max-height:600px;overflow-y:auto;scrollbar-width:thin;padding-right:4px}
+.grp{font-size:11.5px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;margin-top:12px}
+.form .hint{margin-top:-4px}
+.form .hint b{color:var(--muted);font-weight:600}
 .mem{list-style:none;max-height:380px;overflow-y:auto}
 .mem li{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:13.5px}
 .mem li small{display:block;color:var(--faint);font-size:11px}
