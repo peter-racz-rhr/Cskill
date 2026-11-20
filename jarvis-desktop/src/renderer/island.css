@@ -247,3 +247,8 @@
   .app.letter{font-weight:700;font-size:16px;color:#fff}
   .nlist .app.letter{font-size:14px}
   .focusing .ring .fg{stroke:#bf5af2}.focusing .ring .bg{stroke:rgba(191,90,242,.25)}.focusing .tval{color:#bf5af2}
+
+  /* the bump: visible even over black video, a hairline of light around a black drop */
+  #island.bump{box-shadow:0 4px 12px rgba(0,0,0,.35),inset 0 -1px 0 rgba(255,255,255,.22),0 0 0 .5px rgba(255,255,255,.28)}
+  #island.bump .layer{opacity:0!important}
+  #island.bump .count{opacity:0!important}

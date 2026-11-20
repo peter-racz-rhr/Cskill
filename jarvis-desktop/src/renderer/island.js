@@ -35,6 +35,9 @@ const ext = new Map();   // Claude Code sessions running on this PC: id → { pr
 let extPinned = false, extFlash = 0, extDone = null, rowHtml = "";
 let settings = {};
 let hidden = false, peekT = null;
+// tucked into a small bump: flicked up by you, or out of the way of a full-screen / maximized app
+let autoHidden = false, revealed = false, bumpPull = 0, wobble = 0, lastOver = 0;
+const tucked = () => mode === "dock" && (hidden || autoHidden) && !revealed && !needsYou();
 const perms = new Map();   // Claude Code permission requests waiting for Allow / Deny: id → request
 let clips = [], dls = new Map(), focus = null, cal = [], mail = null, update = "", lyrics = null, suggestion = null, curLayer = null;
 function setS(v, text) { s = v; island.dataset.s = v; if (text !== undefined) $("statusText").textContent = text; }
@@ -50,7 +53,10 @@ function needsYou() {   // even when hidden, the island comes out for these
 }
 function shape() {
   const cx = innerWidth / 2, at = (w, h, layer, r) => ({ x: cx - w / 2, y: 10, w, h, layer, r: r ?? h / 2 });
-  if (mode === "dock" && hidden && !needsYou()) return { x: cx - 63, y: -52, w: 126, h: 36, layer: null, r: 18 };
+  if (tucked()) {   // the bump: a little drop hanging from the top edge; pulling stretches it like liquid
+    const w = bumpPull ? Math.max(36, 70 - bumpPull * .5) : hover ? 84 : 70, h = bumpPull ? 26 + bumpPull * .85 : hover ? 32 : 26;
+    return { x: cx - w / 2, y: -10, w, h, layer: null, r: w / 2, bump: true };
+  }
   if (mode === "widget") return { x: WPOS.x, y: WPOS.y, w: 400, h: Math.max(160, contentH()), layer: "lCard", r: 28 };
   if (dragOver) return at(260, 48, "lDrop");
   if (s === "listening") return at(300, 48, "lStatus");
@@ -77,10 +83,11 @@ function frame(now) {
   drawRings(now);
   if (music) drawMusic();
   const sh = shape();
-  if (!pulling || !pulling.moved || mode === "widget") target = sh;
-  const k = pulling ? 520 : 290, c = pulling ? 34 : 23;
+  if (!pulling || !pulling.moved || pulling.bump || mode === "widget") target = sh;
+  const k = pulling ? 520 : now < wobble ? 340 : 290, c = pulling ? 34 : now < wobble ? 13 : 23;   // looser just after it pours out of the bump
   for (const [p, v] of [["x", "vx"], ["y", "vy"], ["w", "vw"], ["h", "vh"]]) { box[v] += (k * (target[p] - box[p]) - c * box[v]) * dt; box[p] += box[v] * dt; }
-  Object.assign(island.style, { left: box.x + "px", top: box.y + "px", width: box.w + "px", height: box.h + "px", borderRadius: Math.min(sh.r, box.h / 2) + "px" });
+  Object.assign(island.style, { left: box.x + "px", top: box.y + "px", width: box.w + "px", height: box.h + "px", borderRadius: sh.bump ? "0 0 50% 50% / 0 0 64% 64%" : Math.min(sh.r, box.h / 2) + "px" });
+  island.classList.toggle("bump", !!sh.bump);
   for (const id of ["lStatus", "lTimer", "lMusic", "lCard", "lHud", "lDrop", "lTask", "lNotif", "lMeet", "lDl"]) $(id).classList.toggle("on", id === sh.layer);
   curLayer = sh.layer;
   if (sh.layer === "lMeet") setRow("meetRow", meetRowHtml(meetingSoon()));
@@ -92,7 +99,7 @@ function frame(now) {
   if (!task && sh.layer === "lTask") { const h = extRowHtml(); if (h !== rowHtml) { rowHtml = h; $("taskRow").innerHTML = h; } }
   else if (sh.layer === "lTask") rowHtml = "";
   if (!task && activeExt() && (hover || extPinned) && sh.layer === "lCard" && !cardOpen) renderExtCard();
-  $("peek").classList.toggle("on", hidden && mode === "dock" && !needsYou());
+
   const dual = mode === "dock" && timer && music && !cardOpen && s === "idle" && sh.layer === "lMusic";
   $("bubble").classList.toggle("on", !!dual);
   if (dual) Object.assign($("bubble").style, { left: box.x + box.w + 8 + "px", top: box.y + (box.h - 38) / 2 + "px" });
@@ -103,22 +110,16 @@ requestAnimationFrame(frame);
 // ---------------- pointer: the window is click-through except over the island ----------------
 let interactive = false;
 function setInteractive(on) { if (on !== interactive) { interactive = on; J.hover(on); } }
-const onPeek = (x, y) => hidden && mode === "dock" && y <= 8 && Math.abs(x - innerWidth / 2) <= 50;
 const overIsland = (x, y) => x >= box.x - 8 && x <= box.x + box.w + 8 && y >= box.y - 8 && y <= box.y + box.h + 8;
 addEventListener("mousemove", (e) => {
   if (pulling) return;
-  if (onPeek(e.clientX, e.clientY)) {               // resting on the little line at the top edge brings it back
-    setInteractive(true);
-    if (!peekT) peekT = setTimeout(() => { hidden = false; peekT = null; $("peek").classList.remove("on"); }, 450);
-    return;
-  }
-  clearTimeout(peekT); peekT = null;
-  const over = (!hidden || needsYou()) && overIsland(e.clientX, e.clientY) || ($("typed").classList.contains("on"));
+  const over = overIsland(e.clientX, e.clientY) || ($("typed").classList.contains("on"));
   setInteractive(over);
   if (mode === "dock") {
-    const was = hover;
-    hover = !hidden && (over || (e.clientY < 70 && Math.abs(e.clientX - innerWidth / 2) < 120));
-    if (hover && !was) maybeBrief();
+    const was = hover, t = tucked();
+    hover = over || (!t && e.clientY < 70 && Math.abs(e.clientX - innerWidth / 2) < 120);
+    if (hover) lastOver = performance.now();
+    if (hover && !was && !t) maybeBrief();
   }
 });
 addEventListener("mouseleave", () => { if (!pulling) { setInteractive(false); hover = false; } });
@@ -126,7 +127,7 @@ addEventListener("mouseleave", () => { if (!pulling) { setInteractive(false); ho
 island.addEventListener("pointerdown", (e) => {
   if (e.button !== 0 || e.target.closest("button:not(.w-mic),.play,a,li[data-n],li[data-f]")) return;
   if (mode === "widget" && !e.target.closest(".w-top,.w-mic")) return;
-  pulling = { y0: e.screenY, x0: e.screenX, moved: false, mic: !!e.target.closest(".w-mic"), handle: !!e.target.closest(".w-top") };
+  pulling = { y0: e.screenY, x0: e.screenX, moved: false, mic: !!e.target.closest(".w-mic"), handle: !!e.target.closest(".w-top"), bump: tucked() };
   island.setPointerCapture(e.pointerId);
   if (mode === "widget" && pulling.handle) { pulling.moved = true; J.dragStart(); }
 });
@@ -134,6 +135,11 @@ island.addEventListener("pointermove", (e) => {
   if (!pulling || mode === "widget") return;
   const dx = e.screenX - pulling.x0, dy = e.screenY - pulling.y0;
   if (!pulling.moved && Math.hypot(dx, dy) < 6) return;
+  if (pulling.bump) {                                   // pulling the bump: it stretches, then pours out
+    pulling.moved = true; bumpPull = Math.max(0, dy);
+    if (dy > 44) { pulling = null; reveal(); }
+    return;
+  }
   if (!pulling.moved && dy < 0 && Math.abs(dy) > Math.abs(dx)) {   // flick up → hide
     pulling = null; hideIsland(); return;
   }
@@ -153,6 +159,7 @@ island.addEventListener("pointerup", () => {
   if (!pulling) return;
   const p = pulling; pulling = null;
   if (mode === "widget" && p.moved) { J.dragEnd(); return; }
+  if (p.bump) { if (p.moved) bumpPull = 0; else reveal(); return; }
   if (p.moved) return;                                  // let go before tearing: springs back
   if (mode === "dock" && performance.now() < notifShow && suggestion) { const sg = suggestion; suggestion = null; notifShow = 0; sg.run(); return; }
   if (mode === "dock" && performance.now() < notifShow && notifs[0]) { notifShow = 0; unread = Math.max(0, unread - 1); show(notifDetail(notifs[0])); return; }
@@ -242,10 +249,22 @@ J.onTalk(() => talk());
 J.onToggleHide(() => (hidden ? showIsland() : hideIsland()));
 function hideIsland() {
   if (pendingApproval()) return;
-  hidden = true; hover = false; cardOpen = false; taskPinned = false; $("card").dataset.task = "";
-  setInteractive(false); $("peek").classList.add("on");
+  hidden = true; revealed = false; hover = false; cardOpen = false; taskPinned = false; $("card").dataset.task = "";
+  setInteractive(false);
 }
-function showIsland() { hidden = false; $("peek").classList.remove("on"); }
+function showIsland() { hidden = false; reveal(); }
+// out of the bump with a liquid overshoot: it drops, squeezes narrow, then settles
+function reveal() {
+  bumpPull = 0;
+  if (hidden) hidden = false; else if (autoHidden) revealed = true;
+  wobble = performance.now() + 800; lastOver = performance.now();
+  box.vh += 420; box.vw -= 260;
+}
+J.onAutoHide?.((on) => { autoHidden = !!on; if (!on) revealed = false; });
+// shown from the bump over a full-screen app: tuck back once you've moved away and nothing is open
+setInterval(() => {
+  if (revealed && !hover && !cardOpen && !taskPinned && !extPinned && s === "idle" && performance.now() - lastOver > 1600) revealed = false;
+}, 400);
 
 // ---------------- one card layout for every answer ----------------
 let lastAnswer = null, closeT = null;

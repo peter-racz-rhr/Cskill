@@ -56,6 +56,7 @@ const DEFAULTS = {
   downloads: true,          // download progress live activity
   morningBriefing: true,
   autoUpdate: true,
+  autoHideFullscreen: true, // tuck into a bump when a full-screen or maximized app is under the island
   city: "",
   icalUrl: "",              // private iCal link of the user's calendar
   mailUser: "", mailHost: "",
@@ -312,6 +313,62 @@ function startMediaWatch() {
   });
   mediaProc.stderr.on("data", (d) => logLine("media", String(d).trim().slice(0, 300)));
   mediaProc.on("exit", (code) => { logLine("media", `watcher stopped (${code})`); mediaProc = null; });   // not supported on this Windows build: no music pill, nothing else breaks
+}
+
+// ---- full-screen / maximized apps: the island tucks into a small bump so it doesn't cover them
+// A tiny PowerShell loop reports the foreground window's rectangle; if it covers the top of the
+// screen where the island sits (YouTube full screen, a maximized Chrome…), the island tucks away.
+const FG_PS = `
+$ErrorActionPreference = 'SilentlyContinue'
+Add-Type @'
+using System; using System.Runtime.InteropServices; using System.Text;
+public static class JFg {
+  [StructLayout(LayoutKind.Sequential)] public struct R { public int L, T, Rt, B; }
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out R r);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr h);
+  [DllImport("user32.dll")] public static extern IntPtr SetProcessDpiAwarenessContext(IntPtr v);
+}
+'@
+[JFg]::SetProcessDpiAwarenessContext([IntPtr](-4)) | Out-Null
+$last = ''
+while ($true) {
+  $h = [JFg]::GetForegroundWindow(); $r = New-Object JFg+R; $p = [uint32]0
+  [JFg]::GetWindowRect($h, [ref]$r) | Out-Null; [JFg]::GetWindowThreadProcessId($h, [ref]$p) | Out-Null
+  $sb = New-Object System.Text.StringBuilder 64; [JFg]::GetClassName($h, $sb, 64) | Out-Null
+  $line = '{0},{1},{2},{3},{4},{5},{6}' -f $r.L, $r.T, $r.Rt, $r.B, $p, [int][JFg]::IsZoomed($h), $sb.ToString()
+  if ($line -ne $last) { $last = $line; [Console]::Out.WriteLine($line); [Console]::Out.Flush() }
+  Start-Sleep -Milliseconds 400
+}`;
+let fgProc = null, autoHidden = false;
+function setAutoHidden(on) { if (on !== autoHidden) { autoHidden = on; send("island:autoHide", on); } }
+function startFullscreenWatch() {
+  if (!IS_WIN || fgProc) return;
+  fgProc = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Buffer.from(FG_PS, "utf16le").toString("base64")], { windowsHide: true });
+  let buf = "";
+  fgProc.stdout.setEncoding("utf8");
+  fgProc.stdout.on("data", (d) => {
+    buf += d; let i;
+    while ((i = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+      const [l, t, r, b, pid, , cls] = line.split(",");
+      if (cls === undefined) continue;
+      if (+pid === process.pid || /^(Progman|WorkerW|Shell_TrayWnd|Shell_SecondaryTrayWnd|Windows\.UI\.Core\.CoreWindow|XamlExplorerHostIslandWindow|TopLevelWindowForOverflowXamlIsland)$/.test(cls)) {
+        if (+pid !== process.pid) setAutoHidden(false);   // desktop, taskbar, Start: show the island
+        continue;                                            // our own windows: keep the current state
+      }
+      if (!settings.autoHideFullscreen || dock !== "top") { setAutoHidden(false); continue; }
+      const rect = screen.screenToDipRect(null, { x: +l, y: +t, width: +r - +l, height: +b - +t });
+      const ib = islandWin?.getBounds(); if (!ib) continue;
+      const d = screen.getDisplayMatching(ib), cx = ib.x + ib.width / 2;
+      // covers the top edge around the island, and is big (maximized or full screen)
+      const covers = rect.y <= d.workArea.y + 12 && rect.x <= cx - 120 && rect.x + rect.width >= cx + 120 && rect.height >= d.workArea.height * .7;
+      setAutoHidden(covers);
+    }
+  });
+  fgProc.on("exit", (code) => { logLine("fullscreen", `watcher stopped (${code})`); fgProc = null; setAutoHidden(false); });
 }
 
 // ---- the user's Claude Code sessions → island (via Claude Code hooks)
@@ -1054,7 +1111,7 @@ ipcMain.handle("settings:set", async (_e, patch) => {
   const changed = (k) => k in patch && patch[k] !== settings[k];
   const hooksChanged = changed("claudeActivity") || changed("approveFromIsland");
   const calChanged = changed("icalUrl"), mailChanged = changed("mailUser") || changed("mailHost") || !!(patch.mailPass || "").trim();
-  const tokenChanged = !!(patch.updateToken || "").trim(), updChanged = changed("autoUpdate");
+  const tokenChanged = !!(patch.updateToken || "").trim(), updChanged = changed("autoUpdate"), changed_autoHide = changed("autoHideFullscreen");
   for (const k of Object.keys(DEFAULTS)) if (k in patch) settings[k] = patch[k];
   for (const k of ["mailPass", "updateToken"]) if (typeof patch[k] === "string" && patch[k].trim()) secrets[k] = patch[k].trim() === "-" ? "" : patch[k].trim();
   if (!settings.mailUser) secrets.mailPass = "";
@@ -1063,6 +1120,7 @@ ipcMain.handle("settings:set", async (_e, patch) => {
   startFeatures();
   if (calChanged) refreshCalendar();
   if (mailChanged) refreshMail();
+  if (changed_autoHide && !settings.autoHideFullscreen) setAutoHidden(false);
   if (updChanged) settings.autoUpdate ? updater?.start() : updater?.stop();
   if (tokenChanged) updater?.check();
   resetClaudeSession(); // pick up model / name changes
@@ -1093,6 +1151,7 @@ else {
       if (settings.backend === "claude") claudeSession().then((s) => s.proc || s.start()).catch(() => {});
     }
     startMediaWatch();
+    startFullscreenWatch();
     startHookListener();
     if (settings.claudeActivity) setClaudeHooks(true).catch(() => {});
     startFeatures();
@@ -1100,6 +1159,6 @@ else {
     setTimeout(() => { refreshCalendar(); refreshMail(); }, 3000);
     screen.on("display-metrics-changed", () => { if (dock === "top") islandWin?.setBounds(dockBounds()); });
   });
-  app.on("will-quit", () => { globalShortcut.unregisterAll(); cc?.kill(); mcp?.close(); input.stop(); ml?.kill(); mediaProc?.kill(); hookServer?.close(); winNotif?.stop(); downloads?.stop(); updater?.stop(); for (const id of [...pendingPerms.keys()]) answerPerm(id, "ask"); });
+  app.on("will-quit", () => { globalShortcut.unregisterAll(); cc?.kill(); mcp?.close(); input.stop(); ml?.kill(); mediaProc?.kill(); fgProc?.kill(); hookServer?.close(); winNotif?.stop(); downloads?.stop(); updater?.stop(); for (const id of [...pendingPerms.keys()]) answerPerm(id, "ask"); });
   app.on("window-all-closed", () => app.quit());
 }

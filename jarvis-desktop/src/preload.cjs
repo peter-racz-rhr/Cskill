@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld("jarvis", {
   onTalk: on("island:talk"),
   onToggleHide: on("island:toggleHide"),
   onShow: on("island:show"),
+  onAutoHide: on("island:autoHide"),
   mediaKey: (action) => ipcRenderer.send("pc:mediaKey", action),
   openExternal: (url) => ipcRenderer.send("pc:openExternal", url),
   openPath: (p) => ipcRenderer.invoke("pc:openPath", p),

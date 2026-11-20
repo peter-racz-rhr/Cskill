@@ -23,7 +23,8 @@ A black island at the top of your Windows screen, powered by your own Claude acc
 - **Focus mode:** "focus for 45 minutes" starts a purple focus ring and holds notifications until the end (meetings and Claude's questions still come through), then shows what you missed.
 - **Spotify:** connect it in Settings and "play Blinding Lights", "play my Chill playlist", "add this to Gym", "like this song", "more like this" really happen. Synced lyrics show under the mini player when you hover it, and in the player card.
 - **Updates:** Jarvis downloads new versions in the background and shows **Update ready · Restart**.
-- **Flick it up** to hide it (only a faint line stays in the top edge; rest the mouse there, press Alt+J, or use the tray to bring it back). It still pops out for things that need you.
+- **Out of the way of full-screen apps:** when YouTube is full screen or Chrome (or anything) is maximized under the island, it tucks into a small black bump in the top edge. Click the bump, or pull it down, and the island pours back out; move away and it tucks back. Things that need you (Claude asking permission, a meeting, a message) still come out. Turn it off in Settings.
+- **Flick it up** to hide it into the same bump yourself; click or pull the bump to bring it back.
 - **Pull it down hard** to tear it off into a floating widget; drag it back to the top edge to dock. Right-click for Settings, Memory, Float/Dock and Quit.
 
 Quick things run instantly on your PC without using Claude: weather (with the next hours), timers, maths, currency, notes, translation, play/pause/next, volume. Everything else goes to Claude.
