@@ -175,8 +175,13 @@ export class ClaudeCodeSession {
     } else if (ev.type === "user" && Array.isArray(ev.message?.content)) {
       for (const b of ev.message.content) if (b.type === "tool_result" && this.pendingTools?.[b.tool_use_id])
         this.send("agent", { type: "tool", name: this.pendingTools[b.tool_use_id], status: b.is_error ? "error" : "done" });
+    } else if (ev.type === "system" && ev.subtype === "init") {
+      this.sessionId = ev.session_id;              // lets Jarvis ignore its own hook events
     } else if (ev.type === "assistant" && Array.isArray(ev.message?.content)) {
-      for (const b of ev.message.content) if (b.type === "tool_use") (this.pendingTools ||= {})[b.id] = toolName(b.name);
+      for (const b of ev.message.content) if (b.type === "tool_use" || b.type === "server_tool_use") {
+        (this.pendingTools ||= {})[b.id] = toolName(b.name);
+        this.send("agent", { type: "tool", name: toolName(b.name), status: "detail", input: b.input || {} });   // full input: "Opening Spotify", the search query…
+      }
     } else if (ev.type === "result") {
       const t = this.turn; this.turn = null;
       if (!t) return;

@@ -44,6 +44,8 @@
       <h2>Your screen</h2>
       <p>When you ask, I can look at your screen, point at things with my own cursor, and use your mouse and keyboard. I always ask first, and <kbd>Esc</kbd> stops me.</p>
       <label class="tg"><input type="checkbox" id="ctl" checked> Allow mouse and keyboard control when I ask</label>
+      <label class="tg"><input type="checkbox" id="ccAct" checked> Show my Claude Code sessions (Claude app, terminal, VS Code) in the island</label>
+      <p class="hint">This adds a small hook to Claude Code's settings so it tells Jarvis each step. Turn it off any time in Settings.</p>
       <div class="btns"><button class="primary" data-next>Continue</button></div>
     </div>
     <div class="step" data-step="4">
@@ -91,6 +93,7 @@
       <label class="tg"><input type="checkbox" name="voice"> Speak out loud</label>
       <label class="tg"><input type="checkbox" name="allowControl"> Let me use your mouse and keyboard when asked</label>
       <label class="tg"><input type="checkbox" name="confirmCommands"> Ask before running commands</label>
+      <label class="tg"><input type="checkbox" name="claudeActivity"> Show my Claude Code sessions in the island</label>
       <label class="tg"><input type="checkbox" name="openAtLogin"> Start with Windows</label>
       <div class="btns"><span class="ok" id="saved"></span><button type="button" class="ghost" id="quit">Quit Jarvis</button><button class="primary">Save</button></div>
     </form>

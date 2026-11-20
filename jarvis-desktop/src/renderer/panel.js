@@ -105,7 +105,7 @@ function renderDl() {
   $("dlHint").textContent = dlReady ? "✓ Ready." : dlPct ? `Downloading… ${dlPct}%  ·  you can finish now, it continues in the background` : "Starting…";
 }
 $("finish").onclick = async () => {
-  await J.setSettings({ allowControl: $("ctl").checked, onboarded: true });
+  await J.setSettings({ allowControl: $("ctl").checked, claudeActivity: $("ccAct").checked, onboarded: true });
   J.setupDone();
 };
 

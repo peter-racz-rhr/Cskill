@@ -13,6 +13,7 @@ import {
 import path from "node:path";
 import os from "node:os";
 import fs from "node:fs/promises";
+import http from "node:http";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
@@ -40,6 +41,7 @@ const DEFAULTS = {
   voice: true,
   confirmCommands: true,
   allowControl: true,   // may Jarvis use mouse & keyboard when asked (still asks once per task)
+  claudeActivity: true, // show the user's own Claude Code sessions (app, terminal, VS Code) in the island
   onboarded: false,
 };
 let settings = { ...DEFAULTS };
@@ -203,19 +205,29 @@ function Await($op, [Type]$t) { $task = $asTask.MakeGenericMethod($t).Invoke($nu
 [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime] | Out-Null
 [Windows.Storage.Streams.DataReader, Windows.Storage.Streams, ContentType = WindowsRuntime] | Out-Null
 $lastKey = ''; $art = ''; $tick = 0
+$artErr = ''
 function Get-Art($ref) {
-  if (-not $ref) { return '' }
+  if (-not $ref) { $script:artErr = 'this player shares no cover'; return '' }
   try {
     $stream = Await ($ref.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
-    $size = [uint32]$stream.Size
-    if ($size -le 0 -or $size -gt 3MB) { return '' }
-    $reader = [Windows.Storage.Streams.DataReader]::new($stream.GetInputStreamAt(0))
-    Await ($reader.LoadAsync($size)) ([uint32]) | Out-Null
-    $bytes = New-Object byte[] $size
-    $reader.ReadBytes($bytes)
-    $type = if ($stream.ContentType) { $stream.ContentType } else { 'image/png' }
+    $type = if ($stream.ContentType) { $stream.ContentType } else { 'image/jpeg' }
+    $bytes = $null
+    try {                                   # most reliable: wrap the WinRT stream as a .NET stream
+      $net = [System.IO.WindowsRuntimeStreamExtensions]::AsStreamForRead($stream)
+      $ms = New-Object System.IO.MemoryStream
+      $net.CopyTo($ms); $bytes = $ms.ToArray()
+    } catch {                               # fallback: read it with a DataReader
+      $size = [uint32]$stream.Size
+      $reader = [Windows.Storage.Streams.DataReader]::new($stream.GetInputStreamAt(0))
+      Await ($reader.LoadAsync($size)) ([uint32]) | Out-Null
+      $bytes = New-Object byte[] $size
+      $reader.ReadBytes($bytes)
+    }
+    if (-not $bytes -or $bytes.Length -eq 0) { $script:artErr = 'cover was empty'; return '' }
+    if ($bytes.Length -gt 4MB) { $script:artErr = 'cover too large'; return '' }
+    $script:artErr = ''
     return 'data:' + $type + ';base64,' + [Convert]::ToBase64String($bytes)
-  } catch { return '' }
+  } catch { $script:artErr = $_.Exception.Message; return '' }
 }
 $mgr = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
 while ($true) {
@@ -226,8 +238,9 @@ while ($true) {
       $pb = $s.GetPlaybackInfo(); $tl = $s.GetTimelineProperties()
       $key = $p.Title + '|' + $p.Artist
       $newSong = ($key -ne $lastKey)
-      if ($newSong) { $lastKey = $key; $art = Get-Art $p.Thumbnail; if (-not $art) { Start-Sleep -Milliseconds 700; $p = Await ($s.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties]); $art = Get-Art $p.Thumbnail } }
-      $o = @{ title = $p.Title; artist = $p.Artist; app = $s.SourceAppUserModelId; playing = ($pb.PlaybackStatus.ToString() -eq 'Playing'); pos = $tl.Position.TotalSeconds; dur = $tl.EndTime.TotalSeconds; key = $key }
+      if ($newSong) { $lastKey = $key; $art = Get-Art $p.Thumbnail }
+      elseif (-not $art -and $tick % 4 -eq 0) { $art = Get-Art $p.Thumbnail; if ($art) { $newSong = $true } }   # players often attach the cover a moment later
+      $o = @{ title = $p.Title; artist = $p.Artist; app = $s.SourceAppUserModelId; playing = ($pb.PlaybackStatus.ToString() -eq 'Playing'); pos = $tl.Position.TotalSeconds; dur = $tl.EndTime.TotalSeconds; key = $key; artErr = $artErr }
       if ($newSong -or $tick % 20 -eq 0) { $o.art = $art }   # cover only when the song changes (and now and then)
       $tick++
       [Console]::Out.WriteLine(($o | ConvertTo-Json -Compress))
@@ -236,7 +249,9 @@ while ($true) {
   [Console]::Out.Flush()
   Start-Sleep -Milliseconds 1500
 }`;
-let mediaProc = null, lastMedia = "";
+let mediaProc = null, lastMedia = "", lastArtErr = null;
+// small diagnostics log in %APPDATA%/Jarvis/jarvis.log (no personal content)
+function logLine(area, msg) { fs.appendFile(path.join(USER_DIR(), "jarvis.log"), `${new Date().toISOString()} [${area}] ${msg}\n`).catch(() => {}); }
 function startMediaWatch() {
   if (!IS_WIN || mediaProc) return;
   const encoded = Buffer.from(MEDIA_PS, "utf16le").toString("base64");
@@ -249,10 +264,66 @@ function startMediaWatch() {
       const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
       if (!line.startsWith("{") || line === lastMedia) continue;
       lastMedia = line;
-      try { send("media:now", JSON.parse(line)); } catch {}
+      try {
+        const m = JSON.parse(line);
+        if ((m.artErr || "") !== lastArtErr) { lastArtErr = m.artErr || ""; logLine("media", lastArtErr ? `cover: ${lastArtErr} (${m.app})` : `cover: ok (${m.app})`); }
+        send("media:now", m);
+      } catch {}
     }
   });
-  mediaProc.on("exit", () => { mediaProc = null; });   // not supported on this Windows build: no music pill, nothing else breaks
+  mediaProc.stderr.on("data", (d) => logLine("media", String(d).trim().slice(0, 300)));
+  mediaProc.on("exit", (code) => { logLine("media", `watcher stopped (${code})`); mediaProc = null; });   // not supported on this Windows build: no music pill, nothing else breaks
+}
+
+// ---- the user's Claude Code sessions → island (via Claude Code hooks)
+// Claude Code runs a tiny curl for each event (prompt, each tool before/after, needs-permission, stop).
+// It posts to this listener on 127.0.0.1 only; responses are empty so nothing is added to Claude's context.
+const HOOK_PORT = 47823;
+const HOOK_EVENTS = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Notification", "Stop", "SessionEnd"];
+const hookCmd = (ev) => `curl -s -m 2 -X POST --data-binary @- http://127.0.0.1:${HOOK_PORT}/cc-hook/${ev} || exit 0`;
+let hookServer = null;
+function startHookListener() {
+  if (hookServer) return;
+  hookServer = http.createServer((req, res) => {
+    const m = req.url.match(/^\/cc-hook\/([A-Za-z]+)$/);
+    if (req.method !== "POST" || !m) { res.writeHead(404); return res.end(); }
+    let body = "";
+    req.on("data", (d) => { body += d; if (body.length > 2e6) req.destroy(); });
+    req.on("end", () => {
+      res.writeHead(204); res.end();
+      if (!settings.claudeActivity) return;
+      let j; try { j = JSON.parse(body); } catch { return; }
+      if (cc?.sessionId && j.session_id === cc.sessionId) return;   // Jarvis's own background Claude: already shown
+      const cwd = j.cwd || "";
+      send("cc:event", {
+        event: m[1], session: j.session_id, project: cwd.split(/[\\/]/).filter(Boolean).pop() || "Claude",
+        tool: j.tool_name, input: j.tool_input, prompt: j.prompt ? String(j.prompt).slice(0, 300) : undefined,
+        message: j.message ? String(j.message).slice(0, 300) : undefined, kind: j.notification_type,
+        last: j.last_assistant_message ? String(j.last_assistant_message).slice(0, 1200) : undefined, at: Date.now(),
+      });
+    });
+  });
+  hookServer.on("error", (e) => logLine("hooks", `listener: ${e.message}`));
+  hookServer.listen(HOOK_PORT, "127.0.0.1");
+}
+// Add (or remove) Jarvis's hooks in ~/.claude/settings.json, keeping everything else the user has there.
+async function setClaudeHooks(on) {
+  const file = path.join(os.homedir(), ".claude", "settings.json");
+  let cfg = {};
+  try { cfg = JSON.parse(await fs.readFile(file, "utf8")); }
+  catch (e) { if (e.code !== "ENOENT") { logLine("hooks", `can't read ${file}: ${e.message}`); return false; } }
+  try { await fs.copyFile(file, file + ".jarvis-backup", fs.constants?.COPYFILE_EXCL ?? 1); } catch {}
+  cfg.hooks ||= {};
+  for (const ev of HOOK_EVENTS) {
+    const kept = (cfg.hooks[ev] || []).filter((g) => !(g.hooks || []).some((h) => String(h.command || "").includes("/cc-hook/")));
+    cfg.hooks[ev] = on ? [...kept, { matcher: "*", hooks: [{ type: "command", command: hookCmd(ev), timeout: 5 }] }] : kept;
+    if (!cfg.hooks[ev].length) delete cfg.hooks[ev];
+  }
+  if (!Object.keys(cfg.hooks).length) delete cfg.hooks;
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  await fs.writeFile(file, JSON.stringify(cfg, null, 2));
+  logLine("hooks", on ? "installed" : "removed");
+  return true;
 }
 
 // ---- panel: setup, settings, memory, approvals
@@ -691,6 +762,7 @@ async function chat({ text, withScreen }) {
       const calls = msg.content.filter((b) => b.type === "tool_use");
       const results = [];
       for (const c of calls) { // sequential: approvals and UI actions stay in order
+        send("agent", { type: "tool", name: c.name, status: "detail", input: c.input ?? {} });
         try {
           const out = await runTool(c.name, c.input ?? {});
           send("agent", { type: "tool", name: c.name, status: "done" });
@@ -760,7 +832,9 @@ ipcMain.on("panel:open", (_e, v) => openPanel(v));
 ipcMain.handle("settings:set", async (_e, patch) => {
   if (typeof patch.apiKey === "string" && patch.apiKey.trim()) apiKey = patch.apiKey.trim();
   if (typeof patch.openAtLogin === "boolean") app.setLoginItemSettings({ openAtLogin: patch.openAtLogin });
+  const hooksChanged = "claudeActivity" in patch && patch.claudeActivity !== settings.claudeActivity;
   for (const k of Object.keys(DEFAULTS)) if (k in patch) settings[k] = patch[k];
+  if (hooksChanged) await setClaudeHooks(!!settings.claudeActivity);
   await saveSettings();
   resetClaudeSession(); // pick up model / name changes
   const hotkeys = registerHotkeys();
@@ -790,8 +864,10 @@ else {
       if (settings.backend === "claude") claudeSession().then((s) => s.proc || s.start()).catch(() => {});
     }
     startMediaWatch();
+    startHookListener();
+    if (settings.claudeActivity) setClaudeHooks(true).catch(() => {});
     screen.on("display-metrics-changed", () => { if (dock === "top") islandWin?.setBounds(dockBounds()); });
   });
-  app.on("will-quit", () => { globalShortcut.unregisterAll(); cc?.kill(); mcp?.close(); input.stop(); ml?.kill(); mediaProc?.kill(); });
+  app.on("will-quit", () => { globalShortcut.unregisterAll(); cc?.kill(); mcp?.close(); input.stop(); ml?.kill(); mediaProc?.kill(); hookServer?.close(); });
   app.on("window-all-closed", () => app.quit());
 }

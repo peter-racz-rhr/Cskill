@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld("jarvis", {
   openPath: (p) => ipcRenderer.invoke("pc:openPath", p),
   filePath: (file) => webUtils.getPathForFile(file),
   onMedia: on("media:now"),
+  onCcEvent: on("cc:event"),
 
   // panel: setup, settings, memory, approvals
   openPanel: (view) => ipcRenderer.send("panel:open", view),

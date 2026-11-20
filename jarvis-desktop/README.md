@@ -7,6 +7,7 @@ A black island at the top of your Windows screen, powered by your own Claude acc
 - **Idle:** a small black pill. **Hover** and it grows; **click** and it listens (red light, bars follow your voice).
 - **Answers** drop down as cards. Click anywhere outside to shrink it back.
 - **Claude working:** a spinner with the current step and a timer. Click it for the step list. **Needs your OK** opens a card with the exact command and **Run it / Don't**. **Ready** shows a green tick, then the answer.
+- **Your Claude Code sessions:** when Claude Code works on a project (in the Claude app, the terminal or VS Code), the island shows it live: project name, each step (Reading…, Editing…, Running the tests), amber when it needs your permission, and a notification with its final message when it's done. Jarvis adds small hooks to `~/.claude/settings.json` for this (backup kept as `settings.json.jarvis-backup`); turn it off in Settings and they're removed.
 - **Music:** whatever plays on Windows (Spotify, YouTube in the browser…) shows as a mini player: the real album cover, progress, equaliser. Click it for the player with ⏮ ⏯ ⏭ (real media keys).
 - **Timers:** an orange ring that drains. With music playing, the timer sits in its own little bubble.
 - **Shelf:** drag files onto the island; click one later to open it.
@@ -68,3 +69,7 @@ npm install
 npm start        # run from source
 npm run dist     # build the installer (on Windows)
 ```
+
+## Troubleshooting
+
+Jarvis keeps a small diagnostics log at `%APPDATA%\Jarvis\jarvis.log` (cover art and Claude Code hook status, no personal content).

@@ -24,6 +24,8 @@ const ICON = {
 let s = "idle", hover = false, cardOpen = false, mode = "dock", pulling = null;
 let timer = null, music = null, hud = null, dragOver = false, shelf = [];
 let task = null, flashTask = 0, taskPinned = false, notifs = [], unread = 0, notifShow = 0;
+const ext = new Map();   // Claude Code sessions running on this PC: id → { project, prompt, steps, status, start, updated }
+let extPinned = false, extFlash = 0, extDone = null, rowHtml = "";
 let settings = {};
 let hidden = false, peekT = null;
 function setS(v, text) { s = v; island.dataset.s = v; if (text !== undefined) $("statusText").textContent = text; }
@@ -49,6 +51,8 @@ function shape() {
   if (task && performance.now() < flashTask) return at(240, 44, "lTask");
   if (cardOpen) return at(400, contentH(), "lCard", 28);
   if (task && task.status !== "done") return hover || taskPinned ? at(400, contentH(), "lCard", 28) : at(330, 44, "lTask");
+  const es = activeExt();
+  if (!task && (es || performance.now() < extFlash)) return es && (hover || extPinned) ? at(400, contentH(), "lCard", 28) : at(340, 44, "lTask");
   if (timer && music) return at(hover ? 312 : 300, 56, "lMusic");
   if (timer) return at(hover ? 196 : 180, 38, "lTimer");
   if (music) return at(hover ? 312 : 300, 56, "lMusic");
@@ -69,6 +73,9 @@ function frame(now) {
   if (sh.layer === "lStatus" && s === "idle") $("statusText").textContent = "Click to talk";
   $("count").textContent = unread; $("count").classList.toggle("on", unread > 0 && !sh.layer);
   if (task && task.status !== "done" && (hover || taskPinned) && sh.layer === "lCard" && !cardOpen && $("card").dataset.task !== "1") renderTaskCard();
+  if (!task && sh.layer === "lTask") { const h = extRowHtml(); if (h !== rowHtml) { rowHtml = h; $("taskRow").innerHTML = h; } }
+  else if (sh.layer === "lTask") rowHtml = "";
+  if (!task && activeExt() && (hover || extPinned) && sh.layer === "lCard" && !cardOpen) renderExtCard();
   $("peek").classList.toggle("on", hidden && mode === "dock" && !needsYou());
   const dual = mode === "dock" && timer && music && !cardOpen && s === "idle" && sh.layer === "lMusic";
   $("bubble").classList.toggle("on", !!dual);
@@ -129,6 +136,7 @@ island.addEventListener("pointerup", () => {
   if (p.moved) return;                                  // let go before tearing: springs back
   if (mode === "dock" && performance.now() < notifShow && notifs[0]) { notifShow = 0; unread = Math.max(0, unread - 1); show(notifDetail(notifs[0])); return; }
   if (mode === "dock" && task && task.status !== "done") { taskPinned = !taskPinned; if (!taskPinned) $("card").dataset.task = ""; return; }
+  if (mode === "dock" && !task && activeExt()) { extPinned = !extPinned; if (!extPinned) $("card").dataset.task = ""; return; }
   if (mode === "dock" && music && !cardOpen && s === "idle" && !timer && !unread) { show(nowPlaying()); return; }
   if (mode === "dock" && unread && !cardOpen && s === "idle") { show(notifCenter()); unread = 0; return; }
   if (mode === "dock" || p.mic) talk();
@@ -138,7 +146,7 @@ island.addEventListener("contextmenu", (e) => { e.preventDefault(); J.menu(); })
 addEventListener("blur", () => { if (mode === "dock" && (cardOpen || taskPinned) && !pendingApproval()) { cardOpen = false; taskPinned = false; $("card").dataset.task = ""; } });
 addEventListener("pointerdown", (e) => {
   if (mode !== "dock" || island.contains(e.target) || e.target.closest("#typed")) return;
-  if ((cardOpen || taskPinned) && !pendingApproval()) { cardOpen = false; taskPinned = false; $("card").dataset.task = ""; }
+  if ((cardOpen || taskPinned || extPinned) && !pendingApproval()) { cardOpen = false; taskPinned = false; extPinned = false; $("card").dataset.task = ""; }
 });
 J.onIslandMode(applyMode);
 function applyMode(m) {
@@ -298,19 +306,66 @@ async function askClaude(text) {
   await J.send(text, false);
   finishTask();
 }
-function addStep(label) {
-  if (!task) return;
-  const cur = task.steps[task.steps.length - 1];
+function pushStep(t, label, name) {
+  const cur = t.steps[t.steps.length - 1];
   if (cur && cur.label === label && !cur.done) return;
   if (cur) cur.done = true;
-  task.steps.push({ label, done: false });
+  t.steps.push({ label, name, done: false });
+}
+function addStep(label, name) {
+  if (!task) return;
+  pushStep(task, label, name);
   renderTaskRow(); if ($("card").dataset.task === "1") renderTaskCard();
+}
+const fileName = (p) => String(p || "").split(/[\\/]/).filter(Boolean).pop() || "";
+const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return String(u || "").slice(0, 40); } };
+const clip = (x, n = 48) => { x = String(x || "").replace(/\s+/g, " ").trim(); return x.length > n ? x.slice(0, n - 1) + "…" : x; };
+// one readable line per step, for Jarvis's tools and for Claude Code's tools
+function stepLabel(name, i = {}) {
+  switch (name) {
+    case "open": return /^(https?|mailto|spotify):/i.test(i.target || "") ? `Opening ${hostOf(i.target)}` : `Opening ${clip(cap(fileName(i.target) || i.target || "it"), 40)}`;
+    case "run_powershell": return clip(i.reason || "Running a command");
+    case "web_search": case "WebSearch": return i.query ? `Searching “${clip(i.query, 40)}”` : "Searching the web";
+    case "web_fetch": case "WebFetch": return i.url ? `Reading ${hostOf(i.url)}` : "Reading a page";
+    case "computer": return { click: "Clicking", double_click: "Double-clicking", right_click: "Right-clicking", type: `Typing “${clip(i.text, 30)}”`, key: `Pressing ${i.keys || "a key"}`, scroll: "Scrolling", drag: "Dragging", move: "Moving the mouse", wait: "Waiting" }[i.action] || "Using your PC";
+    case "point_at": return `Pointing: ${clip(i.label || "here", 40)}`;
+    case "media_control": return { play_pause: "Play / pause", next: "Next track", previous: "Previous track", volume_up: "Volume up", volume_down: "Volume down", mute: "Mute" }[i.action] || "Controlling media";
+    case "clipboard": return i.action === "write" ? "Copying to the clipboard" : "Reading the clipboard";
+    case "set_timer": return `Setting a ${clip(i.label || "", 24)} timer`.replace("a  timer", "a timer");
+    case "remember": return `Remembering “${clip(i.note, 36)}”`;
+    case "get_weather": return `Checking the weather in ${i.city || "your city"}`;
+    // Claude Code's own tools
+    case "Bash": case "PowerShell": return clip(i.description || i.command || "Running a command");
+    case "Edit": case "MultiEdit": return `Editing ${fileName(i.file_path)}`;
+    case "Write": return `Writing ${fileName(i.file_path)}`;
+    case "Read": return `Reading ${fileName(i.file_path)}`;
+    case "NotebookEdit": return `Editing ${fileName(i.notebook_path)}`;
+    case "Grep": return `Searching for “${clip(i.pattern, 32)}”`;
+    case "Glob": return `Finding ${clip(i.pattern, 32)}`;
+    case "Task": case "Agent": return `Subagent: ${clip(i.description || "working", 36)}`;
+    case "TodoWrite": case "TaskCreate": case "TaskUpdate": return "Updating the plan";
+    case "AskUserQuestion": return "Asking you a question";
+    default:
+      if (/^mcp__/.test(name || "")) return `Using ${String(name).split("__").pop().replace(/_/g, " ")}`;
+      return RUN[name] || name || "Working";
+  }
 }
 J.onAgent((ev) => {
   if (!task) return;
   switch (ev.type) {
     case "text": task.out += ev.text; if (!/Writing/.test(task.steps.at(-1).label)) addStep("Writing the answer"); break;
-    case "tool": if (ev.status === "running") addStep(ev.detail || RUN[ev.name] || "Working"); break;
+    case "tool":
+      if (ev.status === "running") addStep(ev.detail || RUN[ev.name] || "Working", ev.name);
+      else if (ev.status === "detail") {                     // full input arrived: make the step specific
+        const st = [...task.steps].reverse().find((x) => x.name === ev.name && !x.done);
+        if (st) st.label = stepLabel(ev.name, ev.input); else addStep(stepLabel(ev.name, ev.input), ev.name);
+        renderTaskRow(); if ($("card").dataset.task === "1") renderTaskCard();
+      } else if (ev.status === "done" || ev.status === "error") {
+        const st = [...task.steps].reverse().find((x) => x.name === ev.name && !x.done);
+        if (st) st.done = true;
+        if ($("card").dataset.task === "1") renderTaskCard();
+      }
+      break;
     case "action": if (ev.name === "set_timer") startTimer("", `${ev.input.seconds} second timer`, ev.input.label); break;
     case "control": task.control = ev.on; renderTaskRow(); break;
     case "approval":
@@ -356,10 +411,66 @@ function finishTask() {
   }
   t.status = "done"; renderTaskRow(); flashTask = performance.now() + 1600;
   const took = fmt(Math.floor((Date.now() - t.start) / 1000));
-  const answer = { icon: "claude", kicker: `Claude · ${took}`, said: t.said, html: `<div class="body md">${md(t.out || "Done.")}</div>`, stay: true,
-    chips: [{ label: "Copy", run: () => navigator.clipboard.writeText(t.out).catch(() => {}) }] };
+  const answer = { icon: "claude", kicker: `Claude · ${took}`, said: t.said, html: `<div class="body md">${md(t.out || "Done.")}</div>`, stay: true };
   if (document.hasFocus() || hover) setTimeout(() => { task = null; show(answer); }, 1500);
   else { notify({ app: "claude", from: "Claude · Ready", msg: (t.out || "Done").split("\n")[0], answer }, true); setTimeout(() => { task = null; }, 1600); }
+}
+
+// ---------------- your Claude Code sessions (Claude app, terminal, VS Code) ----------------
+function activeExt() {
+  let best = null;
+  for (const e of ext.values()) if (e.status === "working" || e.status === "approval") if (!best || e.status === "approval" || e.updated > best.updated && best.status !== "approval") best = e;
+  return best;
+}
+J.onCcEvent((e) => {
+  let x = ext.get(e.session);
+  const now = Date.now();
+  if (e.event === "SessionEnd") { ext.delete(e.session); return; }
+  if (e.event === "UserPromptSubmit") {
+    x = { id: e.session, project: e.project, prompt: e.prompt || "", steps: [{ label: "Thinking", done: false }], status: "working", start: now, updated: now };
+    ext.set(e.session, x); return;
+  }
+  if (!x) {                                     // joined mid-task (Jarvis started after the prompt)
+    if (!["PreToolUse", "PostToolUse", "Notification"].includes(e.event)) return;
+    x = { id: e.session, project: e.project, prompt: "", steps: [], status: "working", start: now, updated: now };
+    ext.set(e.session, x);
+  }
+  x.updated = now;
+  if (e.event === "PreToolUse") { if (x.status === "approval") x.status = "working"; pushStep(x, stepLabel(e.tool, e.input || {}), e.tool); }
+  if (e.event === "PostToolUse") { x.status = "working"; const st = [...x.steps].reverse().find((s) => s.name === e.tool && !s.done); if (st) st.done = true; }
+  if (e.event === "Notification") {
+    if (/permission|approve|allow|confirm/i.test(e.message || "") || e.kind === "permission_prompt") {
+      x.status = "approval"; x.message = e.message;
+      notify({ app: "claude", from: `Claude · ${x.project}`, msg: e.message || "Needs your permission" });
+    }
+  }
+  if (e.event === "Stop") {
+    x.status = "done"; x.steps.forEach((s) => (s.done = true));
+    extDone = x; extFlash = performance.now() + 2200; rowHtml = "";
+    const took = fmt(Math.floor((now - x.start) / 1000));
+    notify({ app: "claude", from: `Claude finished · ${x.project}`, msg: (e.last || "Done").split("\n")[0], full: e.last || "Done",
+      answer: { icon: "claude", kicker: `Claude Code · ${x.project} · ${took}`, said: x.prompt, html: `<div class="body md">${md(e.last || "Done.")}</div>`, stay: true } });
+    setTimeout(() => { if (ext.get(x.id) === x && x.status === "done") ext.delete(x.id); }, 3000);
+    if (extPinned) { extPinned = false; $("card").dataset.task = ""; }
+  }
+  if (extPinned && $("card").dataset.task === "ext") renderExtCard(true);
+});
+setInterval(() => { const cut = Date.now() - 20 * 60e3; for (const [k, x] of ext) if (x.updated < cut) ext.delete(k); }, 60e3);
+function extRowHtml() {
+  const x = activeExt() || (performance.now() < extFlash ? extDone : null);
+  if (!x) return "";
+  const lead = x.status === "done" ? '<span class="badge ok">✓</span>' : x.status === "approval" ? '<span class="badge wait">!</span>' : SPIN;
+  const label = x.status === "done" ? "Done" : x.status === "approval" ? "Needs your OK" : (x.steps.at(-1)?.label || "Working");
+  const more = [...ext.values()].filter((e) => e.status === "working" || e.status === "approval").length - 1;
+  return `${lead}<span class="who">${esc(clip(x.project, 18))}</span><span class="what">${esc(label)}</span><span class="step">${more > 0 ? `+${more}` : x.status === "working" ? fmt(Math.floor((Date.now() - x.start) / 1000)) : ""}</span>`;
+}
+function renderExtCard(force) {
+  const x = activeExt(); if (!x) return;
+  if (!force && $("card").dataset.task === "ext" && $("card").dataset.ext === x.id + x.steps.length + x.status) return;
+  const steps = `<ul class="steps2">${x.steps.slice(-6).map((s, i, a) => { const st = s.done ? "done" : i === a.length - 1 ? "cur" : ""; return `<li class="${st}"><span class="ic">${st === "done" ? "✓" : SPIN}</span>${esc(s.label)}</li>`; }).join("")}</ul>`;
+  render({ icon: "claude", kicker: `Claude Code · ${x.project}`, said: x.prompt, title: x.status === "approval" ? "Needs your OK" : "Working",
+    html: x.status === "approval" ? `<div class="body">${esc(x.message || "Claude is waiting for your permission.")}</div><div class="note">Answer it in Claude Code.</div>` : steps });
+  $("card").dataset.task = "ext"; $("card").dataset.ext = x.id + x.steps.length + x.status;
 }
 
 // ---------------- music: real "now playing" from Windows ----------------
