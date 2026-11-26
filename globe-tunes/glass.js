@@ -14,7 +14,7 @@ const MOTION = '.btn, .pb, .solo, .stack button, .seg button, .radio, .card .ca,
 const controllers = new WeakMap();
 
 function attach(el){
-  if (controllers.has(el) || reduce || document.documentElement.classList.contains('lite')) return;
+  if (controllers.has(el) || reduce) return;   // springs only run while pressed, so lite keeps them
   const small = el.offsetWidth < 60;
   // No WebGL canvas: its renderer copies every frame out of the GPU (drawImage),
   // which stalls the map. The pointer shine is done in CSS instead.

@@ -507,29 +507,39 @@ addEventListener('keydown', e => {
   else if (e.key === 'ArrowLeft' && e.shiftKey) prev();
 });
 
-/* ---------- lite mode ----------
-   If this device can't keep the globe smooth, drop the expensive effects.
-   ?lite forces it on, ?full turns the check off. */
+/* ---------- effects mode ----------
+   Lite is the default: solid panels, 1x map, no auto-spin. The ✨ button turns the
+   full glass effects on (remembered per browser). ?full / ?lite override for one visit. */
 const params = new URLSearchParams(location.search);
+let savedFx = null; try { savedFx = localStorage.getItem('gt-fx'); } catch {}
+const fxMode = params.has('full') ? 'full' : params.has('lite') ? 'lite' : (savedFx === 'full' ? 'full' : 'lite');
 function goLite(auto){
   if (document.documentElement.classList.contains('lite')) return;
   document.documentElement.classList.add('lite');
   try { map.setPixelRatio(1); } catch {}
   setSpin(false);
-  if (auto) toast('Smooth mode on: effects reduced for this device');
+  $('fxBtn').setAttribute('aria-pressed', 'false');
+  if (auto){ toast('Switched to smooth mode for this device'); try { localStorage.setItem('gt-fx', 'lite'); } catch {} }
 }
-if (params.has('lite')) goLite(false);
+if (fxMode === 'lite') goLite(false); else $('fxBtn').setAttribute('aria-pressed', 'true');
+$('fxBtn').onclick = () => {
+  const next = document.documentElement.classList.contains('lite') ? 'full' : 'lite';
+  try { localStorage.setItem('gt-fx', next); } catch {}
+  haptic('medium');
+  toast(next === 'full' ? 'Glass effects on' : 'Smooth mode on');
+  setTimeout(() => { if (location.search) location.search = ''; else location.reload(); }, 600);   // reload in the new mode
+};
 function checkSpeed(){
-  if (params.has('full') || params.has('lite')) return;
-  // count frames the map actually draws while it is animating (the idle spin)
+  if (fxMode !== 'full' || params.has('full')) return;
+  // full effects chosen: bail out to lite if the map can't draw 24 fps while spinning
   let frames = 0; const t0 = performance.now();
   const onRender = () => frames++;
   map.on('render', onRender);
   setTimeout(() => {
     map.off('render', onRender);
-    const secs = (performance.now() - t0) / 1000, fps = frames / secs;
+    const fps = frames / ((performance.now() - t0) / 1000);
     window.GT_FPS = fps;
-    if (map.isMoving() || spinning) { if (fps < 24) goLite(true); }
+    if ((map.isMoving() || spinning) && fps < 24) goLite(true);
   }, 2500);
 }
 
