@@ -1,4 +1,9 @@
-name: Globe Tunes — refresh charts & deploy
+name: Globe Tunes — refresh charts & publish
+
+# Publishes globe-tunes/ to the gh-pages branch, which GitHub Pages serves at
+# https://peter-racz-rhr.github.io/Cskill/
+# Pushes to main publish the committed chart snapshot right away;
+# the daily scheduled run downloads fresh charts first.
 
 on:
   schedule:
@@ -9,16 +14,14 @@ on:
     paths: ["globe-tunes/**", ".github/workflows/globe-tunes.yml"]
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: globe-tunes-pages
+  group: globe-tunes-publish
   cancel-in-progress: true
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,20 +29,18 @@ jobs:
         with:
           node-version: 22
       - name: Download today's charts
-        if: github.event_name != 'push'   # pushes deploy the committed snapshot right away
+        if: github.event_name != 'push'
         working-directory: globe-tunes
         run: node scripts/fetch-charts.mjs
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: globe-tunes
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Publish to gh-pages
+        run: |
+          out=$(mktemp -d)
+          cp -r globe-tunes/index.html globe-tunes/app.css globe-tunes/app.js globe-tunes/vendor globe-tunes/data "$out"/
+          touch "$out/.nojekyll"
+          cd "$out"
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "Publish Globe Tunes ($(date -u +%F))"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" gh-pages
