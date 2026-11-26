@@ -3,387 +3,128 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Globe Tunes — hear what the world is playing</title>
+<meta name="description" content="Spin a 3D satellite globe, tap any country and play its most-played songs right now.">
 <meta name="theme-color" content="#000000">
-<title>Globe Tunes</title>
+<meta name="color-scheme" content="dark">
+<meta property="og:title" content="Globe Tunes">
+<meta property="og:description" content="Spin the globe. Tap a country. Hear its charts.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ff375f'/%3E%3Cstop offset='1' stop-color='%23bf5af2'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23g)'/%3E%3Ccircle cx='32' cy='32' r='17' fill='none' stroke='white' stroke-width='3.5'/%3E%3Cpath d='M15 32h34M32 15c-6 5-6 29 0 34M32 15c6 5 6 29 0 34' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="vendor/maplibre-gl.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&display=swap">
-<style>
-/* Apple-style dark materials over a satellite globe.
-   Type: system SF Pro on Apple devices, Inter elsewhere.
-   Tint: systemPink (music), systemBlue for links. Glass = blur + saturation + specular rim. */
-:root{
-  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display",Inter,"Helvetica Neue",system-ui,sans-serif;
-  --label:#fff;--label2:rgba(235,235,245,.6);--label3:rgba(235,235,245,.3);
-  --sep:rgba(84,84,88,.55);--fill:rgba(118,118,128,.24);--fill2:rgba(118,118,128,.16);
-  --tint:#ff375f;--blue:#0a84ff;--green:#30d158;
-  --glass:rgba(28,28,30,.52);--glass-strong:rgba(28,28,30,.72);
-  --rim:inset 0 .5px 0 rgba(255,255,255,.32),inset 0 0 0 .5px rgba(255,255,255,.12);
-  --lift:0 10px 40px rgba(0,0,0,.45),0 1px 3px rgba(0,0,0,.3);
-  --spring:cubic-bezier(.32,.72,0,1);
-  --st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px);
-  --sl:max(16px,env(safe-area-inset-left,0px));--sr:max(16px,env(safe-area-inset-right,0px));
-}
-*{box-sizing:border-box;min-width:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;margin:0}
-body{background:#000;color:var(--label);font:15px/1.4 var(--font);-webkit-font-smoothing:antialiased;overflow:hidden;letter-spacing:-.01em}
-button{font:inherit;color:inherit}
-#map{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 50%,#07122b 0%,#000 60%)}
-#stars{position:absolute;inset:0;pointer-events:none}
-.maplibregl-canvas{outline:none}
-.maplibregl-ctrl-bottom-left,.maplibregl-ctrl-bottom-right{bottom:var(--sb)}
-.maplibregl-ctrl-attrib{background:transparent!important;color:var(--label3);font-size:10px}
-.maplibregl-ctrl-attrib a{color:var(--label2)}
-.maplibregl-ctrl-attrib-button{filter:invert(1);opacity:.5}
-
-/* glass material */
-.glass{background:var(--glass);backdrop-filter:blur(30px) saturate(190%);-webkit-backdrop-filter:blur(30px) saturate(190%);box-shadow:var(--rim),var(--lift)}
-:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 70%,transparent);outline-offset:2px}
-
-/* ---------- sidebar / sheet ---------- */
-#sheet{position:absolute;z-index:5;top:calc(var(--st) + 14px);left:var(--sl);width:360px;max-height:calc(100% - var(--st) - var(--sb) - 28px);border-radius:26px;display:flex;flex-direction:column;overflow:hidden;transition:transform .5s var(--spring),max-height .5s var(--spring)}
-.grab{display:none}
-.searchbar{display:flex;align-items:center;gap:8px;margin:12px;padding:0 12px;height:40px;border-radius:12px;background:var(--fill)}
-.searchbar svg{flex:none;opacity:.6}
-.searchbar input{flex:1;height:100%;border:0;background:transparent;color:var(--label);font:17px var(--font);letter-spacing:-.02em;outline:none}
-.searchbar input::placeholder{color:var(--label2)}
-#clear{display:none;width:20px;height:20px;border-radius:50%;border:0;background:var(--label3);color:#1c1c1e;font-size:13px;line-height:20px;cursor:pointer;padding:0}
-.has-q #clear{display:block}
-#results{list-style:none;margin:0 12px 8px;padding:0;overflow:auto}
-#results li button{width:100%;display:flex;align-items:center;gap:12px;padding:10px 6px;border:0;background:none;text-align:left;cursor:pointer;border-radius:10px;font-size:16px}
-#results li button:hover,#results li button[aria-selected=true]{background:var(--fill2)}
-#results .fl{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--fill);font-size:18px;flex:none}
-.idle{padding:2px 20px 18px;color:var(--label2);font-size:13px}
-.idle b{color:var(--label);font-weight:600;font-size:15px;display:block;margin-bottom:2px}
-
-#place{overflow:auto;padding:0 20px 20px}
-#place[hidden]{display:none}
-.ph{display:flex;align-items:flex-start;gap:14px;padding-top:4px}
-.ph .fl{font-size:40px;line-height:1}
-#cname{font:700 28px/1.12 var(--font);letter-spacing:-.025em;margin:2px 0 2px}
-#csub{color:var(--label2);font-size:15px;font-variant-numeric:tabular-nums}
-#closeBtn{margin-left:auto;flex:none;width:30px;height:30px;border-radius:50%;border:0;background:var(--fill);color:var(--label2);cursor:pointer;display:grid;place-items:center}
-#closeBtn:hover{background:rgba(118,118,128,.36)}
-.actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:18px 0 22px}
-.act{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:58px;border-radius:12px;border:0;background:var(--fill);color:var(--tint);font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;transition:transform .2s var(--spring),background .2s}
-.act span{color:var(--label)}
-.act.primary{background:var(--tint);color:#fff}
-.act.primary span{color:#fff}
-.act:hover{background:rgba(118,118,128,.36)}
-.act.primary:hover{background:#ff4d70}
-.act:active{transform:scale(.96)}
-.hcap{font:600 20px/1.2 var(--font);letter-spacing:-.02em;margin:0 0 8px}
-.list{border-radius:12px;background:var(--fill2);overflow:hidden}
-.row{display:flex;align-items:center;gap:12px;padding:0 14px;min-height:52px;text-decoration:none;color:var(--label);font-size:16px;position:relative}
-.row+.row::before{content:"";position:absolute;top:0;left:58px;right:0;border-top:.5px solid var(--sep)}
-.row:hover{background:var(--fill2)}
-.ic{width:30px;height:30px;border-radius:7px;display:grid;place-items:center;flex:none}
-.row .t{flex:1}
-.row .t small{display:block;color:var(--label2);font-size:13px}
-.chev{opacity:.35}
-.foot{color:var(--label2);font-size:13px;margin:14px 2px 0}
-
-/* ---------- right controls ---------- */
-.ctrls{position:absolute;z-index:4;top:calc(var(--st) + 14px);right:var(--sr);display:flex;flex-direction:column;gap:10px;align-items:flex-end}
-.seg{display:flex;padding:3px;border-radius:999px;gap:2px}
-.seg button{border:0;background:transparent;border-radius:999px;padding:7px 14px;font-size:13px;font-weight:600;color:var(--label2);cursor:pointer;transition:background .3s var(--spring),color .3s}
-.seg button[aria-pressed=true]{background:rgba(255,255,255,.2);color:var(--label);box-shadow:inset 0 .5px 0 rgba(255,255,255,.3)}
-.stack{display:flex;flex-direction:column;border-radius:22px;overflow:hidden}
-.stack button,.solo{width:44px;height:44px;border:0;background:transparent;display:grid;place-items:center;cursor:pointer;color:var(--label)}
-.stack button+button{border-top:.5px solid var(--sep)}
-.stack button:hover,.solo:hover{background:rgba(255,255,255,.08)}
-.solo{border-radius:50%}
-#compass svg{transition:transform .15s linear}
-
-/* ---------- mini player ---------- */
-#mini{position:absolute;z-index:4;left:50%;bottom:calc(var(--sb) + 22px);transform:translateX(-50%);display:flex;align-items:center;gap:12px;padding:8px 8px 8px 8px;border-radius:999px;width:min(420px,calc(100% - 32px));transition:transform .5s var(--spring),opacity .4s}
-#mini .art{width:40px;height:40px;border-radius:10px;flex:none;display:grid;place-items:center;font-size:20px;background:linear-gradient(145deg,#ff375f,#bf5af2)}
-#mini .mt{flex:1;line-height:1.25;overflow:hidden}
-#mini .mt b{display:block;font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#mini .mt span{display:block;font-size:13px;color:var(--label2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#mini a{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:var(--label);flex:none}
-#mini a:hover{background:rgba(255,255,255,.1)}
-#mini.empty a{opacity:.35;pointer-events:none}
-
-#tip{position:absolute;z-index:3;pointer-events:none;padding:5px 11px;border-radius:999px;font-weight:600;font-size:13px;white-space:nowrap;transform:translate(14px,-50%)}
-
-/* ---------- phone: bottom sheet ---------- */
-@media (max-width:700px){
-  #sheet{top:auto;bottom:0;left:0;right:0;width:auto;border-radius:30px 30px 0 0;padding-bottom:var(--sb);max-height:calc(100% - var(--st) - 60px);transform:translateY(0)}
-  #sheet.collapsed{transform:translateY(calc(100% - 74px - var(--sb)))}
-  .grab{display:block;width:100%;height:20px;border:0;background:none;cursor:grab;padding:0;flex:none}
-  .grab::before{content:"";display:block;margin:8px auto 0;width:36px;height:5px;border-radius:3px;background:var(--label3)}
-  .searchbar{margin-top:2px}
-  .ctrls{top:calc(var(--st) + 12px)}
-  #mini{bottom:auto;top:calc(var(--st) + 12px);left:var(--sl);transform:none;width:calc(100% - 32px - 60px)}
-  .seg{display:none}
-  #mini.empty{opacity:0;pointer-events:none}
-}
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
-@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.glass{background:var(--glass-strong)}}
-</style>
+<link rel="preconnect" href="https://server.arcgisonline.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap">
+<link rel="stylesheet" href="app.css">
 </head>
 <body>
-<canvas id="stars"></canvas>
-<div id="map"></div>
+<canvas id="stars" aria-hidden="true"></canvas>
+<div id="map" aria-label="Interactive globe. Click a country to hear its chart."></div>
 
-<!-- sidebar (desktop) / bottom sheet (phone) -->
-<section id="sheet" class="glass collapsed" aria-label="Search and country details">
-  <button class="grab" id="grab" aria-label="Expand or collapse"></button>
+<!-- ============ Sidebar (desktop) / bottom sheet (phone) ============ -->
+<section id="sheet" class="glass" aria-label="Browse charts">
+  <div class="hero-bg" id="heroBg" aria-hidden="true"></div>
+  <button class="grab" id="grab" aria-label="Expand panel"></button>
+
+  <header class="brand">
+    <span class="logo" aria-hidden="true"></span>
+    <span class="wordmark">Globe Tunes</span>
+  </header>
+
   <form class="searchbar" id="searchForm" autocomplete="off" role="search">
-    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="6.8" cy="6.8" r="5.3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10.8 10.8 15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-    <input id="q" placeholder="Search countries" aria-label="Search countries" aria-controls="results" enterkeyhint="search">
-    <button type="button" id="clear" aria-label="Clear search">✕</button>
+    <svg width="17" height="17" viewBox="0 0 16 16" aria-hidden="true"><circle cx="6.8" cy="6.8" r="5.3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10.8 10.8 15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    <input id="q" type="search" placeholder="Search countries" aria-label="Search countries" aria-controls="results" enterkeyhint="go" spellcheck="false">
+    <kbd class="kbd" aria-hidden="true">/</kbd>
   </form>
-  <ul id="results" role="listbox" hidden></ul>
-  <div class="idle" id="idle"><b>Explore the world's charts</b>Spin the globe and tap any country.</div>
 
-  <div id="place" hidden>
-    <div class="ph">
-      <div class="fl" id="cflag"></div>
-      <div><div id="cname"></div><div id="csub"></div></div>
-      <button id="closeBtn" aria-label="Close"><svg width="11" height="11" viewBox="0 0 11 11"><path d="M1 1l9 9M10 1l-9 9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+  <div class="scrollarea" id="scrollarea">
+    <!-- search results -->
+    <ul id="results" role="listbox" aria-label="Countries" hidden></ul>
+
+    <!-- home -->
+    <div id="home">
+      <button class="radio" id="radioBtn">
+        <span class="radio-art" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 26 26"><circle cx="13" cy="13" r="10" fill="none" stroke="#fff" stroke-width="2"/><path d="M3 13h20M13 3c-4 3.4-4 16.6 0 20M13 3c4 3.4 4 16.6 0 20" fill="none" stroke="#fff" stroke-width="1.7"/></svg></span>
+        <span class="radio-t"><b>Around the World</b><small id="radioSub">A new country's #1 every 30 seconds</small></span>
+        <span class="radio-go" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 18 18"><path d="M5 3.2v11.6c0 .7.8 1.2 1.4.8l9-5.8c.6-.4.6-1.2 0-1.6l-9-5.8C5.8 2 5 2.5 5 3.2z" fill="currentColor"/></svg></span>
+      </button>
+
+      <h2 class="sec">Number ones right now</h2>
+      <div class="shelf" id="shelf" role="list"></div>
+
+      <h2 class="sec">Popular charts</h2>
+      <div class="regions" id="regions"></div>
+
+      <p class="fine" id="fine">Charts: Apple Music most-played songs, updated daily.</p>
     </div>
-    <div class="actions">
-      <a class="act primary" id="aPlay" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M5 3.2v11.6c0 .7.8 1.2 1.4.8l9-5.8c.6-.4.6-1.2 0-1.6l-9-5.8C5.8 2 5 2.5 5 3.2z" fill="currentColor"/></svg><span>Play Top 50</span></a>
-      <button class="act" id="aZoom"><svg width="18" height="18" viewBox="0 0 18 18"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 12l4 4M8 5.5v5M5.5 8h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Fly closer</span></button>
-      <button class="act" id="aRandom"><svg width="18" height="18" viewBox="0 0 18 18"><path d="M2 5h3.5c2 0 3 1 4 4s2 4 4 4H16M2 13h3.5c1.2 0 2-.4 2.7-1.2M16 5h-2.5c-1.2 0-2 .4-2.7 1.2M14 3l2 2-2 2M14 11l2 2-2 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Shuffle</span></button>
-    </div>
-    <h2 class="hcap">Top Charts</h2>
-    <div class="list" id="links"></div>
-    <p class="foot">Opens each service's chart for this country. In‑app playback is coming next.</p>
+
+    <!-- country -->
+    <article id="place" hidden>
+      <div class="hero">
+        <div class="hero-row">
+          <div class="flag" id="cflag"></div>
+          <div class="hero-t">
+            <h1 id="cname"></h1>
+            <p id="csub"></p>
+          </div>
+          <button class="iconbtn" id="closeBtn" aria-label="Close"><svg width="11" height="11" viewBox="0 0 11 11"><path d="M1 1l9 9M10 1l-9 9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+        </div>
+        <div class="chips" id="chips"></div>
+        <div class="cta" id="cta">
+          <button class="btn primary" id="playAll"><svg width="15" height="15" viewBox="0 0 18 18"><path d="M5 3.2v11.6c0 .7.8 1.2 1.4.8l9-5.8c.6-.4.6-1.2 0-1.6l-9-5.8C5.8 2 5 2.5 5 3.2z" fill="currentColor"/></svg>Play</button>
+          <button class="btn" id="shuffleAll"><svg width="16" height="16" viewBox="0 0 18 18"><path d="M2 5h3.5c2 0 3 1 4 4s2 4 4 4H16M2 13h3.5c1.2 0 2-.4 2.7-1.2M16 5h-2.5c-1.2 0-2 .4-2.7 1.2M14 3l2 2-2 2M14 11l2 2-2 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Shuffle</button>
+        </div>
+      </div>
+      <ol class="tracks" id="tracks" aria-label="Chart"></ol>
+      <div class="nochart" id="nochart" hidden>
+        <p><b>No chart here yet.</b> Apple Music doesn't publish a most‑played chart for this country. Try these instead:</p>
+      </div>
+      <h2 class="sec">Also on</h2>
+      <div class="list" id="links"></div>
+      <p class="fine" id="cfine"></p>
+    </article>
   </div>
 </section>
 
-<!-- right-side controls -->
+<!-- ============ Map controls ============ -->
 <div class="ctrls">
   <div class="seg glass" role="group" aria-label="Map style">
     <button id="mSat" aria-pressed="true">Satellite</button>
-    <button id="mHyb" aria-pressed="false">Hybrid</button>
+    <button id="mHyb" aria-pressed="false">Labels</button>
   </div>
   <div class="stack glass">
     <button id="zIn" aria-label="Zoom in"><svg width="16" height="16"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     <button id="zOut" aria-label="Zoom out"><svg width="16" height="16"><path d="M2 8h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
   </div>
   <button class="solo glass" id="compass" aria-label="Reset view"><svg width="22" height="22" viewBox="0 0 22 22"><path d="M11 2l3.2 9H7.8z" fill="#ff453a"/><path d="M11 20l-3.2-9h6.4z" fill="rgba(235,235,245,.6)"/></svg></button>
-  <button class="solo glass" id="spinBtn" aria-label="Pause rotation" aria-pressed="true"><svg width="18" height="18" viewBox="0 0 18 18" id="spinIc"><rect x="4" y="3" width="3.4" height="12" rx="1.2" fill="currentColor"/><rect x="10.6" y="3" width="3.4" height="12" rx="1.2" fill="currentColor"/></svg></button>
+  <button class="solo glass" id="spinBtn" aria-label="Stop globe rotation"><svg width="20" height="20" viewBox="0 0 20 20" id="spinIc"></svg></button>
 </div>
 
-<!-- now playing -->
-<div id="mini" class="glass empty" aria-live="polite">
-  <div class="art" id="mArt">🌍</div>
-  <div class="mt"><b id="mTitle">Not Playing</b><span id="mSub">Pick a country to hear its charts</span></div>
-  <a id="mPlay" target="_blank" rel="noopener" aria-label="Play"><svg width="20" height="20" viewBox="0 0 18 18"><path d="M5 3.2v11.6c0 .7.8 1.2 1.4.8l9-5.8c.6-.4.6-1.2 0-1.6l-9-5.8C5.8 2 5 2.5 5 3.2z" fill="currentColor"/></svg></a>
+<!-- ============ Player ============ -->
+<div id="player" class="glass idle" role="region" aria-label="Player">
+  <button class="p-art" id="pArt" aria-label="Show this chart"><img id="pImg" alt="" hidden><span id="pFlag">🌍</span></button>
+  <div class="p-meta">
+    <div class="p-title" id="pTitle">Around the World</div>
+    <div class="p-sub" id="pSub">Press play to tour the globe’s No. 1s</div>
+  </div>
+  <div class="p-ctrls">
+    <button class="pb" id="pPrev" aria-label="Previous"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M11.5 12 20 6.3c.6-.4 1.4 0 1.4.8v9.8c0 .8-.8 1.2-1.4.8zM2.6 12 11 6.3c.6-.4 1.4 0 1.4.8v9.8c0 .8-.8 1.2-1.4.8z" fill="currentColor" transform="rotate(180 12 12)"/></svg></button>
+    <button class="pb big" id="pPlay" aria-label="Play"><svg width="26" height="26" viewBox="0 0 24 24" id="pIc"></svg></button>
+    <button class="pb" id="pNext" aria-label="Next"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M11.5 12 20 6.3c.6-.4 1.4 0 1.4.8v9.8c0 .8-.8 1.2-1.4.8zM2.6 12 11 6.3c.6-.4 1.4 0 1.4.8v9.8c0 .8-.8 1.2-1.4.8z" fill="currentColor" transform="rotate(180 12 12) scale(-1 1) translate(-24 0)"/></svg></button>
+  </div>
+  <div class="p-bar">
+    <span id="tCur">0:00</span>
+    <input type="range" id="seek" min="0" max="30" step="0.1" value="0" aria-label="Seek">
+    <span id="tDur">0:30</span>
+  </div>
 </div>
 
 <div id="tip" class="glass" hidden></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<audio id="audio" preload="none"></audio>
 
 <script src="vendor/maplibre-gl.js"></script>
 <script src="vendor/countries.js"></script>
-<script>
-{
-const $ = id => document.getElementById(id);
-const C = window.COUNTRIES;
-const all = [...C.features].sort((a,b) => a.properties.name.localeCompare(b.properties.name));
-const phone = () => innerWidth <= 700;
-
-/* ---------- starfield ---------- */
-const sc = $('stars'), sx = sc.getContext('2d');
-function stars(){
-  const d = devicePixelRatio || 1; sc.width = innerWidth*d; sc.height = innerHeight*d;
-  sc.style.width = innerWidth+'px'; sc.style.height = innerHeight+'px';
-  let s = 7; const rnd = () => (s = s*16807 % 2147483647)/2147483647;
-  for(let i=0;i<Math.round(innerWidth*innerHeight/3000);i++){
-    sx.fillStyle = `rgba(255,255,255,${0.15+rnd()**2*0.75})`;
-    sx.beginPath(); sx.arc(rnd()*sc.width, rnd()*sc.height, (rnd()**4*1.3+0.35)*d, 0, 7); sx.fill();
-  }
-}
-stars(); addEventListener('resize', stars);
-
-/* ---------- map ---------- */
-const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services';
-const map = new maplibregl.Map({
-  container: 'map', center: [19, 32], zoom: phone() ? 1.1 : 2.1, maxPitch: 70,
-  attributionControl: { compact: true },
-  style: {
-    version: 8,
-    projection: { type: 'globe' },
-    sky: {
-      'sky-color': '#000814', 'horizon-color': '#5ea0ff', 'fog-color': '#9cc5ff',
-      'sky-horizon-blend': 0.55, 'horizon-fog-blend': 0.7, 'fog-ground-blend': 0.9,
-      'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 5, 1, 7, 0]
-    },
-    sources: {
-      sat: { type: 'raster', tileSize: 256, maxzoom: 19, tiles: [ESRI + '/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
-             attribution: 'Imagery © Esri, Maxar, Earthstar Geographics' },
-      ref: { type: 'raster', tileSize: 256, maxzoom: 19, tiles: [ESRI + '/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'] },
-      countries: { type: 'geojson', data: C }
-    },
-    layers: [
-      { id: 'sat', type: 'raster', source: 'sat', paint: { 'raster-contrast': 0.06, 'raster-saturation': 0.08, 'raster-fade-duration': 250 } },
-      { id: 'fill', type: 'fill', source: 'countries', paint: {
-          'fill-color': '#ffffff',
-          'fill-opacity': ['case', ['boolean', ['feature-state', 'sel'], false], 0.1, ['boolean', ['feature-state', 'hover'], false], 0.12, 0] } },
-      { id: 'borders', type: 'line', source: 'countries', paint: {
-          'line-color': '#ffffff', 'line-opacity': ['interpolate', ['linear'], ['zoom'], 1, 0.22, 6, 0.45],
-          'line-width': ['interpolate', ['linear'], ['zoom'], 1, 0.4, 6, 1] } },
-      { id: 'sel-glow', type: 'line', source: 'countries', paint: {
-          'line-color': '#ff375f', 'line-width': 8, 'line-blur': 6,
-          'line-opacity': ['case', ['boolean', ['feature-state', 'sel'], false], 0.55, 0] } },
-      { id: 'sel-line', type: 'line', source: 'countries', paint: {
-          'line-color': '#ffffff', 'line-width': 2,
-          'line-opacity': ['case', ['boolean', ['feature-state', 'sel'], false], 1, 0] } },
-      { id: 'ref', type: 'raster', source: 'ref', layout: { visibility: 'none' } }
-    ]
-  }
-});
-
-/* ---------- controls ---------- */
-$('zIn').onclick = () => map.zoomIn();
-$('zOut').onclick = () => map.zoomOut();
-$('compass').onclick = () => map.easeTo({ bearing: 0, pitch: 0, zoom: Math.min(map.getZoom(), phone() ? 1.1 : 2.1), duration: 1200 });
-map.on('rotate', () => $('compass').firstElementChild.style.transform = `rotate(${-map.getBearing()}deg)`);
-function setStyle(h){
-  map.setLayoutProperty('ref', 'visibility', h ? 'visible' : 'none');
-  $('mSat').setAttribute('aria-pressed', !h); $('mHyb').setAttribute('aria-pressed', h);
-}
-$('mSat').onclick = () => setStyle(false);
-$('mHyb').onclick = () => setStyle(true);
-
-/* ---------- idle spin ---------- */
-let spinning = true, busy = false;
-const PAUSE = '<rect x="4" y="3" width="3.4" height="12" rx="1.2" fill="currentColor"/><rect x="10.6" y="3" width="3.4" height="12" rx="1.2" fill="currentColor"/>';
-const PLAY = '<path d="M5 3.2v11.6c0 .7.8 1.2 1.4.8l9-5.8c.6-.4.6-1.2 0-1.6l-9-5.8C5.8 2 5 2.5 5 3.2z" fill="currentColor"/>';
-function setSpin(on){
-  spinning = on; $('spinIc').innerHTML = on ? PAUSE : PLAY;
-  $('spinBtn').setAttribute('aria-pressed', on); $('spinBtn').setAttribute('aria-label', on ? 'Pause rotation' : 'Resume rotation');
-  if(on){ busy = false; spin(); } else map.stop();
-}
-function spin(){
-  if(!spinning || busy || map.getZoom() > 4 || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const c = map.getCenter(); c.lng -= 5;
-  map.easeTo({ center: c, duration: 1000, easing: t => t });
-}
-map.on('moveend', spin); map.on('load', spin);
-const cv = map.getCanvas();
-['mousedown','touchstart','wheel'].forEach(e => cv.addEventListener(e, () => busy = true, { passive: true }));
-['mouseup','touchend'].forEach(e => cv.addEventListener(e, () => { busy = false; setTimeout(spin, 1500); }));
-$('spinBtn').onclick = () => setSpin(!spinning);
-
-/* ---------- hover ---------- */
-let hoverId = null, selId = null, current = null;
-const tip = $('tip');
-map.on('mousemove', 'fill', e => {
-  const f = e.features[0]; cv.style.cursor = 'pointer';
-  if(hoverId !== f.id){
-    if(hoverId) map.setFeatureState({ source:'countries', id:hoverId }, { hover:false });
-    hoverId = f.id; map.setFeatureState({ source:'countries', id:hoverId }, { hover:true });
-  }
-  tip.hidden = false; tip.textContent = f.properties.name;
-  tip.style.left = e.point.x + 'px'; tip.style.top = e.point.y + 'px';
-});
-map.on('mouseleave', 'fill', () => {
-  if(hoverId) map.setFeatureState({ source:'countries', id:hoverId }, { hover:false });
-  hoverId = null; tip.hidden = true; cv.style.cursor = '';
-});
-
-/* ---------- geometry helpers ---------- */
-function mainRing(g){
-  if(g.type === 'Polygon') return g.coordinates[0];
-  let best = null, area = -1;
-  for(const p of g.coordinates){
-    const r = p[0]; let a = 0;
-    for(let i=0,j=r.length-1;i<r.length;j=i++) a += (r[j][0]+r[i][0])*(r[j][1]-r[i][1]);
-    if(Math.abs(a) > area){ area = Math.abs(a); best = r; }
-  }
-  return best;
-}
-function bounds(f){ const r = mainRing(f.geometry), b = new maplibregl.LngLatBounds(r[0], r[0]); r.forEach(p => b.extend(p)); return b; }
-const flag = iso => iso ? String.fromCodePoint(...[...iso.toUpperCase()].map(c => 127397 + c.charCodeAt(0))) : '🏳️';
-const enc = encodeURIComponent;
-const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const pad = () => phone()
-  ? { top: 90, bottom: Math.round(innerHeight*0.62), left: 30, right: 30 }
-  : { top: 80, bottom: 110, left: 420, right: 90 };
-
-/* ---------- services (generic glyphs, no brand marks) ---------- */
-const NOTE = '<svg width="16" height="16" viewBox="0 0 16 16"><path d="M6 12.5V3.5l7-1.5v9" fill="none" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><circle cx="4.3" cy="12.5" r="1.9" fill="#fff"/><circle cx="11.3" cy="11" r="1.9" fill="#fff"/></svg>';
-const CHEV = '<svg class="chev" width="8" height="13" viewBox="0 0 8 13"><path d="M1.5 1.5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-const services = name => [
-  ['Spotify', 'Top 50 playlist', '#1db954', `https://open.spotify.com/search/${enc('Top 50 ' + name)}/playlists`],
-  ['Apple Music', 'Top 100 chart', '#fa2d48', `https://music.apple.com/search?term=${enc('Top 100 ' + name)}`],
-  ['Deezer', 'Country chart', '#a238ff', `https://www.deezer.com/search/${enc('Top ' + name)}/playlist`],
-  ['YouTube Music', 'Top songs', '#ff3b30', `https://music.youtube.com/search?q=${enc('Top songs ' + name)}`]
-];
-
-/* ---------- sheet state ---------- */
-const sheet = $('sheet');
-const setSheet = open => sheet.classList.toggle('collapsed', !open);
-$('grab').onclick = () => setSheet(sheet.classList.contains('collapsed'));
-
-function select(f, fly = true){
-  if(selId) map.setFeatureState({ source:'countries', id:selId }, { sel:false });
-  selId = f.id; current = f; map.setFeatureState({ source:'countries', id:selId }, { sel:true });
-  setSpin(false);
-  const { name, iso2: iso } = f.properties, b = bounds(f), c = b.getCenter();
-  $('cflag').textContent = flag(iso);
-  $('cname').textContent = name;
-  $('csub').textContent = `Country · ${Math.abs(c.lat).toFixed(1)}° ${c.lat >= 0 ? 'N' : 'S'}, ${Math.abs(c.lng).toFixed(1)}° ${c.lng >= 0 ? 'E' : 'W'}`;
-  const sv = services(name);
-  $('links').innerHTML = sv.map(([s, sub, col, url]) =>
-    `<a class="row" href="${esc(url)}" target="_blank" rel="noopener"><span class="ic" style="background:${col}">${NOTE}</span><span class="t">${esc(s)}<small>${esc(sub)}</small></span>${CHEV}</a>`).join('');
-  $('aPlay').href = sv[0][3]; $('mPlay').href = sv[0][3];
-  $('mArt').textContent = flag(iso); $('mTitle').textContent = `Top 50 · ${name}`; $('mSub').textContent = 'Weekly chart';
-  $('mini').classList.remove('empty');
-  $('idle').hidden = true; $('results').hidden = true; $('place').hidden = false;
-  $('q').value = ''; $('searchForm').classList.remove('has-q');
-  setSheet(true);
-  if(fly) map.fitBounds(b, { padding: pad(), maxZoom: 5.2, duration: 2400, essential: true });
-}
-function closePlace(){
-  if(selId) map.setFeatureState({ source:'countries', id:selId }, { sel:false });
-  selId = null; current = null;
-  $('place').hidden = true; $('idle').hidden = false; setSheet(false);
-  map.flyTo({ zoom: Math.min(map.getZoom(), phone() ? 1.1 : 2.1), pitch: 0, bearing: 0, duration: 1800 });
-}
-map.on('click', 'fill', e => select(e.features[0]));
-$('closeBtn').onclick = closePlace;
-$('aZoom').onclick = () => { if(current){ const c = bounds(current).getCenter(); map.flyTo({ center: c, zoom: Math.min(map.getZoom() + 2.5, 12), pitch: 45, duration: 2500 }); if(phone()) setSheet(false); } };
-$('aRandom').onclick = () => select(all[Math.floor(Math.random() * all.length)]);
-
-/* ---------- search with live results ---------- */
-const q = $('q'), res = $('results');
-let hits = [], active = 0;
-function renderResults(){
-  const v = q.value.trim().toLowerCase();
-  $('searchForm').classList.toggle('has-q', !!v);
-  if(!v){ res.hidden = true; if(!current) $('idle').hidden = false; else $('place').hidden = false; return; }
-  hits = all.filter(f => f.properties.name.toLowerCase().includes(v))
-            .sort((a,b) => a.properties.name.toLowerCase().indexOf(v) - b.properties.name.toLowerCase().indexOf(v)).slice(0, 8);
-  active = 0;
-  res.innerHTML = hits.length
-    ? hits.map((f,i) => `<li><button type="button" role="option" data-i="${i}" aria-selected="${i===0}"><span class="fl">${flag(f.properties.iso2)}</span>${esc(f.properties.name)}</button></li>`).join('')
-    : `<li class="idle" style="padding:10px 6px">No country matches “${esc(q.value.trim())}”</li>`;
-  res.hidden = false; $('idle').hidden = true; $('place').hidden = true;
-}
-q.addEventListener('input', renderResults);
-q.addEventListener('focus', () => { setSheet(true); renderResults(); });
-q.addEventListener('keydown', e => {
-  if(!hits.length || res.hidden) return;
-  if(e.key === 'ArrowDown' || e.key === 'ArrowUp'){
-    e.preventDefault(); active = (active + (e.key === 'ArrowDown' ? 1 : -1) + hits.length) % hits.length;
-    res.querySelectorAll('button').forEach((b,i) => b.setAttribute('aria-selected', i === active));
-  }
-});
-res.addEventListener('click', e => { const b = e.target.closest('button[data-i]'); if(b){ select(hits[+b.dataset.i]); q.blur(); } });
-$('searchForm').onsubmit = e => { e.preventDefault(); if(hits[active] && !res.hidden){ select(hits[active]); q.blur(); } };
-$('clear').onclick = () => { q.value = ''; renderResults(); q.focus(); };
-addEventListener('keydown', e => {
-  if(e.key === 'Escape'){ if(!res.hidden){ q.value=''; renderResults(); q.blur(); } else if(current) closePlace(); }
-  if(e.key === '/' && document.activeElement !== q){ e.preventDefault(); q.focus(); }
-});
-if(!phone()) setSheet(true);
-}
-</script>
+<script src="app.js"></script>
 </body>
 </html>
