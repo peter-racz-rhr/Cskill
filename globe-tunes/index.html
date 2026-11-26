@@ -49,7 +49,13 @@
         <span class="radio-go" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 18 18"><path d="M5 3.2v11.6c0 .7.8 1.2 1.4.8l9-5.8c.6-.4.6-1.2 0-1.6l-9-5.8C5.8 2 5 2.5 5 3.2z" fill="currentColor"/></svg></span>
       </button>
 
-      <h2 class="sec">Number ones right now</h2>
+      <div class="sec-row">
+        <h2 class="sec">Number ones right now</h2>
+        <div class="shelf-nav">
+          <button class="nav" id="shelfPrev" aria-label="Scroll left"><svg width="8" height="13" viewBox="0 0 8 13" aria-hidden="true"><path d="M6.5 1.5l-5 5 5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <button class="nav" id="shelfNext" aria-label="Scroll right"><svg width="8" height="13" viewBox="0 0 8 13" aria-hidden="true"><path d="M1.5 1.5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </div>
+      </div>
       <div class="shelf" id="shelf" role="list"></div>
 
       <h2 class="sec">Popular charts</h2>

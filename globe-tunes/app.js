@@ -249,12 +249,61 @@ function renderHome(){
       <span class="ca"><img src="${esc(art(t.art, 300))}" alt="" loading="lazy"><span class="cf">${flag(cc)}</span></span>
       <span class="cn">${esc(t.n)}</span><span class="cs">${esc(t.a)}</span></button>`;
   }).join('');
+  requestAnimationFrame(() => $('shelf').dispatchEvent(new Event('scroll')));
   $('regions').innerHTML = MARKETS.filter(cc => INDEX.countries[cc] && byIso.get(cc)).slice(0, 10).map(cc =>
     `<button class="region" data-cc="${cc}"><span>${flag(cc)} ${esc(nice(byIso.get(cc)))}</span>${I.chev}</button>`).join('');
   const n = entries.length, d = INDEX.updated ? new Date(INDEX.updated) : null;
   $('fine').textContent = `${n} country charts from Apple Music's most‑played songs${d ? ', updated ' + d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''}. 30‑second previews.`;
 }
-$('shelf').addEventListener('click', e => { const b = e.target.closest('[data-cc]'); if (b) openCountry(byIso.get(b.dataset.cc), { autoplay: 0 }); });
+$('shelf').addEventListener('click', e => { if (shelfDragged){ e.preventDefault(); e.stopPropagation(); return; } const b = e.target.closest('[data-cc]'); if (b) openCountry(byIso.get(b.dataset.cc), { autoplay: 0 }); }, true);
+
+/* shelf sliding: mouse drag with momentum, vertical wheel → horizontal, arrow buttons.
+   Touch already scrolls natively. */
+let shelfDragged = false;
+{
+  const sh = $('shelf');
+  let x0 = 0, s0 = 0, down = false, lastX = 0, lastT = 0, vel = 0, raf = 0;
+  const updateNav = () => {
+    $('shelfPrev').disabled = sh.scrollLeft < 4;
+    $('shelfNext').disabled = sh.scrollLeft > sh.scrollWidth - sh.clientWidth - 4;
+  };
+  sh.addEventListener('scroll', updateNav, { passive: true });
+  new ResizeObserver(updateNav).observe(sh);
+  sh.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    cancelAnimationFrame(raf); down = true; shelfDragged = false;
+    x0 = lastX = e.clientX; s0 = sh.scrollLeft; lastT = performance.now(); vel = 0;
+  });
+  addEventListener('pointermove', e => {
+    if (!down) return;
+    const dx = e.clientX - x0;
+    if (!shelfDragged && Math.abs(dx) > 5){ shelfDragged = true; sh.classList.add('dragging'); }
+    if (!shelfDragged) return;
+    sh.scrollLeft = s0 - dx;
+    const now = performance.now(); vel = (e.clientX - lastX) / Math.max(now - lastT, 1); lastX = e.clientX; lastT = now;
+  });
+  addEventListener('pointerup', () => {
+    if (!down) return; down = false;
+    if (!shelfDragged) return;
+    // glide, then let scroll-snap settle on a card
+    let v = -vel * 16;
+    const glide = () => {
+      v *= 0.92; sh.scrollLeft += v;
+      if (Math.abs(v) > 0.5 && !reduceMotion.matches) raf = requestAnimationFrame(glide);
+      else { sh.classList.remove('dragging'); setTimeout(() => shelfDragged = false, 0); }
+    };
+    raf = requestAnimationFrame(glide);
+  });
+  sh.addEventListener('wheel', e => {
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;   // trackpads already scroll sideways
+    const max = sh.scrollWidth - sh.clientWidth;
+    if ((e.deltaY < 0 && sh.scrollLeft <= 0) || (e.deltaY > 0 && sh.scrollLeft >= max)) return;
+    e.preventDefault(); sh.scrollBy({ left: e.deltaY, behavior: 'auto' });
+  }, { passive: false });
+  const page = dir => { sh.scrollBy({ left: dir * (sh.clientWidth - 40), behavior: reduceMotion.matches ? 'auto' : 'smooth' }); haptic('light'); };
+  $('shelfPrev').onclick = () => page(-1);
+  $('shelfNext').onclick = () => page(1);
+}
 $('regions').addEventListener('click', e => { const b = e.target.closest('[data-cc]'); if (b) openCountry(byIso.get(b.dataset.cc)); });
 
 /* ---------- country page ---------- */
