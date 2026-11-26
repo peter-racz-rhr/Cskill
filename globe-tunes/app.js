@@ -174,8 +174,13 @@ function spin(){
   map.easeTo({ center: c, duration: 1000, easing: t => t });
 }
 map.on('moveend', spin);
-['mousedown', 'touchstart', 'wheel'].forEach(e => cv.addEventListener(e, () => busy = true, { passive: true }));
-['mouseup', 'touchend'].forEach(e => cv.addEventListener(e, () => { busy = false; setTimeout(spin, 2000); }));
+// The moment someone touches the globe the auto-spin gets out of the way completely,
+// and only comes back after 6 s of no interaction, so it can never fight a gesture.
+let resumeT = 0;
+const takeOver = () => { busy = true; clearTimeout(resumeT); if (spinning) map.stop(); };
+const letGo = () => { clearTimeout(resumeT); resumeT = setTimeout(() => { busy = false; spin(); }, 6000); };
+['mousedown', 'touchstart', 'wheel', 'pointerdown'].forEach(e => cv.addEventListener(e, takeOver, { passive: true }));
+['mouseup', 'touchend', 'touchcancel', 'wheel', 'pointerup'].forEach(e => cv.addEventListener(e, letGo, { passive: true }));
 $('spinBtn').onclick = () => setSpin(!spinning);
 setSpin(spinning);
 
@@ -584,7 +589,15 @@ $('fxBtn').onclick = () => {
   setTimeout(() => { if (location.search) location.search = ''; else location.reload(); }, 600);   // reload in the new mode
 };
 function checkSpeed(){
-  if (fxMode !== 'full' || params.has('full')) return;
+  if (params.has('full')) return;
+  if (fxMode !== 'full'){
+    // smooth mode on a phone still spins: stop the spin if the phone can't keep 30 fps
+    if (!phone() || !spinning) return;
+    let n = 0; const t0 = performance.now(); const f = () => n++;
+    map.on('render', f);
+    setTimeout(() => { map.off('render', f); const fps = n / ((performance.now() - t0) / 1000); window.GT_FPS = fps; if (spinning && !busy && fps < 30) setSpin(false); }, 2500);
+    return;
+  }
   // full effects chosen: bail out to lite if the map can't draw 24 fps while spinning
   let frames = 0; const t0 = performance.now();
   const onRender = () => frames++;
