@@ -306,7 +306,6 @@ img{display:block}
 .btn.primary[data-liquid-motion]::before,.radio[data-liquid-motion]::before,#pPlay[data-liquid-motion]::before{background:radial-gradient(90px circle at var(--lq-pointer-x,50%) var(--lq-pointer-y,50%),rgba(255,255,255,.34),transparent 65%)}
 
 /* lite mode: no backdrop blur, no glow, no infinite animations */
-.lite #toast{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;background:#2c2c2e!important}
 .lite .hero-bg{display:none}
 .lite .mk.live img,.lite .mk.live::before,.lite .radio.on,.lite .playing .tr.now .rk::after{animation:none!important}
 
@@ -332,3 +331,34 @@ img{display:block}
 @media (max-width:700px){
   .brand-float{display:block;position:absolute;z-index:4;top:calc(var(--st) + 18px);left:var(--sl);font:400 26px/1 "Bytesized",var(--font);letter-spacing:.02em;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.8);pointer-events:none}
 }
+
+/* ================= Liquid Glass (CSS only, phone-friendly) =================
+   No SVG refraction or WebGL: a light blur + saturation does the "glass", and layered
+   inner highlights fake the thick, curved edge. Values are hard-coded inside
+   -webkit-backdrop-filter because Safari ignores custom properties there. */
+.lg,#player.glass,.seg.glass,.stack.glass,.solo.glass,#tip.glass,#toast{
+  background:rgba(44,44,50,.38);
+  -webkit-backdrop-filter:blur(14px) saturate(190%) brightness(1.08);
+  backdrop-filter:blur(14px) saturate(190%) brightness(1.08);
+  box-shadow:
+    inset 0 1.5px 1px -.5px rgba(255,255,255,.30),   /* light catching the top edge */
+    inset 0 -1.5px 1px -.5px rgba(255,255,255,.10),  /* faint bounce on the bottom edge */
+    inset 0 0 14px rgba(255,255,255,.05),             /* thickness: a little glow inside */
+    0 10px 30px rgba(0,0,0,.35)}
+/* specular sheen: bright top-left, soft reflection bottom-right */
+#player.glass::after,.seg.glass::after,.stack.glass::after,.solo.glass::after,#tip.glass::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(120% 80% at 15% -10%,rgba(255,255,255,.16),transparent 55%),
+    radial-gradient(90% 70% at 100% 115%,rgba(255,255,255,.07),transparent 60%);
+  -webkit-mask:none;mask:none;padding:0}
+#player>*,.seg>*,.stack>*{position:relative;z-index:1}
+.solo.glass:active,.stack button:active,.seg button:active{background-color:rgba(255,255,255,.12)}
+.seg button[aria-pressed=true]{background:rgba(255,255,255,.18)}
+/* the big panel turns to glass in High quality mode; stays solid by default for speed and legibility */
+html:not(.lite) #sheet.glass{background:rgba(30,30,34,.62);
+  -webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);
+  box-shadow:inset 0 1.5px 1px -.5px rgba(255,255,255,.26),inset 0 0 18px rgba(255,255,255,.04),0 18px 50px rgba(0,0,0,.45)}
+@media (prefers-reduced-transparency:reduce){
+  .lg,#player.glass,.seg.glass,.stack.glass,.solo.glass,#tip.glass,#toast,#sheet.glass{
+    background:#2c2c2e!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}}
