@@ -261,8 +261,6 @@ img{display:block}
 .glass::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:3;padding:1px;
   background:linear-gradient(var(--lq-edge-angle,140deg),rgba(255,255,255,.55),rgba(255,255,255,.08) 28%,rgba(255,255,255,0) 50%,rgba(255,255,255,.06) 72%,rgba(255,255,255,.32));
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
-/* real refraction where the browser can run SVG filters in backdrop-filter (Chromium) */
-.lq-lens .seg[data-liquid-lens],.lq-lens .stack[data-liquid-lens],.lq-lens .solo[data-liquid-lens]{background:rgba(40,40,46,.16);-webkit-backdrop-filter:var(--lq-lens) blur(2px) saturate(190%) brightness(1.06);backdrop-filter:var(--lq-lens) blur(2px) saturate(190%) brightness(1.06)}
 @media (prefers-reduced-transparency:reduce){.glass{background:rgba(30,30,32,.94)!important}}
 
 /* spring physics from @liquefy-ui/core drive these variables */
@@ -305,3 +303,8 @@ img{display:block}
 .radio.on{background-image:linear-gradient(110deg,rgba(255,55,95,.95),rgba(191,90,242,.9) 40%,rgba(255,120,160,.95) 50%,rgba(191,90,242,.9) 60%,rgba(255,55,95,.95))}
 
 .btn.primary[data-liquid-motion]::before,.radio[data-liquid-motion]::before,#pPlay[data-liquid-motion]::before{background:radial-gradient(90px circle at var(--lq-pointer-x,50%) var(--lq-pointer-y,50%),rgba(255,255,255,.34),transparent 65%)}
+
+/* lite mode: no backdrop blur, no glow, no infinite animations */
+.lite .glass,.lite #toast{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;background:rgba(28,28,30,.93)!important}
+.lite .hero-bg{display:none}
+.lite .mk.live img,.lite .mk.live::before,.lite .radio.on,.lite .playing .tr.now .rk::after{animation:none!important}

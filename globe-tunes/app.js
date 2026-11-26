@@ -135,12 +135,12 @@ const map = new maplibregl.Map({
           'line-color': '#ffffff',
           'line-opacity': ['interpolate', ['linear'], ['zoom'], 1, 0.2, 6, 0.45],
           'line-width': ['interpolate', ['linear'], ['zoom'], 1, 0.4, 6, 1.1] } },
-      { id: 'sel-glow', type: 'line', source: 'countries', paint: {
-          'line-color': '#ff375f', 'line-width': 10, 'line-blur': 8,
-          'line-opacity': ['case', ['boolean', ['feature-state', 'sel'], false], 0.6, 0] } },
-      { id: 'sel-line', type: 'line', source: 'countries', paint: {
-          'line-color': '#ffffff', 'line-width': 2,
-          'line-opacity': ['case', ['boolean', ['feature-state', 'sel'], false], 1, 0] } },
+      // selection outline: filtered to the one selected country, so the GPU doesn't
+      // draw 241 invisible blurred borders every frame
+      { id: 'sel-glow', type: 'line', source: 'countries', filter: ['==', ['id'], -1], paint: {
+          'line-color': '#ff375f', 'line-width': 10, 'line-blur': 8, 'line-opacity': 0.6 } },
+      { id: 'sel-line', type: 'line', source: 'countries', filter: ['==', ['id'], -1], paint: {
+          'line-color': '#ffffff', 'line-width': 2 } },
       { id: 'ref', type: 'raster', source: 'ref', layout: { visibility: 'none' } }
     ]
   }
@@ -263,6 +263,8 @@ function select(f){
   if (selId) map.setFeatureState({ source: 'countries', id: selId }, { sel: false });
   selId = f?.id ?? null;
   if (selId) map.setFeatureState({ source: 'countries', id: selId }, { sel: true });
+  const flt = ['==', ['id'], selId ?? -1];
+  map.setFilter('sel-glow', flt); map.setFilter('sel-line', flt);
 }
 function fly(f){
   const b = bounds(f);
@@ -505,6 +507,32 @@ addEventListener('keydown', e => {
   else if (e.key === 'ArrowLeft' && e.shiftKey) prev();
 });
 
+/* ---------- lite mode ----------
+   If this device can't keep the globe smooth, drop the expensive effects.
+   ?lite forces it on, ?full turns the check off. */
+const params = new URLSearchParams(location.search);
+function goLite(auto){
+  if (document.documentElement.classList.contains('lite')) return;
+  document.documentElement.classList.add('lite');
+  try { map.setPixelRatio(1); } catch {}
+  setSpin(false);
+  if (auto) toast('Smooth mode on: effects reduced for this device');
+}
+if (params.has('lite')) goLite(false);
+function checkSpeed(){
+  if (params.has('full') || params.has('lite')) return;
+  // count frames the map actually draws while it is animating (the idle spin)
+  let frames = 0; const t0 = performance.now();
+  const onRender = () => frames++;
+  map.on('render', onRender);
+  setTimeout(() => {
+    map.off('render', onRender);
+    const secs = (performance.now() - t0) / 1000, fps = frames / secs;
+    window.GT_FPS = fps;
+    if (map.isMoving() || spinning) { if (fps < 24) goLite(true); }
+  }, 2500);
+}
+
 /* ---------- boot ---------- */
 setSheet(phone() ? 'peek' : 'full');
 addEventListener('resize', () => setSheet(sheetState));
@@ -514,6 +542,7 @@ map.on('load', () => {
   document.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
   if (!reduceMotion.matches) map.easeTo({ zoom: START_ZOOM(), center: [19, 30], duration: 3200, easing: t => 1 - (1 - t) ** 4 });
   setTimeout(spin, reduceMotion.matches ? 0 : 3300);
+  setTimeout(checkSpeed, 3600);   // measure while the globe is spinning
 });
 fetch('data/index.json').then(r => r.json()).then(d => {
   INDEX = d;
