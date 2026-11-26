@@ -146,6 +146,7 @@ const map = new maplibregl.Map({
   }
 });
 const cv = map.getCanvas();
+window.GT.map = map;   // handy for debugging from the console
 
 /* ---------- map controls ---------- */
 $('zIn').onclick = () => map.zoomIn();
@@ -209,6 +210,7 @@ function setSheet(s){
   sheet.classList.toggle('peek', s === 'peek');
   sheet.classList.toggle('half', s === 'half');
   document.body.classList.toggle('phone-open', phone() && s !== 'peek');
+  document.body.classList.toggle('sheet-full', phone() && s === 'full');
   $('grab').setAttribute('aria-label', s === 'peek' ? 'Expand panel' : 'Collapse panel');
 }
 $('grab').onclick = () => setSheet(sheetState === 'peek' ? (current ? 'half' : 'full') : 'peek');
@@ -381,7 +383,9 @@ $('playAll').onclick = () => { setRadio(false); playAt(current.properties.iso2.t
 $('shuffleAll').onclick = () => { setRadio(false); Q.shuffle = true; const cc = current.properties.iso2.toLowerCase(); loadChart(cc).then(d => playAt(cc, Math.floor(Math.random() * d.tracks.length))); };
 function closeCountry(){
   current = null; select(null); show('home'); setSheet('peek');
-  map.flyTo({ zoom: Math.min(map.getZoom(), START_ZOOM()), pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: reduceMotion.matches ? 0 : 1800 });
+  const c = map.getCenter();
+  map.flyTo({ center: [c.lng, Math.max(-25, Math.min(30, c.lat))], zoom: Math.min(map.getZoom(), START_ZOOM()), pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: reduceMotion.matches ? 0 : 1800 });
+  setTimeout(() => { if (!current && phone() && !reduceMotion.matches) setSpin(true); }, 2000);
 }
 $('closeBtn').onclick = closeCountry;
 map.on('click', 'fill', e => openCountry(byId.get(e.features[0].id)));
@@ -570,7 +574,8 @@ function goLite(auto){
   $('fxBtn').setAttribute('aria-pressed', 'false');
   if (auto){ toast('Switched to smooth mode for this device'); try { localStorage.setItem('gt-fx', 'lite'); } catch {} }
 }
-if (fxMode === 'lite') goLite(false); else $('fxBtn').setAttribute('aria-pressed', 'true');
+if (fxMode === 'lite'){ goLite(false); if (phone() && !reduceMotion.matches) setSpin(true); }   // phones: GPU handles the spin fine, and it's the first impression
+else $('fxBtn').setAttribute('aria-pressed', 'true');
 $('fxBtn').onclick = () => {
   const next = document.documentElement.classList.contains('lite') ? 'full' : 'lite';
   try { localStorage.setItem('gt-fx', next); } catch {}
@@ -603,6 +608,8 @@ map.on('load', () => {
   setTimeout(spin, reduceMotion.matches ? 0 : 3300);
   setTimeout(checkSpeed, 3600);   // measure while the globe is spinning
 });
+let seenHint = false; try { seenHint = localStorage.getItem('gt-hint') === '1'; } catch {}
+if (!seenHint) setTimeout(() => { if (!current){ toast(phone() ? 'Tap any country to hear its charts' : 'Click any country to hear its charts'); try { localStorage.setItem('gt-hint', '1'); } catch {} } }, 4200);
 fetch('data/index.json').then(r => r.json()).then(d => {
   INDEX = d;
   for (const cc of Object.keys(d.countries)){ const f = byIso.get(cc); if (f) map.setFeatureState({ source: 'countries', id: f.id }, { chart: true }); }

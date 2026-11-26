@@ -7,10 +7,16 @@
 <meta name="description" content="Spin a 3D satellite globe, tap any country and play its most-played songs right now.">
 <meta name="theme-color" content="#000000">
 <meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Globe Tunes">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
 <meta property="og:title" content="Globe Tunes">
 <meta property="og:description" content="Spin the globe. Tap a country. Hear its charts.">
 <meta property="og:type" content="website">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%235e5ce6'/%3E%3Cstop offset='1' stop-color='%230a84ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23g)'/%3E%3Ccircle cx='32' cy='32' r='17' fill='none' stroke='white' stroke-width='3.5'/%3E%3Cpath d='M15 32h34M32 15c-6 5-6 29 0 34M32 15c6 5 6 29 0 34' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
 <link rel="stylesheet" href="vendor/maplibre-gl.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://server.arcgisonline.com" crossorigin>
@@ -112,7 +118,7 @@
   <button class="p-art" id="pArt" aria-label="Show this chart"><img id="pImg" alt="" hidden><span id="pFlag"><svg class="flg globe" viewBox="0 0 24 18" aria-hidden="true"><rect width="24" height="18" rx="3" fill="rgba(118,118,128,.35)"/><circle cx="12" cy="9" r="6" fill="none" stroke="#fff" stroke-width="1.3"/><path d="M6 9h12M12 3c-2.4 2-2.4 10 0 12M12 3c2.4 2 2.4 10 0 12" fill="none" stroke="#fff" stroke-width="1.1"/></svg></span></button>
   <div class="p-meta">
     <div class="p-title" id="pTitle">Around the World</div>
-    <div class="p-sub" id="pSub">Press play to tour the globe’s No. 1s</div>
+    <div class="p-sub" id="pSub">Tap play to tour the world</div>
   </div>
   <div class="p-ctrls">
     <button class="pb" id="pPrev" aria-label="Previous"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M11.5 12 20 6.3c.6-.4 1.4 0 1.4.8v9.8c0 .8-.8 1.2-1.4.8zM2.6 12 11 6.3c.6-.4 1.4 0 1.4.8v9.8c0 .8-.8 1.2-1.4.8z" fill="currentColor" transform="rotate(180 12 12)"/></svg></button>
