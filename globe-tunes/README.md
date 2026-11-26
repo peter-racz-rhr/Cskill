@@ -8,6 +8,25 @@ Spin a 3D satellite globe, tap a country, and hear what it's playing right now.
 - **Around the World:** a radio mode that flies to a new country every 30 seconds and plays its No. 1.
 - **Apple-style UI:** glass materials, SF Pro on Apple devices, a bottom sheet on phones, `prefers-reduced-motion` respected.
 
+## Features
+
+- **Vibe line:** a one-sentence summary of each country's chart, computed from the chart itself (top genre share, artists with several songs, how homegrown the chart is, new entries).
+- **Genre map:** colours every country by its dominant genre (switch on the home panel). Genres come from Apple in English so they group across countries.
+- **Only here + movement:** a tab with songs that chart in this country and nowhere else, plus ▲▼/NEW against the previous snapshot.
+- **Travel mode:** pick a destination (or use your location) and get a mix of its chart plus its nearest neighbours'.
+- **Daily game:** a 10-second clip of a song that charts in one country only; tap the country on the globe (6 tries, distance and direction hints, shareable result).
+- **Spotify (optional):** connect to save any country's chart as a Spotify playlist, open songs in Spotify, and play full songs in the page on desktop with Premium.
+
+## Spotify setup (2 minutes)
+
+1. Go to https://developer.spotify.com/dashboard → **Create app**.
+2. Redirect URIs: `https://peter-racz-rhr.github.io/Cskill/` (add `http://localhost:8000/` too for local testing).
+3. Tick **Web API** and **Web Playback SDK**, then save.
+4. Copy the **Client ID** into `config.js` (`spotifyClientId`), commit, and the site picks it up on the next publish.
+5. New Spotify apps start in development mode: under **User Management**, add the Spotify accounts that may log in (yours, an investor's).
+
+Full in-page playback needs Spotify Premium and a desktop browser (Spotify's player SDK doesn't run in mobile browsers). Everyone else keeps the previews, and gets Spotify links and playlist saving.
+
 ## Live
 
 https://peter-racz-rhr.github.io/Cskill/
