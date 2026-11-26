@@ -373,3 +373,6 @@ html:not(.lite) #sheet.glass{background:rgba(30,30,34,.62);
   .p-title{font-size:16px}
   #sheet{box-shadow:0 -10px 40px rgba(0,0,0,.45)}
 }
+
+/* phone: no map buttons. Pinch to zoom, drag to spin. */
+@media (max-width:700px){.ctrls{display:none}}
