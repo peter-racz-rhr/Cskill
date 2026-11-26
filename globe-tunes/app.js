@@ -575,7 +575,7 @@ $('fxBtn').onclick = () => {
   const next = document.documentElement.classList.contains('lite') ? 'full' : 'lite';
   try { localStorage.setItem('gt-fx', next); } catch {}
   haptic('medium');
-  toast(next === 'full' ? 'Glass effects on' : 'Smooth mode on');
+  toast(next === 'full' ? 'High quality on' : 'Smooth mode on');
   setTimeout(() => { if (location.search) location.search = ''; else location.reload(); }, 600);   // reload in the new mode
 };
 function checkSpeed(){
