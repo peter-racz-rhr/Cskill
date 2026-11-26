@@ -502,6 +502,7 @@ setPlayIcon();
 function setRadio(on){
   radio = on;
   $('radioBtn').classList.toggle('on', on);
+  $('dockRadio').setAttribute('aria-pressed', String(on));
   $('radioSub').textContent = on ? 'Playing · tap to stop' : 'A new country’s No. 1 every 30 seconds';
 }
 const recent = [];
@@ -517,6 +518,9 @@ function radioStep(){
 }
 function startRadio(){ setRadio(true); Q.shuffle = false; radioStep(); }
 $('radioBtn').onclick = () => { if (radio){ setRadio(false); audio.pause(); } else startRadio(); };
+$('dockRadio').onclick = () => { haptic('medium'); $('radioBtn').click(); };
+// focus in the same tap so the phone keyboard opens
+$('dockSearch').onclick = () => { setSheet('full'); show(q.value ? 'results' : (current ? 'place' : 'home')); q.focus({ preventScroll: true }); };
 
 /* ---------- search ---------- */
 const q = $('q'), res = $('results');
