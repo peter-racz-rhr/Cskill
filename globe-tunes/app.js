@@ -173,6 +173,7 @@ function spinLoop(t){
   spinRaf = requestAnimationFrame(spinLoop);
   const dt = Math.min(t - (spinLast || t), 50); spinLast = t;
   if (!spinning || busy || document.hidden || map.isMoving() || map.getZoom() > 3.5) return;
+  if (document.body.classList.contains('phone-open') || document.body.classList.contains('searching')) return;
   const c = map.getCenter();
   map.jumpTo({ center: [c.lng - dt * SPIN_DEG_PER_MS, c.lat] });
 }
@@ -229,80 +230,92 @@ function setSheet(s){
 }
 $('grab').onclick = () => setSheet(sheetState === 'peek' ? (current ? 'half' : 'full') : 'peek');
 /* ---------- bottom sheet gestures (phone) ----------
-   The sheet follows the finger 1:1 from the handle, the search bar and the header, and from
-   the list when that can't scroll any further in the drag direction. On release it snaps to
-   the nearest stop, or to the next one in the flick direction when the flick is fast. */
+   One owner per swipe, decided on the first movement: either the sheet moves or the list
+   scrolls, never both. Half-open: every vertical swipe moves the sheet. Full: the list
+   scrolls, and pulling down at its top moves the sheet. A big swipe down closes it. */
 {
-  const DETENTS = () => {
-    const H = sheet.offsetHeight;
-    return { full: 0, half: Math.round(H * 0.42), peek: H + 20 };
-  };
   const area = $('scrollarea');
-  let g = null;   // active gesture
-  const posOf = s => DETENTS()[s];
-  function begin(y, fromList){
-    g = { y0: y, base: posOf(sheetState), pos: posOf(sheetState), fromList, dragging: false, samples: [[performance.now(), y]] };
-  }
-  function moveTo(y, ev){
+  const stops = () => { const H = sheet.offsetHeight; return { full: 0, half: Math.round(H * 0.42), peek: H + 20 }; };
+  let g = null;
+  sheet.addEventListener('touchstart', e => {
+    if (!phone() || sheetState === 'peek') return;
+    const t = e.touches[0], inList = area.contains(e.target) && !e.target.closest('.hero, .vhead');
+    g = { x0: t.clientX, y0: t.clientY, base: stops()[sheetState], pos: stops()[sheetState], inList, owner: null, samples: [[performance.now(), t.clientY]] };
+  }, { passive: true });
+  addEventListener('touchmove', e => {
     if (!g) return;
-    const dy = y - g.y0;
-    if (!g.dragging){
-      if (Math.abs(dy) < 6) return;
-      if (g.fromList){
-        const atTop = area.scrollTop <= 0;
-        // list: pull down only from the very top; push up only while the sheet isn't full
-        if (!((dy > 0 && atTop) || (dy < 0 && sheetState !== 'full'))){ g = null; return; }
-      }
-      g.dragging = true; g.y0 = y; sheet.classList.add('dragging');
-      if (document.activeElement === q) q.blur();
+    const t = e.touches[0], dx = t.clientX - g.x0, dy = t.clientY - g.y0;
+    if (!g.owner){
+      if (Math.abs(dx) < 3 && Math.abs(dy) < 3) return;
+      if (Math.abs(dx) > Math.abs(dy)){ g = null; return; }              // sideways: shelves etc.
+      const listCanTake = g.inList && sheetState === 'full' && !(dy > 0 && area.scrollTop <= 0);
+      g.owner = listCanTake ? 'list' : 'sheet';
+      if (g.owner === 'list'){ g = null; return; }
+      sheet.classList.add('dragging');        // keep y0: the whole swipe counts
+      if (document.activeElement?.blur && document.activeElement !== document.body) document.activeElement.blur();
     }
-    ev?.cancelable && ev.preventDefault();
-    let pos = g.base + (y - g.y0);
-    if (pos < 0) pos = pos * 0.25;                         // rubber band above full height
+    if (e.cancelable) e.preventDefault();
+    let pos = g.base + (t.clientY - g.y0);
+    if (pos < 0) pos *= 0.25;
     g.pos = pos; sheet.style.translate = `0 ${pos}px`;
-    g.samples.push([performance.now(), y]); if (g.samples.length > 6) g.samples.shift();
-  }
-  function end(){
-    if (!g) return;
-    const was = g; g = null;
-    if (!was.dragging) return;
-    // speed over the last ~100 ms only (like iOS), so a pause before the flick doesn't count
+    g.samples.push([performance.now(), t.clientY]); if (g.samples.length > 8) g.samples.shift();
+  }, { passive: false });
+  const end = () => {
+    if (!g) return; const was = g; g = null;
+    if (was.owner !== 'sheet') return;
     const last = was.samples.at(-1), recent = was.samples.filter(s => last[0] - s[0] <= 100);
     const first = recent.length > 1 ? recent[0] : was.samples.at(-2) || last;
-    const v = (last[1] - first[1]) / Math.max(last[0] - first[0], 1);   // px per ms, + = down
+    const v = (last[1] - first[1]) / Math.max(last[0] - first[0], 1);      // px/ms, + = down
     const moved = was.pos - was.base;
-    const d = DETENTS();
-    const order = ['full', 'half', 'peek'];
-    let target;
-    if (Math.abs(v) > 0.35 || Math.abs(moved) > 50){
-      // a flick, or a drag of more than 50px: go to the next stop in that direction
-      // fast flick: go to the next stop in that direction from where the finger let go
-      const sorted = order.map(k => [k, d[k]]).sort((a, b) => a[1] - b[1]);
-      const down = Math.abs(v) > 0.35 ? v > 0 : moved > 0;
-      target = down ? (sorted.find(([, y]) => y > was.pos + 10) || sorted.at(-1))[0]
-                     : ([...sorted].reverse().find(([, y]) => y < was.pos - 10) || sorted[0])[0];
-    } else {
-      const projected = was.pos + v * 180;
-      target = order.reduce((best, k) => Math.abs(d[k] - projected) < Math.abs(d[best] - projected) ? k : best, 'full');
-    }
-    sheet.classList.remove('dragging');
-    sheet.style.translate = '';                             // CSS class position takes over, animated
-    setSheet(target);
-    haptic('light');
-  }
-  // handle + header: always drag
-  const head = [$('grab'), $('searchForm')];
-  for (const el of head){
-    el.addEventListener('touchstart', e => { if (phone()) begin(e.touches[0].clientY, false); }, { passive: true });
-  }
-  // list: drag only at its scroll edge
-  area.addEventListener('touchstart', e => { if (phone()) begin(e.touches[0].clientY, true); }, { passive: true });
-  addEventListener('touchmove', e => { if (g) moveTo(e.touches[0].clientY, e); }, { passive: false });
+    let target = sheetState;
+    if (moved > 110 || v > 0.5) target = 'peek';                          // a big or fast swipe down closes
+    else if (moved > 30 || v > 0.3) target = sheetState === 'full' ? 'half' : 'peek';
+    else if (moved < -30 || v < -0.3) target = 'full';
+    sheet.classList.remove('dragging'); sheet.style.translate = '';
+    setSheet(target); if (target !== sheetState || target === 'peek') haptic('light');
+  };
   addEventListener('touchend', end, { passive: true });
   addEventListener('touchcancel', end, { passive: true });
-  // a drag shouldn't also count as a tap on the handle
-  $('grab').addEventListener('click', e => { if (sheet.dataset.justDragged){ e.stopImmediatePropagation(); } }, true);
 }
+
+/* ---------- phone search: a bar that rides on top of the keyboard ---------- */
+{
+  const root = document.documentElement.style, vv = window.visualViewport;
+  const fit = () => {
+    if (!vv) return;
+    const kb = Math.max(0, innerHeight - vv.height - vv.offsetTop);
+    root.setProperty('--kb', kb + 'px'); root.setProperty('--vvh', vv.height + 'px');
+  };
+  vv?.addEventListener('resize', fit); vv?.addEventListener('scroll', fit); fit();
+}
+const dq = $('dq'), dres = $('dres');
+let dhits = [];
+function phoneResults(){
+  const v = dq.value.trim().toLowerCase();
+  dhits = v ? all.filter(x => x.key.includes(v)).sort((a, b) => (a.key.startsWith(v) ? 0 : 1) - (b.key.startsWith(v) ? 0 : 1) || a.name.localeCompare(b.name)).slice(0, 8)
+            : chartCountries().map(cc => all.find(x => x.f.properties.iso2?.toLowerCase() === cc)).filter(Boolean).sort(() => Math.random() - .5).slice(0, 5);
+  dres.innerHTML = (v ? '' : '<li class="dh">Try</li>') + (dhits.length ? dhits.map((x, i) => {
+    const cc = x.f.properties.iso2?.toLowerCase(), top = INDEX.countries[cc];
+    return `<li><button type="button" data-i="${i}"><span class="rf">${flag(cc)}</span><span class="rt">${esc(x.name)}<small>${top ? 'No. 1 · ' + esc(top.n) + ' — ' + esc(top.a) : 'No chart available'}</small></span></button></li>`;
+  }).join('') : `<li class="empty">No country matches “${esc(dq.value.trim())}”.</li>`);
+  dres.hidden = false;
+}
+function startSearch(){ document.body.classList.add('searching'); setSheet('peek'); phoneResults(); }
+function endSearch(){ document.body.classList.remove('searching'); dres.hidden = true; dq.value = ''; dq.blur(); }
+dq.addEventListener('focus', startSearch);
+dq.addEventListener('input', phoneResults);
+dq.addEventListener('keydown', e => { if (e.key === 'Enter' && dhits[0]){ e.preventDefault(); choose(0); } if (e.key === 'Escape') endSearch(); });
+function choose(i){
+  const x = dhits[i]; if (!x) return;
+  endSearch(); haptic('medium');
+  if (gameOn){ show('game'); setSheet('half'); guess(x.f); } else openCountry(x.f);
+}
+dres.addEventListener('pointerdown', e => e.preventDefault());          // keep the keyboard up while tapping a result
+dres.addEventListener('click', e => { const b = e.target.closest('button[data-i]'); if (b) choose(+b.dataset.i); });
+$('dockCancel').onclick = endSearch;
+$('dockExplore').onclick = () => { haptic('light'); show(current ? 'place' : 'home'); setSheet(current ? 'half' : 'full'); };
+// tapping the dimmed area closes whatever is open on top of the map
+$('scrim').addEventListener('click', () => { if (document.body.classList.contains('searching')) endSearch(); else setSheet('peek'); });
 
 /* ---------- views ---------- */
 function show(view){
@@ -619,7 +632,6 @@ function startRadio(){ setRadio(true); Q.shuffle = false; radioStep(); }
 $('radioBtn').onclick = () => { if (radio){ setRadio(false); stopAll(); } else startRadio(); };
 $('dockRadio').onclick = () => { haptic('medium'); $('radioBtn').click(); };
 // focus in the same tap so the phone keyboard opens
-$('dockSearch').onclick = () => { setSheet('full'); show(q.value ? 'results' : (current ? 'place' : 'home')); q.focus({ preventScroll: true }); };
 
 /* ---------- search ---------- */
 const q = $('q'), res = $('results');
@@ -847,11 +859,12 @@ async function openGame(){
     game.done = saved?.day === day ? saved.done : false;
   }
   gameOn = !game.done;
+  document.body.classList.toggle('game-on', gameOn);
   clip.src = game.t.p;
   renderGame();
   if (gameOn) toast(phone() ? 'Play the clip, then tap a country' : 'Play the clip, then click a country');
 }
-function endGameMode(){ gameOn = false; clip.pause(); }
+function endGameMode(){ gameOn = false; clip.pause(); document.body.classList.remove('game-on'); }
 function renderGame(){
   const ans = byIso.get(game.cc), ac = centre(ans);
   $('guesses').innerHTML = game.guesses.map(cc => {
@@ -883,7 +896,7 @@ function guess(f){
   game.guesses.push(cc); select(f);
   const won = cc === game.cc;
   if (won || game.guesses.length >= 6){
-    game.done = true; gameOn = false; clip.pause();
+    game.done = true; gameOn = false; clip.pause(); document.body.classList.remove('game-on');
     const st = gstore.get('gt-stats', { played: 0, won: 0, streak: 0, best: 0, last: 0 });
     st.played++; if (won){ st.won++; st.streak = st.last === game.day - 1 ? st.streak + 1 : 1; st.best = Math.max(st.best, st.streak); } else st.streak = 0;
     st.last = game.day; gstore.set('gt-stats', st);

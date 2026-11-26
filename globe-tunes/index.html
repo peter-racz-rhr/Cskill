@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-visual">
 <title>Globe Tunes — hear what the world is playing</title>
 <meta name="description" content="Spin a 3D satellite globe, tap any country and play its most-played songs right now.">
 <meta name="theme-color" content="#000000">
@@ -186,10 +186,16 @@
 </div>
 
 <!-- phone: floating dock (search pill + radio), replaces the peeking sheet -->
+<div id="scrim" aria-hidden="true"></div>
+<ul id="dres" class="glass" role="listbox" aria-label="Countries" hidden></ul>
 <nav class="dock" id="dock" aria-label="Quick actions">
-  <button class="dock-search glass" id="dockSearch" type="button">
+  <label class="dock-search glass" id="dockSearch">
     <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true"><circle cx="6.8" cy="6.8" r="5.3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10.8 10.8 15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-    <span id="dockLabel">Search countries</span>
+    <input id="dq" type="search" placeholder="Search countries" aria-label="Search countries" autocomplete="off" spellcheck="false" enterkeyhint="go">
+  </label>
+  <button class="dock-cancel" id="dockCancel" type="button">Cancel</button>
+  <button class="dock-radio glass" id="dockExplore" type="button" aria-label="Explore">
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>
   </button>
   <button class="dock-radio glass" id="dockRadio" type="button" aria-label="Around the World radio" aria-pressed="false">
     <svg width="24" height="24" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 13h20M13 3c-4 3.4-4 16.6 0 20M13 3c4 3.4 4 16.6 0 20" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>
