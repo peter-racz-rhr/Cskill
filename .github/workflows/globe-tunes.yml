@@ -35,7 +35,7 @@ jobs:
       - name: Publish to gh-pages
         run: |
           out=$(mktemp -d)
-          cp -r globe-tunes/index.html globe-tunes/app.css globe-tunes/app.js globe-tunes/glass.js globe-tunes/vendor globe-tunes/data "$out"/
+          cp -r globe-tunes/index.html globe-tunes/app.css globe-tunes/app.js globe-tunes/glass.js globe-tunes/manifest.webmanifest globe-tunes/icons globe-tunes/vendor globe-tunes/data "$out"/
           touch "$out/.nojekyll"
           # cache-busting: browsers must fetch the new app files after each publish
           sed -i "s/?v=dev/?v=${GITHUB_SHA::7}-$(date -u +%s)/g" "$out/index.html"
