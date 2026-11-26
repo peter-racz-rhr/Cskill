@@ -160,25 +160,30 @@ function setLabels(on){
 $('mSat').onclick = () => setLabels(false);
 $('mHyb').onclick = () => setLabels(true);
 
-/* ---------- idle rotation ---------- */
-let spinning = !reduceMotion.matches, busy = false;
+/* ---------- idle rotation ----------
+   A tiny per-frame nudge, skipped whenever MapLibre says the camera is busy (a finger on
+   the globe, inertia after a flick, a fly-to). It never starts animations and never calls
+   map.stop(), because map.stop() also resets the touch handlers and cancels the gesture. */
+let spinning = !reduceMotion.matches, busy = false, spinRaf = 0, spinLast = 0;
+const SPIN_DEG_PER_MS = 0.004;   // about 4° a second
+function spinLoop(t){
+  spinRaf = requestAnimationFrame(spinLoop);
+  const dt = Math.min(t - (spinLast || t), 50); spinLast = t;
+  if (!spinning || busy || document.hidden || map.isMoving() || map.getZoom() > 3.5) return;
+  const c = map.getCenter();
+  map.jumpTo({ center: [c.lng - dt * SPIN_DEG_PER_MS, c.lat] });
+}
+function spin(){ if (!spinRaf) spinRaf = requestAnimationFrame(spinLoop); }
 function setSpin(on){
   spinning = on;
   $('spinIc').innerHTML = on ? I.spinOff : I.spinOn;
   $('spinBtn').setAttribute('aria-label', on ? 'Stop globe rotation' : 'Rotate globe');
-  if (on){ busy = false; spin(); } else map.stop();
+  if (on){ busy = false; spin(); }
 }
-function spin(){
-  if (!spinning || busy || map.getZoom() > 3.5) return;
-  const c = map.getCenter(); c.lng -= 4;
-  map.easeTo({ center: c, duration: 1000, easing: t => t });
-}
-map.on('moveend', spin);
-// The moment someone touches the globe the auto-spin gets out of the way completely,
-// and only comes back after 6 s of no interaction, so it can never fight a gesture.
+// a touch pauses the spin; it comes back after 6 s of no interaction
 let resumeT = 0;
-const takeOver = () => { busy = true; clearTimeout(resumeT); if (spinning) map.stop(); };
-const letGo = () => { clearTimeout(resumeT); resumeT = setTimeout(() => { busy = false; spin(); }, 6000); };
+const takeOver = () => { busy = true; clearTimeout(resumeT); };
+const letGo = () => { clearTimeout(resumeT); resumeT = setTimeout(() => { busy = false; }, 6000); };
 ['mousedown', 'touchstart', 'wheel', 'pointerdown'].forEach(e => cv.addEventListener(e, takeOver, { passive: true }));
 ['mouseup', 'touchend', 'touchcancel', 'wheel', 'pointerup'].forEach(e => cv.addEventListener(e, letGo, { passive: true }));
 $('spinBtn').onclick = () => setSpin(!spinning);
