@@ -26,6 +26,7 @@ jobs:
         with:
           node-version: 22
       - name: Download today's charts
+        if: github.event_name != 'push'   # pushes deploy the committed snapshot right away
         working-directory: globe-tunes
         run: node scripts/fetch-charts.mjs
       - uses: actions/configure-pages@v5
