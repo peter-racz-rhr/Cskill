@@ -308,3 +308,6 @@ img{display:block}
 .lite .glass,.lite #toast{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;background:rgba(28,28,30,.93)!important}
 .lite .hero-bg{display:none}
 .lite .mk.live img,.lite .mk.live::before,.lite .radio.on,.lite .playing .tr.now .rk::after{animation:none!important}
+
+#fxBtn[aria-pressed=true]{color:#ffd60a}
+#fxBtn[aria-pressed=true] svg{filter:drop-shadow(0 0 6px rgba(255,214,10,.6))}
