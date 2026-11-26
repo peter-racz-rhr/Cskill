@@ -240,7 +240,9 @@ function select(f){
 }
 function fly(f){
   const b = bounds(f);
-  map.fitBounds(b, { padding: pad(), maxZoom: 5, duration: reduceMotion.matches ? 0 : 2600, essential: true, curve: 1.5 });
+  const p = pad(), cam = map.cameraForBounds(b, { padding: p, maxZoom: 5 });
+  map.flyTo({ center: b.getCenter(), zoom: Math.min(cam?.zoom ?? 4, 5), padding: p, bearing: 0, pitch: 0,
+              duration: reduceMotion.matches ? 0 : 2600, essential: true, curve: 1.5 });
 }
 async function openCountry(f, { autoplay = null, flyTo = true } = {}){
   if (!f) return;
@@ -297,7 +299,7 @@ $('playAll').onclick = () => { setRadio(false); playAt(current.properties.iso2.t
 $('shuffleAll').onclick = () => { setRadio(false); Q.shuffle = true; const cc = current.properties.iso2.toLowerCase(); loadChart(cc).then(d => playAt(cc, Math.floor(Math.random() * d.tracks.length))); };
 function closeCountry(){
   current = null; select(null); show('home'); setSheet('peek');
-  map.flyTo({ zoom: Math.min(map.getZoom(), START_ZOOM()), pitch: 0, bearing: 0, duration: reduceMotion.matches ? 0 : 1800 });
+  map.flyTo({ zoom: Math.min(map.getZoom(), START_ZOOM()), pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: reduceMotion.matches ? 0 : 1800 });
 }
 $('closeBtn').onclick = closeCountry;
 map.on('click', 'fill', e => openCountry(byId.get(e.features[0].id)));
