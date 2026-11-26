@@ -44,7 +44,10 @@ const iOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform ==
 function haptic(kind = 'light'){
   try {
     if (navigator.vibrate && !iOS){ navigator.vibrate({ light: 8, medium: 16, heavy: [12, 40, 18], success: [10, 50, 10] }[kind] || 8); return; }
-    if (iOS){ hapticLabel.click(); if (kind === 'heavy' || kind === 'success') setTimeout(() => hapticLabel.click(), 90); }
+    if (iOS){
+      const tick = () => { const a = document.activeElement; hapticLabel.click(); if (a && a !== document.body && a !== hapticLabel.firstChild) a.focus({ preventScroll: true }); else hapticLabel.firstChild.blur(); };
+      tick(); if (kind === 'heavy' || kind === 'success') setTimeout(tick, 90);
+    }
   } catch {}
 }
 window.GT = { haptic };
@@ -217,6 +220,7 @@ const sheet = $('sheet');
 let sheetState = 'peek';
 function setSheet(s){
   sheetState = s;
+  sheet.style.translate = '';
   sheet.classList.toggle('peek', s === 'peek');
   sheet.classList.toggle('half', s === 'half');
   document.body.classList.toggle('phone-open', phone() && s !== 'peek');
@@ -224,15 +228,80 @@ function setSheet(s){
   $('grab').setAttribute('aria-label', s === 'peek' ? 'Expand panel' : 'Collapse panel');
 }
 $('grab').onclick = () => setSheet(sheetState === 'peek' ? (current ? 'half' : 'full') : 'peek');
-{ // drag the grabber
-  let y0 = null;
-  $('grab').addEventListener('pointerdown', e => { y0 = e.clientY; $('grab').setPointerCapture(e.pointerId); });
-  $('grab').addEventListener('pointerup', e => {
-    if (y0 == null) return; const dy = e.clientY - y0; y0 = null;
-    if (Math.abs(dy) < 30) return;
-    const order = ['peek', 'half', 'full'], i = order.indexOf(sheetState);
-    setSheet(order[Math.max(0, Math.min(2, i + (dy < 0 ? 1 : -1)))]);
-  });
+/* ---------- bottom sheet gestures (phone) ----------
+   The sheet follows the finger 1:1 from the handle, the search bar and the header, and from
+   the list when that can't scroll any further in the drag direction. On release it snaps to
+   the nearest stop, or to the next one in the flick direction when the flick is fast. */
+{
+  const DETENTS = () => {
+    const H = sheet.offsetHeight;
+    return { full: 0, half: Math.round(H * 0.42), peek: H + 20 };
+  };
+  const area = $('scrollarea');
+  let g = null;   // active gesture
+  const posOf = s => DETENTS()[s];
+  function begin(y, fromList){
+    g = { y0: y, base: posOf(sheetState), pos: posOf(sheetState), fromList, dragging: false, samples: [[performance.now(), y]] };
+  }
+  function moveTo(y, ev){
+    if (!g) return;
+    const dy = y - g.y0;
+    if (!g.dragging){
+      if (Math.abs(dy) < 6) return;
+      if (g.fromList){
+        const atTop = area.scrollTop <= 0;
+        // list: pull down only from the very top; push up only while the sheet isn't full
+        if (!((dy > 0 && atTop) || (dy < 0 && sheetState !== 'full'))){ g = null; return; }
+      }
+      g.dragging = true; g.y0 = y; sheet.classList.add('dragging');
+      if (document.activeElement === q) q.blur();
+    }
+    ev?.cancelable && ev.preventDefault();
+    let pos = g.base + (y - g.y0);
+    if (pos < 0) pos = pos * 0.25;                         // rubber band above full height
+    g.pos = pos; sheet.style.translate = `0 ${pos}px`;
+    g.samples.push([performance.now(), y]); if (g.samples.length > 6) g.samples.shift();
+  }
+  function end(){
+    if (!g) return;
+    const was = g; g = null;
+    if (!was.dragging) return;
+    // speed over the last ~100 ms only (like iOS), so a pause before the flick doesn't count
+    const last = was.samples.at(-1), recent = was.samples.filter(s => last[0] - s[0] <= 100);
+    const first = recent.length > 1 ? recent[0] : was.samples.at(-2) || last;
+    const v = (last[1] - first[1]) / Math.max(last[0] - first[0], 1);   // px per ms, + = down
+    const moved = was.pos - was.base;
+    const d = DETENTS();
+    const order = ['full', 'half', 'peek'];
+    let target;
+    if (Math.abs(v) > 0.35 || Math.abs(moved) > 50){
+      // a flick, or a drag of more than 50px: go to the next stop in that direction
+      // fast flick: go to the next stop in that direction from where the finger let go
+      const sorted = order.map(k => [k, d[k]]).sort((a, b) => a[1] - b[1]);
+      const down = Math.abs(v) > 0.35 ? v > 0 : moved > 0;
+      target = down ? (sorted.find(([, y]) => y > was.pos + 10) || sorted.at(-1))[0]
+                     : ([...sorted].reverse().find(([, y]) => y < was.pos - 10) || sorted[0])[0];
+    } else {
+      const projected = was.pos + v * 180;
+      target = order.reduce((best, k) => Math.abs(d[k] - projected) < Math.abs(d[best] - projected) ? k : best, 'full');
+    }
+    sheet.classList.remove('dragging');
+    sheet.style.translate = '';                             // CSS class position takes over, animated
+    setSheet(target);
+    haptic('light');
+  }
+  // handle + header: always drag
+  const head = [$('grab'), $('searchForm')];
+  for (const el of head){
+    el.addEventListener('touchstart', e => { if (phone()) begin(e.touches[0].clientY, false); }, { passive: true });
+  }
+  // list: drag only at its scroll edge
+  area.addEventListener('touchstart', e => { if (phone()) begin(e.touches[0].clientY, true); }, { passive: true });
+  addEventListener('touchmove', e => { if (g) moveTo(e.touches[0].clientY, e); }, { passive: false });
+  addEventListener('touchend', end, { passive: true });
+  addEventListener('touchcancel', end, { passive: true });
+  // a drag shouldn't also count as a tap on the handle
+  $('grab').addEventListener('click', e => { if (sheet.dataset.justDragged){ e.stopImmediatePropagation(); } }, true);
 }
 
 /* ---------- views ---------- */
