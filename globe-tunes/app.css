@@ -376,3 +376,26 @@ html:not(.lite) #sheet.glass{background:rgba(30,30,34,.62);
 
 /* phone: no map buttons. Pinch to zoom, drag to spin. */
 @media (max-width:700px){.ctrls{display:none}}
+
+/* ================= phone dock ================= */
+.dock{display:none}
+@media (max-width:700px){
+  :root{--dock-h:54px}
+  /* closed sheet is fully hidden; the floating dock takes its place */
+  #sheet.peek{translate:0 calc(100% + 20px)}
+  .dock{display:flex;gap:10px;position:absolute;z-index:6;left:12px;right:12px;bottom:calc(var(--sb) + 14px);transition:translate .5s var(--ease),opacity .3s}
+  .phone-open .dock{translate:0 calc(100% + 40px);opacity:0;pointer-events:none}
+  .dock-search{flex:1;height:var(--dock-h);border:0;border-radius:calc(var(--dock-h) / 2);display:flex;align-items:center;gap:10px;padding:0 20px;color:var(--label2);font-size:17px;text-align:left;cursor:text}
+  .dock-search span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dock-radio{width:var(--dock-h);height:var(--dock-h);border:0;border-radius:50%;display:grid;place-items:center;color:#fff;flex:none}
+  .dock-radio[aria-pressed=true]{background:var(--tint)!important;box-shadow:0 8px 24px rgba(94,92,230,.45)}
+  .dock-search::after,.dock-radio::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:radial-gradient(120% 80% at 15% -10%,rgba(255,255,255,.16),transparent 55%)}
+  .dock>*{position:relative}
+  #player{bottom:calc(var(--sb) + 14px + var(--dock-h) + 10px)}
+  .dock-search,.dock-radio{background:rgba(44,44,50,.42);-webkit-backdrop-filter:blur(14px) saturate(190%) brightness(1.08);backdrop-filter:blur(14px) saturate(190%) brightness(1.08);
+    box-shadow:inset 0 1.5px 1px -.5px rgba(255,255,255,.30),inset 0 -1.5px 1px -.5px rgba(255,255,255,.10),inset 0 0 14px rgba(255,255,255,.05),0 10px 30px rgba(0,0,0,.4)}
+}
+@media (max-width:700px){
+  #toast{top:calc(var(--st) + 58px)}   /* below the wordmark */
+  .maplibregl-ctrl-bottom-right{top:calc(var(--st) + 10px);bottom:auto}   /* map credit up where the buttons used to be */
+}
