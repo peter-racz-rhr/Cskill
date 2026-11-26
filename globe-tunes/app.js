@@ -3,10 +3,14 @@
 const $ = id => document.getElementById(id);
 const C = window.COUNTRIES;
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
-const phone = () => innerWidth <= 700;
+const phoneMQ = matchMedia('(max-width: 700px)');
+const phone = () => phoneMQ.matches;   // same test as the CSS
+const vw = () => document.documentElement.clientWidth, vh = () => document.documentElement.clientHeight;
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const enc = encodeURIComponent;
-const flag = iso => iso ? String.fromCodePoint(...[...iso.toUpperCase()].map(c => 127397 + c.charCodeAt(0))) : '🏳️';
+const FLAGS = new Set(['ad','ae','af','ag','ai','al','am','ao','aq','ar','as','at','au','aw','ax','az','ba','bb','bd','be','bf','bg','bh','bi','bj','bl','bm','bn','bo','bq','br','bs','bt','bv','bw','by','bz','ca','cc','cd','cf','cg','ch','ci','ck','cl','cm','cn','co','cr','cu','cv','cw','cx','cy','cz','de','dj','dk','dm','do','dz','ec','ee','eg','eh','er','es','et','fi','fj','fk','fm','fo','fr','ga','gb','gd','ge','gf','gg','gh','gi','gl','gm','gn','gp','gq','gr','gs','gt','gu','gw','gy','hk','hm','hn','hr','ht','hu','id','ie','il','im','in','io','iq','ir','is','it','je','jm','jo','jp','ke','kg','kh','ki','km','kn','kp','kr','kw','ky','kz','la','lb','lc','li','lk','lr','ls','lt','lu','lv','ly','ma','mc','md','me','mf','mg','mh','mk','ml','mm','mn','mo','mp','mq','mr','ms','mt','mu','mv','mw','mx','my','mz','na','nc','ne','nf','ng','ni','nl','no','np','nr','nu','nz','om','pa','pe','pf','pg','ph','pk','pl','pm','pn','pr','ps','pt','pw','py','qa','re','ro','rs','ru','rw','sa','sb','sc','sd','se','sg','sh','si','sj','sk','sl','sm','sn','so','sr','ss','st','sv','sx','sy','sz','tc','td','tf','tg','th','tj','tk','tl','tm','tn','to','tr','tt','tv','tw','tz','ua','ug','um','us','uy','uz','va','vc','ve','vg','vi','vn','vu','wf','ws','xk','ye','yt','za','zm','zw']);
+const GLOBE_SVG = '<svg class="flg globe" viewBox="0 0 24 18" aria-hidden="true"><rect width="24" height="18" rx="3" fill="rgba(118,118,128,.35)"/><circle cx="12" cy="9" r="6" fill="none" stroke="#fff" stroke-width="1.3"/><path d="M6 9h12M12 3c-2.4 2-2.4 10 0 12M12 3c2.4 2 2.4 10 0 12" fill="none" stroke="#fff" stroke-width="1.1"/></svg>';
+const flag = iso => { iso = (iso || '').toLowerCase(); return FLAGS.has(iso) ? `<img class="flg" src="vendor/flags/${iso}.svg" alt="" loading="lazy" decoding="async">` : GLOBE_SVG; };
 const art = (u, px) => u ? u.replace(/\/\d+x\d+bb\./, `/${px}x${px}bb.`) : '';
 const fmt = s => { s = Math.max(0, Math.floor(s || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 let regionNames; try { regionNames = new Intl.DisplayNames(['en'], { type: 'region' }); } catch {}
@@ -27,6 +31,25 @@ const I = {
 $('pPrev').firstElementChild.innerHTML = I.prev;
 $('pNext').firstElementChild.innerHTML = I.next;
 
+/* ---------- haptics ----------
+   Android/Chrome: Vibration API. iOS Safari 18+: toggling a native <input switch>
+   gives a system haptic tick, so a hidden one is clicked through its label. */
+const hapticLabel = (() => {
+  const id = 'hx' + Math.random().toString(36).slice(2);
+  const l = document.createElement('label'); l.htmlFor = id; l.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:-9px';
+  const i = document.createElement('input'); i.type = 'checkbox'; i.id = id; i.setAttribute('switch', ''); i.tabIndex = -1; i.setAttribute('aria-hidden', 'true');
+  l.append(i); l.setAttribute('aria-hidden', 'true'); document.body.append(l); return l;
+})();
+const iOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function haptic(kind = 'light'){
+  try {
+    if (navigator.vibrate && !iOS){ navigator.vibrate({ light: 8, medium: 16, heavy: [12, 40, 18], success: [10, 50, 10] }[kind] || 8); return; }
+    if (iOS){ hapticLabel.click(); if (kind === 'heavy' || kind === 'success') setTimeout(() => hapticLabel.click(), 90); }
+  } catch {}
+}
+window.GT = { haptic };
+document.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse' && e.target.closest('button, a, .tr')) haptic('light'); }, { passive: true });
+
 /* ---------- toast ---------- */
 let toastT;
 function toast(msg){ const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2600); }
@@ -34,10 +57,10 @@ function toast(msg){ const t = $('toast'); t.textContent = msg; t.classList.add(
 /* ---------- starfield ---------- */
 const sc = $('stars'), sx = sc.getContext('2d');
 function stars(){
-  const d = devicePixelRatio || 1; sc.width = innerWidth * d; sc.height = innerHeight * d;
-  sc.style.width = innerWidth + 'px'; sc.style.height = innerHeight + 'px';
+  const d = devicePixelRatio || 1; sc.width = vw() * d; sc.height = vh() * d;
+  sc.style.width = vw() + 'px'; sc.style.height = vh() + 'px';
   let s = 11; const rnd = () => (s = s * 16807 % 2147483647) / 2147483647;
-  for (let i = 0; i < Math.round(innerWidth * innerHeight / 2800); i++){
+  for (let i = 0; i < Math.round(vw() * vh() / 2800); i++){
     sx.fillStyle = `rgba(${225 + rnd() * 30 | 0},${230 + rnd() * 25 | 0},255,${0.12 + rnd() ** 2 * 0.8})`;
     sx.beginPath(); sx.arc(rnd() * sc.width, rnd() * sc.height, (rnd() ** 5 * 1.4 + 0.35) * d, 0, 7); sx.fill();
   }
@@ -75,7 +98,7 @@ function bounds(f){
   r.forEach(p => b.extend(p)); boundsCache.set(f.id, b); return b;
 }
 function pad(){
-  if (phone()) return { top: 70, bottom: Math.round(innerHeight * 0.6), left: 40, right: 70 };
+  if (phone()) return { top: 70, bottom: Math.round(map.getContainer().clientHeight * 0.6), left: 40, right: 70 };
   return { top: 70, bottom: 130, left: 380 + 60, right: 100 };
 }
 
@@ -169,7 +192,7 @@ map.on('mousemove', 'fill', e => {
       : `<span class="tf">${flag(cc)}</span><span><b>${esc(nice(full))}</b><small>No chart available</small></span>`;
   }
   tip.hidden = false;
-  const x = Math.min(e.point.x, innerWidth - 320);
+  const x = Math.min(e.point.x, vw() - 320);
   tip.style.left = x + 'px'; tip.style.top = e.point.y + 'px';
 });
 map.on('mouseleave', 'fill', () => {
@@ -201,6 +224,8 @@ $('grab').onclick = () => setSheet(sheetState === 'peek' ? (current ? 'half' : '
 
 /* ---------- views ---------- */
 function show(view){
+  const el = { home: $('home'), place: $('place'), results: $('results') }[view];
+  if (el && el.hidden){ el.classList.remove('enter'); void el.offsetWidth; el.classList.add('enter'); }
   if (view !== 'place') $('heroBg').classList.remove('on'); else if (current && hasChart(current) && $('heroBg').style.backgroundImage) $('heroBg').classList.add('on');
   $('home').hidden = view !== 'home'; $('place').hidden = view !== 'place'; $('results').hidden = view !== 'results';
   if (view !== 'results') $('scrollarea').scrollTop = 0;
@@ -219,7 +244,7 @@ function renderHome(){
   }
   $('shelf').innerHTML = cards.map(([cc, t]) => {
     const f = byIso.get(cc);
-    return `<button class="card" role="listitem" data-cc="${cc}" aria-label="${esc(t.n)} by ${esc(t.a)}, number one in ${esc(nice(f))}">
+    return `<button class="card" role="listitem" style="--i:${cards.indexOf(cards.find(c => c[0] === cc))}" data-cc="${cc}" aria-label="${esc(t.n)} by ${esc(t.a)}, number one in ${esc(nice(f))}">
       <span class="ca"><img src="${esc(art(t.art, 300))}" alt="" loading="lazy"><span class="cf">${flag(cc)}</span></span>
       <span class="cn">${esc(t.n)}</span><span class="cs">${esc(t.a)}</span></button>`;
   }).join('');
@@ -240,16 +265,21 @@ function select(f){
 }
 function fly(f){
   const b = bounds(f);
-  const p = pad(), cam = map.cameraForBounds(b, { padding: p, maxZoom: 5 });
+  const p = pad();
+  let cam; try { cam = map.cameraForBounds(b, { padding: p, maxZoom: 5 }); } catch {}
+  if (!cam){ // globe camera maths can fail for huge countries: estimate from the span
+    const span = Math.max(b.getEast() - b.getWest(), (b.getNorth() - b.getSouth()) * 1.6, 0.5);
+    cam = { zoom: Math.max(1.2, Math.log2(360 / span) + (phone() ? -0.6 : 0.2)) };
+  }
   map.flyTo({ center: b.getCenter(), zoom: Math.min(cam?.zoom ?? 4, 5), padding: p, bearing: 0, pitch: 0,
               duration: reduceMotion.matches ? 0 : 2600, essential: true, curve: 1.5 });
 }
 async function openCountry(f, { autoplay = null, flyTo = true } = {}){
   if (!f) return;
-  current = f; select(f); setSpin(false);
+  current = f; select(f); setSpin(false); haptic('medium');
   const cc = f.properties.iso2?.toLowerCase() || '', name = nice(f);
   const c = bounds(f).getCenter();
-  $('cflag').textContent = flag(cc);
+  $('cflag').innerHTML = flag(cc);
   $('cname').textContent = name;
   $('csub').textContent = `${Math.abs(c.lat).toFixed(1)}° ${c.lat >= 0 ? 'N' : 'S'}, ${Math.abs(c.lng).toFixed(1)}° ${c.lng >= 0 ? 'E' : 'W'}`;
   $('heroBg').classList.remove('on'); $('chips').innerHTML = '';
@@ -278,7 +308,7 @@ function renderChart(f, data){
   $('chips').innerHTML = Object.entries(g).sort((a, b) => b[1] - a[1]).slice(0, 3)
     .map(([k, v]) => `<span class="chip">${esc(k)}<i>${Math.round(v / t.length * 100)}%</i></span>`).join('');
   $('tracks').innerHTML = t.map((x, i) => `
-    <li class="tr" data-i="${i}">
+    <li class="tr" data-i="${i}" style="--i:${Math.min(i, 14)}">
       <span class="rk">${i + 1}</span>
       <span class="ar"><img src="${esc(art(x.art, 100))}" srcset="${esc(art(x.art, 200))} 2x" alt="" loading="lazy" width="46" height="46"></span>
       <span class="tt"><div class="tn">${esc(x.n)}${x.e ? '<span class="ex" aria-label="Explicit">E</span>' : ''}</div><div class="ta">${esc(x.a)}</div></span>
@@ -332,13 +362,15 @@ async function playAt(cc, i){
   if (token !== playToken) return;
   const t = data.tracks[i]; if (!t) return;
   Q.cc = cc; Q.i = i; Q.tracks = data.tracks;
+  $('player').classList.remove('bump'); void $('player').offsetWidth; $('player').classList.add('bump');
+  window.GTglass?.pulse($('pArt'));
   if (!t.p){ toast('No preview for this song, skipping'); return next(); }
   audio.src = t.p; audio.currentTime = 0;
   try { await audio.play(); } catch (err) { if (err.name !== 'AbortError') toast('Tap play to start listening'); }
   const f = byIso.get(cc), country = nice(f);
   $('player').classList.remove('idle');
   $('pImg').src = art(t.art, 200); $('pImg').hidden = false;
-  $('pFlag').textContent = flag(cc);
+  $('pFlag').innerHTML = flag(cc);
   $('pTitle').textContent = t.n;
   $('pSub').textContent = `${t.a} · No. ${i + 1} in ${country}`;
   document.title = `${t.n} · ${t.a} — Globe Tunes`;
@@ -476,6 +508,7 @@ addEventListener('keydown', e => {
 setSheet(phone() ? 'peek' : 'full');
 addEventListener('resize', () => setSheet(sheetState));
 document.body.classList.add('intro');
+setTimeout(() => document.body.classList.remove('intro'), 2500);
 map.on('load', () => {
   document.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
   if (!reduceMotion.matches) map.easeTo({ zoom: START_ZOOM(), center: [19, 30], duration: 3200, easing: t => 1 - (1 - t) ** 4 });

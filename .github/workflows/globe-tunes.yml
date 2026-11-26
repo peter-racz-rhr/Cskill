@@ -35,7 +35,7 @@ jobs:
       - name: Publish to gh-pages
         run: |
           out=$(mktemp -d)
-          cp -r globe-tunes/index.html globe-tunes/app.css globe-tunes/app.js globe-tunes/vendor globe-tunes/data "$out"/
+          cp -r globe-tunes/index.html globe-tunes/app.css globe-tunes/app.js globe-tunes/glass.js globe-tunes/vendor globe-tunes/data "$out"/
           touch "$out/.nojekyll"
           cd "$out"
           git init -q -b gh-pages

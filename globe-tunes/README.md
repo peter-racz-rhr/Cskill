@@ -8,6 +8,10 @@ Spin a 3D satellite globe, tap a country, and hear what it's playing right now.
 - **Around the World:** a radio mode that flies to a new country every 30 seconds and plays its No. 1.
 - **Apple-style UI:** glass materials, SF Pro on Apple devices, a bottom sheet on phones, `prefers-reduced-motion` respected.
 
+## Live
+
+https://peter-racz-rhr.github.io/Cskill/
+
 ## Run locally
 
 The site reads JSON files, so serve it over HTTP. Opening `index.html` straight from disk won't work.
@@ -49,7 +53,8 @@ Apple's chart feed blocks browser requests (CORS), so the site can't fetch it li
 |---|---|
 | `index.html` | Markup |
 | `app.css` | All styles (glass, sheet, player, phone layout) |
-| `app.js` | Globe, search, chart view, player, radio |
-| `vendor/` | MapLibre (BSD-3) and Natural Earth 1:50m borders (public domain) |
+| `app.js` | Globe, search, chart view, player, radio, haptics |
+| `glass.js` | Liquid Glass: refraction lens + spring press physics via `@liquefy-ui/core` |
+| `vendor/` | MapLibre (BSD-3), Natural Earth 1:50m borders (public domain), @liquefy-ui/core (MIT), flag-icons (MIT) |
 | `scripts/fetch-charts.mjs` | Chart downloader, Node 18+, no dependencies |
 | `data/` | Downloaded charts |
