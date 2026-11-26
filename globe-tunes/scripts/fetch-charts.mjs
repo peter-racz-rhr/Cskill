@@ -22,11 +22,11 @@ const codes = [...new Set(geo.features.map(f => f.properties.iso2).filter(Boolea
 const only = process.argv.slice(2).map(c => c.toLowerCase());
 const todo = only.length ? codes.filter(c => only.includes(c)) : codes;
 
-async function get(url, tries = 3) {
+async function get(url, tries = 2) {
   for (let i = 0; i < tries; i++) {
     let r;
     try { r = await fetch(url, { headers: { 'User-Agent': 'globe-tunes-chart-fetcher/1.0' }, signal: AbortSignal.timeout(8000) }); }
-    catch { if (i >= 1) return null; await sleep(1000); continue; }
+    catch { await sleep(1000); continue; }   // timeout/network: retry, then throw (keeps old data)
     if (r.ok) return r.json();
     if (r.status === 404 || r.status === 403) return null;   // no such storefront
     if (r.status === 500 && i >= 1) return null;             // Apple answers 500 for storefronts without charts
