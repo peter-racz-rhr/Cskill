@@ -541,3 +541,18 @@ html,body{overscroll-behavior:none}                 /* no pull-to-refresh while 
   #sheet:not(.half) .scrollarea{touch-action:pan-x pan-y}
   .grab{height:30px}
 }
+
+/* ================= radio ================= */
+.ctabs{overflow-x:auto;scrollbar-width:none}
+.ctabs::-webkit-scrollbar{display:none}
+.ctabs button{flex:1 0 auto;padding:7px 10px}
+.ar.sta{display:grid;place-items:center;background:linear-gradient(140deg,#30d158,#0a84ff);color:#fff;position:relative}
+.ar.sta img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#fff}
+.livetag{font-size:10px;font-weight:800;letter-spacing:.04em;color:#ff453a;padding:3px 6px;border-radius:6px;background:rgba(255,69,58,.15)}
+.tr.st.now .tn{color:var(--tint);font-weight:600}
+#player.live .p-bar{visibility:hidden}
+#player.live .p-sub{color:#ff6961}
+#player.live .p-art:not(:has(img:not([hidden]))){background:linear-gradient(140deg,#30d158,#0a84ff)}
+
+.spot-cta{width:100%;display:flex;align-items:center;gap:12px;margin:2px 0 10px;padding:10px 12px;border:0;border-radius:16px;background:rgba(29,185,84,.14);color:var(--label);text-align:left}
+.spot-cta .pill{pointer-events:none}

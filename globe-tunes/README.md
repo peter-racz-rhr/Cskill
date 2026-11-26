@@ -15,6 +15,8 @@ Spin a 3D satellite globe, tap a country, and hear what it's playing right now.
 - **Only here + movement:** a tab with songs that chart in this country and nowhere else, plus ▲▼/NEW against the previous snapshot.
 - **Travel mode:** pick a destination (or use your location) and get a mix of its chart plus its nearest neighbours'.
 - **Daily game:** a 10-second clip of a song that charts in one country only; tap the country on the globe (6 tries, distance and direction hints, shareable result).
+- **Folk and underground radio:** live, full-length radio for each country from the open [Radio Browser](https://www.radio-browser.info) directory (593 stations in 98 countries; others get the nearest country). `scripts/fetch-radio.mjs` keeps working https streams only and runs daily.
+- **Background play:** the next clip is fetched early, and the lock screen shows the song or station with controls.
 - **Spotify (optional):** connect to save any country's chart as a Spotify playlist, open songs in Spotify, and play full songs in the page on desktop with Premium.
 
 ## Spotify setup (2 minutes)

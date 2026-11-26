@@ -32,6 +32,10 @@ jobs:
         if: github.event_name != 'push'
         working-directory: globe-tunes
         run: node scripts/fetch-charts.mjs
+      - name: Refresh folk and underground radio
+        if: github.event_name != 'push'
+        working-directory: globe-tunes
+        run: node scripts/fetch-radio.mjs
       - name: Publish to gh-pages
         run: |
           out=$(mktemp -d)

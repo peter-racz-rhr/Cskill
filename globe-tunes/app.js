@@ -440,7 +440,8 @@ async function openCountry(f, { autoplay = null, flyTo = true } = {}){
   const ok = hasChart(f);
   $('nochart').hidden = ok; $('cta').hidden = !ok; $('tracks').hidden = !ok;
   $('cfine').textContent = '';
-  if (!ok){ $('csub').textContent += ' · No chart'; return; }
+  chartTabs(ok, false);
+  if (!ok){ $('csub').textContent += ' · No chart'; setTab('none', true); return; }
   $('tracks').innerHTML = Array.from({ length: 8 }, () => '<li class="tr skel"><span class="rk"></span><span class="ar"></span><span class="tt"><div class="tn">.</div><div class="ta">.</div></span><span></span></li>').join('');
   let data;
   try { data = await loadChart(cc); } catch { if (current === f){ $('tracks').innerHTML = ''; toast('Couldn’t load this chart. Check your connection.'); } return; }
@@ -459,7 +460,7 @@ function renderChart(f, data){
   const v = vibe(data); $('vibe').textContent = v; $('vibe').hidden = !v;
   const local = t.filter(x => x.x === 1).length;
   $('localN').textContent = t[0]?.x ? local : '';
-  $('ctabs').hidden = !t[0]?.x;
+  chartTabs(true, !!t[0]?.x);
   setTab('top', true);
   $('tracks').innerHTML = t.map((x, i) => `
     <li class="tr${x.x === 1 ? ' only' : ''}" data-i="${i}" style="--i:${Math.min(i, 14)}">
@@ -517,6 +518,7 @@ function setPlayIcon(){
 }
 async function playAt(cc, i, keepList){
   if (!keepList) Q.list = null;
+  Q.radio = null; $('player').classList.remove('live');
   const token = ++playToken;
   let data; try { data = await loadChart(cc); } catch { toast('Couldn’t load that chart.'); return; }
   if (token !== playToken) return;
@@ -541,6 +543,7 @@ async function playAt(cc, i, keepList){
   $('pTitle').textContent = t.n;
   $('pSub').textContent = `${t.a} · No. ${i + 1} in ${country}${engine === 'spotify' ? ' · Spotify' : ''}`;
   setPlayIcon();
+  warmNext();
   document.title = `${t.n} · ${t.a} — Globe Tunes`;
   placeMarker(f, t);
   markNow();
@@ -563,7 +566,7 @@ function placeMarker(f, t){
     const el = document.createElement('div'); el.className = 'mk'; el.innerHTML = '<img alt="">';
     marker = new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(c).addTo(map);
   }
-  marker.setLngLat(c); marker.getElement().querySelector('img').src = art(t.art, 100);
+  marker.setLngLat(c); const im = marker.getElement().querySelector('img'); if (t.art) im.src = art(t.art, 100); else im.removeAttribute('src');
 }
 function toggle(){
   if (engine === 'spotify'){ GTSpotify.toggle(); return; }
@@ -571,6 +574,7 @@ function toggle(){
   audio.paused ? audio.play().catch(() => {}) : audio.pause();
 }
 function next(){
+  if (engine === 'radio' && Q.radio) return playStation(Q.radio.list, (Q.radio.idx + 1) % Q.radio.list.length, Q.radio.cc, Q.radio.kind);
   if (radio) return radioStep();
   if (Q.list){ if (Q.li + 1 < Q.list.length){ Q.li++; return playAt(Q.list[Q.li].cc, Q.list[Q.li].i, true); } stopAll(); return toast('End of your mix'); }
   if (!Q.cc) return;
@@ -578,6 +582,7 @@ function next(){
   if (n < Q.tracks.length) playAt(Q.cc, n); else { audio.pause(); toast('End of chart'); }
 }
 function prev(){
+  if (engine === 'radio' && Q.radio) return playStation(Q.radio.list, (Q.radio.idx - 1 + Q.radio.list.length) % Q.radio.list.length, Q.radio.cc, Q.radio.kind);
   if (Q.list && Q.li > 0 && (engine === 'spotify' || audio.currentTime <= 3)){ Q.li--; return playAt(Q.list[Q.li].cc, Q.list[Q.li].i, true); }
   if (engine === 'spotify'){ GTSpotify.seek(0); return; }
   if (audio.currentTime > 3 || !Q.cc){ audio.currentTime = 0; return; }
@@ -585,10 +590,16 @@ function prev(){
 }
 $('pPlay').onclick = toggle; $('pNext').onclick = next; $('pPrev').onclick = prev;
 $('pArt').onclick = () => { if (Q.cc) openCountry(byIso.get(Q.cc)); };
-audio.addEventListener('play', setPlayIcon); audio.addEventListener('pause', setPlayIcon);
+audio.addEventListener('play', setPlayIcon); audio.addEventListener('playing', () => { Q.radioFails = 0; }); audio.addEventListener('pause', setPlayIcon);
 audio.addEventListener('ended', () => { if (engine === 'preview') next(); });
 function stopAll(){ if (engine === 'spotify') GTSpotify.pause(); audio.pause(); }
-audio.addEventListener('error', () => { if (audio.src && engine === 'preview'){ toast('Preview unavailable, skipping'); setTimeout(next, 600); } });
+audio.addEventListener('error', () => {
+  if (audio.src && engine === 'radio' && Q.radio){
+    Q.radioFails = (Q.radioFails || 0) + 1;
+    if (Q.radioFails >= Q.radio.list.length){ Q.radioFails = 0; audio.pause(); toast('No station is reachable right now'); return; }
+    toast('Station is offline, trying the next one'); setTimeout(next, 600); return;
+  }
+  if (audio.src && engine === 'preview'){ toast('Preview unavailable, skipping'); setTimeout(next, 600); } });
 const seek = $('seek');
 let scrubbing = false;
 audio.addEventListener('timeupdate', () => {
@@ -597,6 +608,9 @@ audio.addEventListener('timeupdate', () => {
   const p = (t / d * 100).toFixed(2) + '%';
   seek.style.setProperty('--p', p); $('player').style.setProperty('--pp', p);
   $('tCur').textContent = fmt(t); $('tDur').textContent = '-' + fmt(d - t);
+  if (engine === 'preview' && 'mediaSession' in navigator && navigator.mediaSession.setPositionState && isFinite(audio.duration)){
+    try { navigator.mediaSession.setPositionState({ duration: audio.duration, position: Math.min(t, audio.duration), playbackRate: 1 }); } catch {}
+  }
 });
 seek.addEventListener('input', () => { scrubbing = true; seek.style.setProperty('--p', (seek.value / seek.max * 100) + '%'); });
 seek.addEventListener('change', () => { if (engine === 'spotify') GTSpotify.seek(+seek.value * 1000); else audio.currentTime = +seek.value; scrubbing = false; });
@@ -719,6 +733,10 @@ let ctab = 'top';
 function setTab(t, quiet){
   ctab = t;
   $('ctabs').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.t === t)));
+  const radioTab = t === 'folk' || t === 'underground';
+  $('radioList').hidden = !radioTab;
+  $('tracks').hidden = radioTab || !(current && hasChart(current));
+  if (radioTab) renderRadio(t);
   $('tracks').classList.toggle('local', t === 'local');
   if (!quiet) haptic('light');
   const empty = t === 'local' && !$('tracks').querySelector('.tr.only');
@@ -942,8 +960,10 @@ if (SP?.configured){
       : s.premium ? 'Getting the player ready…'
       : 'Previews play here · full songs open in Spotify · save charts as playlists';
     $('spotSave').hidden = !s.connected;
+    $('spotCta').hidden = s.connected;
     if (s.connected && current && hasChart(current)) loadChart(current.properties.iso2.toLowerCase()).then(spotifyLinks).catch(() => {});
   });
+  $('spotCta').onclick = () => { haptic('medium'); SP.login().catch(() => toast('Spotify isn’t set up yet')); };
   $('spotBtn').onclick = () => { if (SP.connected()) SP.logout(); else SP.login().catch(() => toast('Spotify isn’t set up yet')); };
   $('spotSave').onclick = async () => {
     if (!current) return;
@@ -987,6 +1007,89 @@ async function spotifyLinks(data){
     const a = row.querySelector('.ext'); if (a){ a.href = m.url; a.setAttribute('aria-label', `Open ${t.n} in Spotify`); a.classList.add('sp'); }
     if (!current || current.properties.iso2?.toLowerCase() !== data.cc) break;
   }
+}
+
+/* ---------- folk + underground radio ---------- */
+let RADIO = {};
+const radioCache = new Map();
+const loadRadio = cc => { if (!radioCache.has(cc)) radioCache.set(cc, fetch(`data/radio/${cc}.json`).then(r => { if (!r.ok) throw 0; return r.json(); })); return radioCache.get(cc); };
+fetch('data/radio/index.json').then(r => r.json()).then(d => { RADIO = d; if (current) chartTabs(hasChart(current), !!$('localN').textContent); }).catch(() => {});
+function chartTabs(hasCh, hasSpread){
+  const b = k => $('ctabs').querySelector(`[data-t="${k}"]`);
+  b('top').hidden = !hasCh; b('local').hidden = !hasCh || !hasSpread;
+  const anyRadio = Object.keys(RADIO).length > 0;
+  b('folk').hidden = b('underground').hidden = !anyRadio;
+  $('ctabs').hidden = !hasCh && !anyRadio;
+  if (!hasCh) $('radioList').hidden = true;
+}
+function radioSource(cc, kind){
+  const key = kind === 'folk' ? 'f' : 'u';
+  if (RADIO[cc]?.[key] > 0) return [cc, false];
+  const f = byIso.get(cc); if (!f) return [null, false];
+  const c = centre(f);
+  const best = Object.keys(RADIO).filter(x => RADIO[x][key] > 0 && byIso.get(x)).map(x => [x, km(c, centre(byIso.get(x)))]).sort((a, b) => a[1] - b[1])[0];
+  return best ? [best[0], true] : [null, false];
+}
+const RADIO_IC = '<svg class="ric" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="15.5" cy="14" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6.5 12.5h4M6.5 15.5h4M7 8l9-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+async function renderRadio(kind){
+  const box = $('radioList'), f = current; if (!f) return;
+  const cc = f.properties.iso2?.toLowerCase();
+  const [src, borrowed] = radioSource(cc, kind);
+  if (!src){ box.innerHTML = `<p class="vsub">No ${kind} stations found yet.</p>`; return; }
+  box.innerHTML = '<p class="vsub">Tuning in…</p>';
+  let data; try { data = await loadRadio(src); } catch { box.innerHTML = '<p class="vsub">Couldn’t load the stations. Try again.</p>'; return; }
+  if (current !== f || ctab !== kind) return;
+  const list = data[kind] || [];
+  box.innerHTML = (borrowed
+      ? `<p class="vsub">No ${kind} stations stream from ${esc(nice(f))}, so here’s ${flag(src)} ${esc(nice(byIso.get(src)))} nearby.</p>`
+      : `<p class="vsub">Live ${kind} radio from ${esc(nice(f))}. Whole songs, nonstop.</p>`) +
+    `<ol class="tracks stations">${list.map((s, i) => `
+      <li class="tr st" data-i="${i}">
+        <span class="rk">${i + 1}</span>
+        <span class="ar sta">${RADIO_IC}${s.i ? `<img src="${esc(s.i)}" alt="" loading="lazy" width="46" height="46" onerror="this.remove()">` : ''}</span>
+        <span class="tt"><div class="tn">${esc(s.n)}</div><div class="ta">${esc([s.c, s.t.slice(0, 2).join(', ')].filter(Boolean).join(' · '))}</div></span>
+        <span class="livetag">LIVE</span>
+        <button class="play" aria-label="Play ${esc(s.n)}"></button>
+      </li>`).join('')}</ol>`;
+  box.querySelector('.stations').onclick = e => { const b = e.target.closest('.play'); if (b) playStation(list, +b.closest('.tr').dataset.i, src, kind); };
+  markStation();
+}
+function markStation(){
+  document.querySelectorAll('.tr.st.now').forEach(el => el.classList.remove('now'));
+  if (engine === 'radio' && Q.radio) document.querySelector(`#radioList .tr.st[data-i="${Q.radio.idx}"]`)?.classList.add('now');
+}
+async function playStation(list, idx, cc, kind){
+  const s = list[idx]; if (!s) return;
+  ++playToken; setRadio(false); Q.list = null;
+  if (engine === 'spotify') GTSpotify.pause();
+  engine = 'radio'; Q.radio = { list, idx, cc, kind };
+  const label = kind === 'folk' ? 'Folk' : 'Underground';
+  audio.src = s.u;
+  try { await audio.play(); } catch (err) { if (err.name !== 'AbortError') toast('Tap play to start the station'); }
+  const f = byIso.get(cc);
+  $('player').classList.remove('idle'); $('player').classList.add('live');
+  if (s.i){ $('pImg').src = s.i; $('pImg').hidden = false; $('pImg').onerror = () => { $('pImg').hidden = true; }; } else $('pImg').hidden = true;
+  $('pFlag').innerHTML = flag(cc);
+  $('pTitle').textContent = s.n;
+  $('pSub').textContent = `● Live · ${label} radio · ${nice(f)}`;
+  document.title = `${s.n} — Globe Tunes`;
+  setPlayIcon(); haptic('medium');
+  if (f) placeMarker(f, { art: '' });
+  markStation();
+  if ('mediaSession' in navigator){
+    navigator.mediaSession.metadata = new MediaMetadata({ title: s.n, artist: `${label} radio · ${nice(f)}`, album: 'Globe Tunes',
+      artwork: s.i ? [{ src: s.i, sizes: '512x512' }] : [{ src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' }] });
+  }
+}
+
+/* ---------- background playback: fetch the next clip early ---------- */
+const warm = new Audio(); warm.preload = 'auto'; warm.muted = true;
+function warmNext(){
+  let n = null;
+  if (Q.list && Q.list[Q.li + 1]) n = Q.list[Q.li + 1];
+  else if (!radio && Q.cc && Q.tracks[Q.i + 1]) n = { cc: Q.cc, i: Q.i + 1 };
+  if (!n) return;
+  loadChart(n.cc).then(d => { const t = d.tracks[n.i]; if (t?.p && warm.src !== t.p){ warm.src = t.p; try { warm.load(); } catch {} } }).catch(() => {});
 }
 
 /* ---------- keyboard ---------- */
