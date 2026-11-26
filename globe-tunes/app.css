@@ -8,7 +8,8 @@
   --label:#fff;--label2:rgba(235,235,245,.62);--label3:rgba(235,235,245,.32);--label4:rgba(235,235,245,.18);
   --sep:rgba(84,84,88,.6);--fill:rgba(118,118,128,.24);--fill2:rgba(118,118,128,.14);--fill3:rgba(118,118,128,.36);
   --tint:#ff375f;--tint2:#bf5af2;--blue:#0a84ff;
-  --glass:rgba(30,30,32,.5);
+  --glass:#1c1c1e;   /* solid: Apple dark secondary background */
+  --glass-2:#2c2c2e;
   --rim:inset 0 .5px 0 rgba(255,255,255,.34),inset 0 0 0 .5px rgba(255,255,255,.1);
   --lift:0 18px 50px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.3);
   --ease:cubic-bezier(.32,.72,0,1);
@@ -33,8 +34,7 @@ img{display:block}
 .maplibregl-ctrl-attrib a{color:var(--label2)}
 .maplibregl-ctrl-attrib-button{filter:invert(1);opacity:.45}
 
-.glass{background:var(--glass);backdrop-filter:blur(22px) saturate(180%);-webkit-backdrop-filter:blur(22px) saturate(180%);box-shadow:var(--rim),var(--lift)}
-@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.glass{background:rgba(30,30,32,.94)}}
+.glass{background:var(--glass);border:.5px solid rgba(255,255,255,.1);box-shadow:var(--rim),var(--lift)}
 
 /* ================= sheet ================= */
 #sheet{position:absolute;z-index:5;isolation:isolate;top:calc(var(--st) + 14px);left:var(--sl);width:var(--sheet-w);max-height:calc(100% - var(--st) - var(--sb) - 28px);border-radius:28px;display:flex;flex-direction:column;overflow:hidden;transition:translate .55s var(--ease)}
@@ -258,9 +258,7 @@ img{display:block}
 /* bright specular rim on every glass surface (the edge light of Liquid Glass) */
 .glass{position:relative}
 .seg,.stack,.solo{position:relative}
-.glass::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:3;padding:1px;
-  background:linear-gradient(var(--lq-edge-angle,140deg),rgba(255,255,255,.55),rgba(255,255,255,.08) 28%,rgba(255,255,255,0) 50%,rgba(255,255,255,.06) 72%,rgba(255,255,255,.32));
-  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
+.glass::after{content:none}
 @media (prefers-reduced-transparency:reduce){.glass{background:rgba(30,30,32,.94)!important}}
 
 /* spring physics from @liquefy-ui/core drive these variables */
@@ -305,7 +303,7 @@ img{display:block}
 .btn.primary[data-liquid-motion]::before,.radio[data-liquid-motion]::before,#pPlay[data-liquid-motion]::before{background:radial-gradient(90px circle at var(--lq-pointer-x,50%) var(--lq-pointer-y,50%),rgba(255,255,255,.34),transparent 65%)}
 
 /* lite mode: no backdrop blur, no glow, no infinite animations */
-.lite .glass,.lite #toast{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;background:rgba(28,28,30,.93)!important}
+.lite #toast{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;background:#2c2c2e!important}
 .lite .hero-bg{display:none}
 .lite .mk.live img,.lite .mk.live::before,.lite .radio.on,.lite .playing .tr.now .rk::after{animation:none!important}
 
@@ -324,3 +322,5 @@ img{display:block}
 .shelf.dragging .card{pointer-events:none}
 .shelf img{-webkit-user-drag:none;user-drag:none}
 @media (hover:none){.shelf-nav{display:none}}
+
+.seg.glass,.stack.glass,.solo.glass,#tip.glass{background:var(--glass-2)}
