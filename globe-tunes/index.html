@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Globe Tunes — hear what the world is playing</title>
+<meta name="description" content="Spin a 3D satellite globe, tap any country and play its most-played songs right now.">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark">
+<meta property="og:title" content="Globe Tunes">
+<meta property="og:description" content="Spin the globe. Tap a country. Hear its charts.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ff375f'/%3E%3Cstop offset='1' stop-color='%23bf5af2'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='url(%23g)'/%3E%3Ccircle cx='32' cy='32' r='17' fill='none' stroke='white' stroke-width='3.5'/%3E%3Cpath d='M15 32h34M32 15c-6 5-6 29 0 34M32 15c6 5 6 29 0 34' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="vendor/maplibre-gl.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://server.arcgisonline.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<canvas id="stars" aria-hidden="true"></canvas>
+<div id="map" aria-label="Interactive globe. Click a country to hear its chart."></div>
+
+<!-- ============ Sidebar (desktop) / bottom sheet (phone) ============ -->
+<section id="sheet" class="glass" aria-label="Browse charts">
+  <div class="hero-bg" id="heroBg" aria-hidden="true"></div>
+  <button class="grab" id="grab" aria-label="Expand panel"></button>
+
+  <header class="brand">
+    <span class="logo" aria-hidden="true"></span>
+    <span class="wordmark">Globe Tunes</span>
+  </header>
+
+  <form class="searchbar" id="searchForm" autocomplete="off" role="search">
+    <svg width="17" height="17" viewBox="0 0 16 16" aria-hidden="true"><circle cx="6.8" cy="6.8" r="5.3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10.8 10.8 15 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    <input id="q" type="search" placeholder="Search countries" aria-label="Search countries" aria-controls="results" enterkeyhint="go" spellcheck="false">
+    <kbd class="kbd" aria-hidden="true">/</kbd>
+  </form>
+
+  <div class="scrollarea" id="scrollarea">
+    <!-- search results -->
+    <ul id="results" role="listbox" aria-label="Countries" hidden></ul>
+
+    <!-- home -->
+    <div id="home">
+      <button class="radio" id="radioBtn">
+        <span class="radio-art" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 26 26"><circle cx="13" cy="13" r="10" fill="none" stroke="#fff" stroke-width="2"/><path d="M3 13h20M13 3c-4 3.4-4 16.6 0 20M13 3c4 3.4 4 16.6 0 20" fill="none" stroke="#fff" stroke-width="1.7"/></svg></span>
+        <span class="radio-t"><b>Around the World</b><small id="radioSub">A new country's #1 every 30 seconds</small></span>
+        <span class="radio-go" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 18 18"><path d="M5 3.2v11.6c0 .7.8 1.2 1.4.8l9-5.8c.6-.4.6-1.2 0-1.6l-9-5.8C5.8 2 5 2.5 5 3.2z" fill="currentColor"/></svg></span>
+      </button>
+
+      <h2 class="sec">Number ones right now</h2>
+      <div class="shelf" id="shelf" role="list"></div>
+
+      <h2 class="sec">Popular charts</h2>
+      <div class="regions" id="regions"></div>
+
+      <p class="fine" id="fine">Charts: Apple Music most-played songs, updated daily.</p>
+    </div>
+
+    <!-- country -->
+    <article id="place" hidden>
+      <div class="hero">
+        <div class="hero-row">
+          <div class="flag" id="cflag"></div>
+          <div class="hero-t">
+            <h1 id="cname"></h1>
+            <p id="csub"></p>
+          </div>
+          <button class="iconbtn" id="closeBtn" aria-label="Close"><svg width="11" height="11" viewBox="0 0 11 11"><path d="M1 1l9 9M10 1l-9 9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+        </div>
+        <div class="chips" id="chips"></div>
+        <div class="cta" id="cta">
+          <button class="btn primary" id="playAll"><svg width="15" height="15" viewBox="0 0 18 18"><path d="M5 3.2v11.6c0 .7.8 1.2 1.4.8l9-5.8c.6-.4.6-1.2 0-1.6l-9-5.8C5.8 2 5 2.5 5 3.2z" fill="currentColor"/></svg>Play</button>
+          <button class="btn" id="shuffleAll"><svg width="16" height="16" viewBox="0 0 18 18"><path d="M2 5h3.5c2 0 3 1 4 4s2 4 4 4H16M2 13h3.5c1.2 0 2-.4 2.7-1.2M16 5h-2.5c-1.2 0-2 .4-2.7 1.2M14 3l2 2-2 2M14 11l2 2-2 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Shuffle</button>
+        </div>
+      </div>
+      <ol class="tracks" id="tracks" aria-label="Chart"></ol>
+      <div class="nochart" id="nochart" hidden>
+        <p><b>No chart here yet.</b> Apple Music doesn't publish a most‑played chart for this country. Try these instead:</p>
+      </div>
+      <h2 class="sec">Also on</h2>
+      <div class="list" id="links"></div>
+      <p class="fine" id="cfine"></p>
+    </article>
+  </div>
+</section>
+
+<!-- ============ Map controls ============ -->
+<div class="ctrls">
+  <div class="seg glass" role="group" aria-label="Map style">
+    <button id="mSat" aria-pressed="true">Satellite</button>
+    <button id="mHyb" aria-pressed="false">Labels</button>
+  </div>
+  <div class="stack glass">
+    <button id="zIn" aria-label="Zoom in"><svg width="16" height="16"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+    <button id="zOut" aria-label="Zoom out"><svg width="16" height="16"><path d="M2 8h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+  </div>
+  <button class="solo glass" id="compass" aria-label="Reset view"><svg width="22" height="22" viewBox="0 0 22 22"><path d="M11 2l3.2 9H7.8z" fill="#ff453a"/><path d="M11 20l-3.2-9h6.4z" fill="rgba(235,235,245,.6)"/></svg></button>
+  <button class="solo glass" id="spinBtn" aria-label="Stop globe rotation"><svg width="20" height="20" viewBox="0 0 20 20" id="spinIc"></svg></button>
+</div>
+
+<!-- ============ Player ============ -->
+<div id="player" class="glass idle" role="region" aria-label="Player">
+  <button class="p-art" id="pArt" aria-label="Show this chart"><img id="pImg" alt="" hidden><span id="pFlag">🌍</span></button>
+  <div class="p-meta">
+    <div class="p-title" id="pTitle">Around the World</div>
+    <div class="p-sub" id="pSub">Press play to tour the globe’s No. 1s</div>
+  </div>
+  <div class="p-ctrls">
+    <button class="pb" id="pPrev" aria-label="Previous"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M11.5 12 20 6.3c.6-.4 1.4 0 1.4.8v9.8c0 .8-.8 1.2-1.4.8zM2.6 12 11 6.3c.6-.4 1.4 0 1.4.8v9.8c0 .8-.8 1.2-1.4.8z" fill="currentColor" transform="rotate(180 12 12)"/></svg></button>
+    <button class="pb big" id="pPlay" aria-label="Play"><svg width="26" height="26" viewBox="0 0 24 24" id="pIc"></svg></button>
+    <button class="pb" id="pNext" aria-label="Next"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M11.5 12 20 6.3c.6-.4 1.4 0 1.4.8v9.8c0 .8-.8 1.2-1.4.8zM2.6 12 11 6.3c.6-.4 1.4 0 1.4.8v9.8c0 .8-.8 1.2-1.4.8z" fill="currentColor" transform="rotate(180 12 12) scale(-1 1) translate(-24 0)"/></svg></button>
+  </div>
+  <div class="p-bar">
+    <span id="tCur">0:00</span>
+    <input type="range" id="seek" min="0" max="30" step="0.1" value="0" aria-label="Seek">
+    <span id="tDur">0:30</span>
+  </div>
+</div>
+
+<div id="tip" class="glass" hidden></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<audio id="audio" preload="none"></audio>
+
+<script src="vendor/maplibre-gl.js"></script>
+<script src="vendor/countries.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
