@@ -126,7 +126,7 @@ const map = new maplibregl.Map({
     layers: [
       { id: 'sat', type: 'raster', source: 'sat', paint: { 'raster-contrast': 0.08, 'raster-saturation': 0.12, 'raster-brightness-max': 0.96, 'raster-fade-duration': 300 } },
       { id: 'fill', type: 'fill', source: 'countries', paint: {
-          'fill-color': ['case', ['boolean', ['feature-state', 'sel'], false], '#ff375f', '#ffffff'],
+          'fill-color': ['case', ['boolean', ['feature-state', 'sel'], false], '#5e5ce6', '#ffffff'],
           'fill-opacity': ['case',
             ['boolean', ['feature-state', 'sel'], false], 0.1,
             ['boolean', ['feature-state', 'hover'], false], ['case', ['boolean', ['feature-state', 'chart'], false], 0.16, 0.06],
@@ -138,7 +138,7 @@ const map = new maplibregl.Map({
       // selection outline: filtered to the one selected country, so the GPU doesn't
       // draw 241 invisible blurred borders every frame
       { id: 'sel-glow', type: 'line', source: 'countries', filter: ['==', ['id'], -1], paint: {
-          'line-color': '#ff375f', 'line-width': 10, 'line-blur': 8, 'line-opacity': 0.6 } },
+          'line-color': '#5e5ce6', 'line-width': 10, 'line-blur': 8, 'line-opacity': 0.6 } },
       { id: 'sel-line', type: 'line', source: 'countries', filter: ['==', ['id'], -1], paint: {
           'line-color': '#ffffff', 'line-width': 2 } },
       { id: 'ref', type: 'raster', source: 'ref', layout: { visibility: 'none' } }

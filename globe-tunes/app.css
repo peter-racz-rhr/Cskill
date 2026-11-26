@@ -7,7 +7,7 @@
   --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display",Inter,"Helvetica Neue",system-ui,sans-serif;
   --label:#fff;--label2:rgba(235,235,245,.62);--label3:rgba(235,235,245,.32);--label4:rgba(235,235,245,.18);
   --sep:rgba(84,84,88,.6);--fill:rgba(118,118,128,.24);--fill2:rgba(118,118,128,.14);--fill3:rgba(118,118,128,.36);
-  --tint:#ff375f;--tint2:#bf5af2;--blue:#0a84ff;
+  --tint:#5e5ce6;--tint2:#0a84ff;--blue:#0a84ff;
   --glass:#1c1c1e;   /* solid: Apple dark secondary background */
   --glass-2:#2c2c2e;
   --rim:0 0 0 transparent;
@@ -43,9 +43,10 @@ img{display:block}
 .grab{display:none}
 #sheet>:not(.hero-bg){position:relative;z-index:1}
 .brand{display:flex;align-items:center;gap:10px;padding:18px 20px 4px}
-.logo{width:28px;height:28px;border-radius:8px;flex:none;background:linear-gradient(140deg,var(--tint),var(--tint2));position:relative}
-.logo::after{content:"";position:absolute;inset:6px;border-radius:50%;border:2px solid #fff;box-shadow:inset 0 0 0 4px transparent}
-.wordmark{font:700 19px/1 var(--font);letter-spacing:-.03em}
+.logo{display:none}
+
+.wordmark{font:400 28px/1 "Bytesized",var(--font);letter-spacing:.02em;color:#fff}
+.brand-float{display:none}
 .searchbar{display:flex;align-items:center;gap:8px;margin:12px 16px 8px;padding:0 10px 0 12px;height:40px;border-radius:12px;background:var(--fill);color:var(--label2);flex:none}
 .searchbar input{flex:1;height:100%;border:0;background:transparent;color:var(--label);font:17px var(--font);letter-spacing:-.02em;outline:none;-webkit-appearance:none;appearance:none}
 .searchbar input::placeholder{color:var(--label2)}
@@ -66,7 +67,7 @@ img{display:block}
 #results .empty{padding:14px 8px;color:var(--label2)}
 
 /* home */
-.radio{width:100%;display:flex;align-items:center;gap:14px;margin:6px 0 4px;padding:12px;border:0;border-radius:18px;text-align:left;color:#fff;background:linear-gradient(120deg,rgba(255,55,95,.9),rgba(191,90,242,.85));box-shadow:0 8px 24px rgba(255,55,95,.25);transition:scale .2s var(--ease),filter .2s}
+.radio{width:100%;display:flex;align-items:center;gap:14px;margin:6px 0 4px;padding:12px;border:0;border-radius:18px;text-align:left;color:#fff;background:linear-gradient(120deg,#5e5ce6,#3b6cf0);box-shadow:0 8px 24px rgba(94,92,230,.3);transition:scale .2s var(--ease),filter .2s}
 .radio:hover{filter:brightness(1.08)}
 .radio:not([data-liquid-motion]):active{scale:.98}
 .radio-art{width:48px;height:48px;border-radius:12px;background:rgba(255,255,255,.18);display:grid;place-items:center;flex:none}
@@ -112,7 +113,7 @@ img{display:block}
 .btn{display:flex;align-items:center;justify-content:center;gap:8px;height:44px;border-radius:12px;border:0;background:rgba(255,255,255,.16);color:#fff;font-size:16px;font-weight:600;transition:scale .15s,background .2s}
 .btn.primary{background:var(--tint);color:#fff}
 .btn:hover{background:rgba(255,255,255,.24)}
-.btn.primary:hover{background:#ff5276}
+.btn.primary:hover{background:#6f6dee}
 .btn:not([data-liquid-motion]):active{scale:.97}
 
 .tracks{list-style:none;margin:2px 0 0;padding:0}
@@ -300,7 +301,7 @@ img{display:block}
 @keyframes pin-in{from{scale:0}}
 @keyframes flag-in{from{scale:.6;rotate:-8deg;opacity:0}}
 @keyframes sheen{to{background-position:-220% 0}}
-.radio.on{background-image:linear-gradient(110deg,rgba(255,55,95,.95),rgba(191,90,242,.9) 40%,rgba(255,120,160,.95) 50%,rgba(191,90,242,.9) 60%,rgba(255,55,95,.95))}
+.radio.on{background-image:linear-gradient(110deg,#5e5ce6,#3b6cf0 40%,#8a88ff 50%,#3b6cf0 60%,#5e5ce6)}
 
 .btn.primary[data-liquid-motion]::before,.radio[data-liquid-motion]::before,#pPlay[data-liquid-motion]::before{background:radial-gradient(90px circle at var(--lq-pointer-x,50%) var(--lq-pointer-y,50%),rgba(255,255,255,.34),transparent 65%)}
 
@@ -326,3 +327,8 @@ img{display:block}
 @media (hover:none){.shelf-nav{display:none}}
 
 .seg.glass,.stack.glass,.solo.glass,#tip.glass{background:var(--glass-2)}
+
+/* phone: the sheet has no room for the wordmark, so it floats over the map */
+@media (max-width:700px){
+  .brand-float{display:block;position:absolute;z-index:4;top:calc(var(--st) + 18px);left:var(--sl);font:400 26px/1 "Bytesized",var(--font);letter-spacing:.02em;color:#fff;text-shadow:0 2px 10px rgba(0,0,0,.8);pointer-events:none}
+}
