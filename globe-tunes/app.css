@@ -492,3 +492,13 @@ html:not(.lite) #sheet.glass{background:rgba(30,30,34,.62);
   .modes{grid-template-columns:1fr 1fr}
   .mode{padding:10px}
 }
+
+/* ---------- sheet gestures ---------- */
+html,body{overscroll-behavior:none}                 /* no pull-to-refresh while dragging the sheet */
+@media (max-width:700px){
+  #sheet.dragging{transition:none!important}
+  .grab{height:28px}
+  .grab,.searchbar{touch-action:none}
+  #scrollarea{touch-action:pan-y;overscroll-behavior:contain}
+  #sheet:not(.dragging){transition:translate .5s cubic-bezier(.2,.9,.25,1)}
+}
