@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Globe Tunes</title>
+<link rel="stylesheet" href="vendor/maplibre-gl.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+:root{--ink:#f4f6fb;--dim:#9aa6bf;--panel:rgba(10,14,26,.78);--edge:rgba(255,255,255,.12);--accent:#1ed760;--hover:#ffd24a}
+*{box-sizing:border-box;min-width:0}
+html,body{height:100%;margin:0}
+body{background:#03050b;color:var(--ink);font:15px/1.5 Inter,system-ui,sans-serif;overflow:hidden}
+#map{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 55%,#0b1430 0%,#03050b 62%)}
+#stars{position:absolute;inset:0;pointer-events:none}
+.maplibregl-canvas{outline:none}
+.top{position:absolute;z-index:2;top:calc(env(safe-area-inset-top,0px) + 16px);left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));display:flex;gap:12px;align-items:center;flex-wrap:wrap;pointer-events:none}
+.brand{font:700 26px/1 'Space Grotesk',sans-serif;letter-spacing:-.02em;margin-right:auto;text-shadow:0 2px 12px #000}
+.brand small{display:block;font:500 13px/1.4 Inter,sans-serif;color:var(--dim);letter-spacing:0;margin-top:4px}
+.search{pointer-events:auto;position:relative}
+.search input{font:16px Inter,sans-serif;color:var(--ink);background:var(--panel);border:1px solid var(--edge);border-radius:999px;padding:10px 16px;width:min(280px,70vw);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.search input:focus{outline:2px solid var(--accent);outline-offset:1px}
+.chip{pointer-events:auto;font:500 14px Inter,sans-serif;color:var(--ink);background:var(--panel);border:1px solid var(--edge);border-radius:999px;padding:10px 14px;cursor:pointer;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.chip:hover{border-color:rgba(255,255,255,.35)}
+.chip[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}
+#tip{position:absolute;z-index:3;pointer-events:none;padding:6px 10px;border-radius:8px;background:var(--panel);border:1px solid var(--edge);font-weight:600;font-size:14px;white-space:nowrap;transform:translate(12px,-50%)}
+#panel{position:absolute;z-index:4;right:max(16px,env(safe-area-inset-right,0px));top:calc(env(safe-area-inset-top,0px) + 84px);width:340px;max-height:calc(100% - 110px);overflow:auto;background:var(--panel);border:1px solid var(--edge);border-radius:20px;padding:22px;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);box-shadow:0 20px 60px rgba(0,0,0,.5);transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .35s}
+#panel.off{transform:translateX(30px);opacity:0;pointer-events:none}
+.flag{font-size:44px;line-height:1}
+#cname{font:700 32px/1.05 'Space Grotesk',sans-serif;letter-spacing:-.02em;margin:10px 0 4px}
+#ccoord{color:var(--dim);font-size:13px;font-variant-numeric:tabular-nums}
+.close{position:absolute;top:12px;right:12px;width:36px;height:36px;border-radius:50%;border:1px solid var(--edge);background:transparent;color:var(--ink);font-size:18px;cursor:pointer}
+.close:hover{background:rgba(255,255,255,.08)}
+h3{font:600 13px Inter,sans-serif;color:var(--dim);margin:22px 0 10px}
+.player{border-radius:14px;padding:14px;background:linear-gradient(135deg,#123a24,#0c1a2e);border:1px solid rgba(30,215,96,.25);display:grid;grid-template-columns:56px 1fr;gap:12px;align-items:center}
+.cover{width:56px;height:56px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#0a7a3a);display:grid;place-items:center;font:700 15px 'Space Grotesk',sans-serif;color:#03140a}
+.player b{display:block;font-size:15px}
+.player span{color:var(--dim);font-size:13px}
+.eq{display:flex;gap:3px;align-items:flex-end;height:18px;margin-top:6px}
+.eq i{width:4px;background:var(--accent);border-radius:2px;animation:eq 1s ease-in-out infinite}
+.eq i:nth-child(2){animation-delay:-.3s}.eq i:nth-child(3){animation-delay:-.6s}.eq i:nth-child(4){animation-delay:-.15s}
+@keyframes eq{0%,100%{height:4px}50%{height:18px}}
+.links{display:grid;gap:8px}
+.links a{display:flex;justify-content:space-between;align-items:center;text-decoration:none;color:var(--ink);padding:12px 14px;border-radius:12px;border:1px solid var(--edge);background:rgba(255,255,255,.03);font-weight:500}
+.links a:hover{border-color:rgba(255,255,255,.35);background:rgba(255,255,255,.07)}
+.links a em{font-style:normal;color:var(--dim);font-size:13px}
+.links a.sp{border-color:rgba(30,215,96,.45)}
+.note{color:var(--dim);font-size:13px;margin:16px 0 0}
+.hint{position:absolute;z-index:2;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 28px);transform:translateX(-50%);background:var(--panel);border:1px solid var(--edge);border-radius:999px;padding:10px 18px;font-size:14px;color:var(--dim);white-space:nowrap;backdrop-filter:blur(12px);transition:opacity .5s}
+.maplibregl-ctrl-attrib{background:rgba(0,0,0,.5)!important;color:#bbb}
+.maplibregl-ctrl-attrib a{color:#ddd}
+.maplibregl-ctrl-group{background:var(--panel)!important;border:1px solid var(--edge)}
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon{filter:invert(1)}
+@media(max-width:640px){
+  .brand{font-size:22px}.brand small{display:none}
+  .search input{width:min(220px,58vw)}
+  #panel{left:12px;right:12px;width:auto;top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);max-height:58%;border-radius:20px}
+  #panel.off{transform:translateY(40px)}
+  .hint{bottom:calc(env(safe-area-inset-bottom,0px) + 60px)}
+}
+@media(prefers-reduced-motion:reduce){.eq i{animation:none;height:10px}#panel{transition:none}}
+</style>
+</head>
+<body>
+<canvas id="stars"></canvas>
+<div id="map"></div>
+
+<div class="top">
+  <div class="brand">Globe Tunes<small>Spin the planet, tap a country, hear what it's playing</small></div>
+  <form class="search" id="searchForm" autocomplete="off">
+    <input id="q" list="countryList" placeholder="Search a country…" aria-label="Search a country">
+    <datalist id="countryList"></datalist>
+  </form>
+  <button class="chip" id="labelsBtn" aria-pressed="false">Labels</button>
+  <button class="chip" id="spinBtn" aria-pressed="true">Spin</button>
+</div>
+
+<div id="tip" hidden></div>
+<div class="hint" id="hint">Drag to spin · scroll or pinch to zoom · tap a country</div>
+
+<aside id="panel" class="off" aria-live="polite">
+  <button class="close" id="closeBtn" aria-label="Close">×</button>
+  <div class="flag" id="cflag"></div>
+  <div id="cname">Country</div>
+  <div id="ccoord"></div>
+
+  <h3>Now on the charts</h3>
+  <div class="player">
+    <div class="cover" id="ccover">TOP</div>
+    <div><b id="ptitle">Top 50</b><span id="psub">Weekly most-played</span><div class="eq"><i></i><i></i><i></i><i></i></div></div>
+  </div>
+
+  <h3>Listen</h3>
+  <div class="links" id="links"></div>
+  <p class="note">Prototype: links open the country's charts on each service. Built-in playback comes next.</p>
+</aside>
+
+<script src="vendor/maplibre-gl.js"></script>
+<script src="vendor/countries.js"></script>
+<script>
+{
+const $ = id => document.getElementById(id);
+const C = window.COUNTRIES;
+const byName = new Map(C.features.map(f => [f.properties.name.toLowerCase(), f]));
+
+/* ---------- starfield ---------- */
+const sc = $('stars'), sx = sc.getContext('2d');
+function stars(){
+  const d = devicePixelRatio || 1; sc.width = innerWidth*d; sc.height = innerHeight*d;
+  sc.style.width = innerWidth+'px'; sc.style.height = innerHeight+'px';
+  let s = 42; const rnd = () => (s = s*16807 % 2147483647)/2147483647;
+  for(let i=0;i<Math.round(innerWidth*innerHeight/2600);i++){
+    const r = rnd()**3*1.6+0.3;
+    sx.fillStyle = `rgba(${200+rnd()*55|0},${210+rnd()*45|0},255,${0.25+rnd()*0.7})`;
+    sx.beginPath(); sx.arc(rnd()*sc.width, rnd()*sc.height, r*d, 0, 7); sx.fill();
+  }
+}
+stars(); addEventListener('resize', stars);
+
+/* ---------- map ---------- */
+const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services';
+const map = new maplibregl.Map({
+  container: 'map',
+  center: [19, 30], zoom: innerWidth < 640 ? 1.1 : 2.1,
+  maxPitch: 70, attributionControl: { compact: true },
+  style: {
+    version: 8,
+    projection: { type: 'globe' },
+    sky: {
+      'sky-color': '#0a1a3f', 'horizon-color': '#4d8fd8', 'fog-color': '#86b6f0',
+      'sky-horizon-blend': 0.6, 'horizon-fog-blend': 0.6, 'fog-ground-blend': 0.9,
+      'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 5, 1, 7, 0]
+    },
+    sources: {
+      sat: { type: 'raster', tileSize: 256, maxzoom: 19,
+        tiles: [ESRI + '/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+        attribution: 'Imagery © Esri, Maxar, Earthstar Geographics' },
+      ref: { type: 'raster', tileSize: 256, maxzoom: 19,
+        tiles: [ESRI + '/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'] },
+      countries: { type: 'geojson', data: C }
+    },
+    layers: [
+      { id: 'sat', type: 'raster', source: 'sat',
+        paint: { 'raster-saturation': 0.1, 'raster-contrast': 0.08, 'raster-fade-duration': 200 } },
+      { id: 'fill', type: 'fill', source: 'countries',
+        paint: { 'fill-color': ['case', ['boolean', ['feature-state', 'sel'], false], '#1ed760', '#ffd24a'],
+                 'fill-opacity': ['case', ['boolean', ['feature-state', 'sel'], false], 0.18,
+                                  ['boolean', ['feature-state', 'hover'], false], 0.16, 0] } },
+      { id: 'borders', type: 'line', source: 'countries',
+        paint: { 'line-color': '#ffffff',
+                 'line-opacity': ['interpolate', ['linear'], ['zoom'], 1, 0.28, 6, 0.5],
+                 'line-width': ['interpolate', ['linear'], ['zoom'], 1, 0.5, 6, 1.2] } },
+      { id: 'sel-line', type: 'line', source: 'countries',
+        paint: { 'line-color': '#1ed760', 'line-width': 2.5,
+                 'line-opacity': ['case', ['boolean', ['feature-state', 'sel'], false], 1, 0] } },
+      { id: 'ref', type: 'raster', source: 'ref', layout: { visibility: 'none' } }
+    ]
+  }
+});
+map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
+map.addControl(new maplibregl.GlobeControl(), 'bottom-right');
+
+/* ---------- idle spin ---------- */
+let spinning = true, userBusy = false;
+function spin(){
+  if(!spinning || userBusy || map.getZoom() > 4) return;
+  const c = map.getCenter(); c.lng -= 6;
+  map.easeTo({ center: c, duration: 1000, easing: t => t });
+}
+map.on('moveend', spin);
+map.on('load', spin);
+['mousedown','touchstart','wheel'].forEach(e => map.getCanvas().addEventListener(e, () => { userBusy = true; hideHint(); }, { passive: true }));
+['mouseup','touchend'].forEach(e => map.getCanvas().addEventListener(e, () => { userBusy = false; setTimeout(spin, 1500); }));
+$('spinBtn').onclick = e => { spinning = !spinning; e.currentTarget.setAttribute('aria-pressed', spinning); if(spinning){ userBusy=false; spin(); } else map.stop(); };
+$('labelsBtn').onclick = e => {
+  const on = map.getLayoutProperty('ref', 'visibility') !== 'visible';
+  map.setLayoutProperty('ref', 'visibility', on ? 'visible' : 'none');
+  e.currentTarget.setAttribute('aria-pressed', on);
+};
+let hinted = false;
+function hideHint(){ if(hinted) return; hinted = true; $('hint').style.opacity = 0; setTimeout(() => $('hint').hidden = true, 600); }
+
+/* ---------- hover ---------- */
+let hoverId = null, selId = null;
+const tip = $('tip');
+map.on('mousemove', 'fill', e => {
+  const f = e.features[0]; map.getCanvas().style.cursor = 'pointer';
+  if(hoverId !== f.id){ if(hoverId) map.setFeatureState({ source:'countries', id:hoverId }, { hover:false }); hoverId = f.id; map.setFeatureState({ source:'countries', id:hoverId }, { hover:true }); }
+  tip.hidden = false; tip.textContent = f.properties.name;
+  tip.style.left = e.point.x + 'px'; tip.style.top = e.point.y + 'px';
+});
+map.on('mouseleave', 'fill', () => {
+  if(hoverId) map.setFeatureState({ source:'countries', id:hoverId }, { hover:false });
+  hoverId = null; tip.hidden = true; map.getCanvas().style.cursor = '';
+});
+
+/* ---------- select ---------- */
+function mainPolygon(g){
+  if(g.type === 'Polygon') return g.coordinates[0];
+  let best = null, area = -1;
+  for(const p of g.coordinates){
+    const r = p[0]; let a = 0;
+    for(let i=0,j=r.length-1;i<r.length;j=i++) a += (r[j][0]+r[i][0])*(r[j][1]-r[i][1]);
+    if(Math.abs(a) > area){ area = Math.abs(a); best = r; }
+  }
+  return best;
+}
+function bounds(f){
+  const r = mainPolygon(f.geometry); const b = new maplibregl.LngLatBounds(r[0], r[0]);
+  r.forEach(p => b.extend(p)); return b;
+}
+const flag = iso => iso ? String.fromCodePoint(...[...iso.toUpperCase()].map(c => 127397 + c.charCodeAt(0))) : '';
+const enc = encodeURIComponent;
+
+function select(f){
+  if(selId) map.setFeatureState({ source:'countries', id:selId }, { sel:false });
+  selId = f.id; map.setFeatureState({ source:'countries', id:selId }, { sel:true });
+  spinning = false; $('spinBtn').setAttribute('aria-pressed', false); hideHint();
+  const name = f.properties.name, iso = f.properties.iso2;
+  const b = bounds(f), c = b.getCenter();
+  $('cflag').textContent = flag(iso);
+  $('cname').textContent = name;
+  $('ccoord').textContent = `${Math.abs(c.lat).toFixed(1)}° ${c.lat>=0?'N':'S'}, ${Math.abs(c.lng).toFixed(1)}° ${c.lng>=0?'E':'W'}${iso ? ' · ' + iso : ''}`;
+  $('ptitle').textContent = `Top 50 · ${name}`;
+  $('ccover').textContent = iso || 'TOP';
+  const q = enc('Top 50 ' + name);
+  $('links').innerHTML = [
+    ['sp', 'Spotify', 'Top 50 playlist', `https://open.spotify.com/search/${q}/playlists`],
+    ['', 'Apple Music', 'Top 100 chart', `https://music.apple.com/search?term=${enc('Top 100 ' + name)}`],
+    ['', 'Deezer', 'Top country chart', `https://www.deezer.com/search/${enc('Top ' + name)}/playlist`],
+    ['', 'YouTube Music', 'Top songs', `https://music.youtube.com/search?q=${enc('Top songs ' + name)}`]
+  ].map(([cls, s, sub, url]) => `<a class="${cls}" href="${url}" target="_blank" rel="noopener">${s}<em>${sub} ↗</em></a>`).join('');
+  $('panel').classList.remove('off');
+  const narrow = innerWidth < 640;
+  map.fitBounds(b, { padding: narrow ? { top: 80, bottom: innerHeight*0.55, left: 30, right: 30 } : { top: 90, bottom: 60, left: 60, right: 420 },
+                     maxZoom: 5.2, duration: 2600, essential: true });
+}
+map.on('click', 'fill', e => select(e.features[0]));
+$('closeBtn').onclick = () => {
+  $('panel').classList.add('off');
+  if(selId) map.setFeatureState({ source:'countries', id:selId }, { sel:false }); selId = null;
+  map.flyTo({ zoom: Math.min(map.getZoom(), 1.8), pitch: 0, duration: 2000 });
+};
+
+/* ---------- search ---------- */
+$('countryList').innerHTML = [...C.features].map(f => f.properties.name).sort().map(n => `<option value="${n.replace(/"/g,'&quot;')}">`).join('');
+function trySearch(){
+  const v = $('q').value.trim().toLowerCase(); if(!v) return;
+  const f = byName.get(v) || C.features.find(x => x.properties.name.toLowerCase().startsWith(v));
+  if(f){ select(f); $('q').blur(); }
+}
+$('searchForm').onsubmit = e => { e.preventDefault(); trySearch(); };
+$('q').addEventListener('change', trySearch);
+addEventListener('keydown', e => { if(e.key === 'Escape') $('closeBtn').click(); });
+}
+</script>
+</body>
+</html>
