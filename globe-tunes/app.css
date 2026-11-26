@@ -502,3 +502,42 @@ html,body{overscroll-behavior:none}                 /* no pull-to-refresh while 
   #scrollarea{touch-action:pan-y;overscroll-behavior:contain}
   #sheet:not(.dragging){transition:translate .5s cubic-bezier(.2,.9,.25,1)}
 }
+
+/* ================= phone: keyboard search, scrim, gesture ownership ================= */
+#scrim,#dres,.dock-cancel{display:none}
+@media (max-width:700px){
+  :root{--kb:0px}
+  .searchbar{display:none}                                   /* search lives in the dock on phones */
+  #sheet{z-index:7}
+  #scrim{display:block;position:fixed;inset:0;z-index:6;background:rgba(0,0,0,.38);opacity:0;pointer-events:none;transition:opacity .3s}
+  body.phone-open:not(.game-on) #scrim,body.searching #scrim{opacity:1;pointer-events:auto}
+  body.searching .brand-float,body.searching #player{opacity:0;pointer-events:none}
+  /* the dock rides on top of the keyboard */
+  .dock{position:fixed;z-index:8;bottom:calc(var(--kb) + max(var(--sb), 10px) + 4px);transition:bottom .25s ease,translate .5s var(--ease),opacity .3s}
+  body.searching .dock{bottom:calc(var(--kb) + 10px)}
+  .dock-search{cursor:text}
+  .dock-search input{flex:1;min-width:0;height:100%;border:0;background:transparent;color:var(--label);font:17px var(--font);letter-spacing:-.02em;outline:none;-webkit-appearance:none;appearance:none;padding:0}
+  .dock-search input::placeholder{color:var(--label2)}
+  .dock-search input::-webkit-search-cancel-button{filter:invert(.6)}
+  body.searching #dockExplore,body.searching #dockRadio{display:none}
+  .dock-cancel{display:none;border:0;background:none;color:#fff;font-size:17px;font-weight:600;padding:0 4px;flex:none}
+  body.searching .dock-cancel{display:block}
+  /* results float right above the search bar */
+  #dres{display:block;position:fixed;z-index:8;left:12px;right:12px;bottom:calc(var(--kb) + 10px + var(--dock-h) + 8px);
+    max-height:calc(var(--vvh, 100vh) - var(--dock-h) - 40px - var(--st));overflow:auto;overscroll-behavior:contain;
+    list-style:none;margin:0;padding:6px;border-radius:22px;background:rgba(30,30,34,.78)}
+  #dres[hidden]{display:none}
+  #dres button{width:100%;display:flex;align-items:center;gap:12px;padding:9px 8px;border:0;background:none;text-align:left;border-radius:14px;font-size:16px;color:var(--label)}
+  #dres button:active{background:var(--fill)}
+  #dres .rf{width:34px;height:34px;border-radius:50%;overflow:hidden;flex:none;background:var(--fill)}
+  #dres .rf .flg{width:100%;height:100%;border-radius:0}
+  #dres .rt{flex:1;min-width:0}
+  #dres .rt small{display:block;color:var(--label2);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #dres .dh{padding:6px 10px 2px;color:var(--label2);font-size:13px;font-weight:600}
+  #dres .empty{padding:14px 10px;color:var(--label2)}
+  /* who owns a vertical swipe: half-open = the sheet; full = the list (sideways always free) */
+  .grab,.hero,.vhead{touch-action:none}
+  #sheet.half .scrollarea{overflow:hidden;touch-action:pan-x}
+  #sheet:not(.half) .scrollarea{touch-action:pan-x pan-y}
+  .grab{height:30px}
+}
