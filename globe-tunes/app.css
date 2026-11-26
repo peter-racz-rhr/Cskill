@@ -311,3 +311,16 @@ img{display:block}
 
 #fxBtn[aria-pressed=true]{color:#ffd60a}
 #fxBtn[aria-pressed=true] svg{filter:drop-shadow(0 0 6px rgba(255,214,10,.6))}
+
+/* shelf: drag / wheel / arrows */
+.sec-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sec-row .sec{margin-right:auto}
+.shelf-nav{display:flex;gap:6px;margin-top:12px}
+.nav{width:30px;height:30px;border-radius:50%;border:0;background:var(--fill);color:var(--label);display:grid;place-items:center;transition:background .2s,opacity .2s}
+.nav:hover{background:var(--fill3)}
+.nav:disabled{opacity:.3;pointer-events:none}
+.shelf{cursor:grab;scroll-behavior:smooth;user-select:none;-webkit-user-select:none}
+.shelf.dragging{cursor:grabbing;scroll-snap-type:none;scroll-behavior:auto}
+.shelf.dragging .card{pointer-events:none}
+.shelf img{-webkit-user-drag:none;user-drag:none}
+@media (hover:none){.shelf-nav{display:none}}
