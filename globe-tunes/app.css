@@ -33,7 +33,7 @@ img{display:block}
 .maplibregl-ctrl-attrib a{color:var(--label2)}
 .maplibregl-ctrl-attrib-button{filter:invert(1);opacity:.45}
 
-.glass{background:var(--glass);backdrop-filter:blur(34px) saturate(190%);-webkit-backdrop-filter:blur(34px) saturate(190%);box-shadow:var(--rim),var(--lift)}
+.glass{background:var(--glass);backdrop-filter:blur(22px) saturate(180%);-webkit-backdrop-filter:blur(22px) saturate(180%);box-shadow:var(--rim),var(--lift)}
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.glass{background:rgba(30,30,32,.94)}}
 
 /* ================= sheet ================= */
@@ -262,18 +262,16 @@ img{display:block}
   background:linear-gradient(var(--lq-edge-angle,140deg),rgba(255,255,255,.55),rgba(255,255,255,.08) 28%,rgba(255,255,255,0) 50%,rgba(255,255,255,.06) 72%,rgba(255,255,255,.32));
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
 /* real refraction where the browser can run SVG filters in backdrop-filter (Chromium) */
-.lq-lens #sheet[data-liquid-lens],.lq-lens #player[data-liquid-lens]{background:rgba(28,28,32,.34);-webkit-backdrop-filter:var(--lq-lens) blur(14px) saturate(185%) brightness(.92);backdrop-filter:var(--lq-lens) blur(14px) saturate(185%) brightness(.92)}
-.lq-lens .seg[data-liquid-lens],.lq-lens .stack[data-liquid-lens],.lq-lens .solo[data-liquid-lens],.lq-lens #tip[data-liquid-lens]{background:rgba(40,40,46,.16);-webkit-backdrop-filter:var(--lq-lens) blur(2px) saturate(190%) brightness(1.06);backdrop-filter:var(--lq-lens) blur(2px) saturate(190%) brightness(1.06)}
+.lq-lens .seg[data-liquid-lens],.lq-lens .stack[data-liquid-lens],.lq-lens .solo[data-liquid-lens]{background:rgba(40,40,46,.16);-webkit-backdrop-filter:var(--lq-lens) blur(2px) saturate(190%) brightness(1.06);backdrop-filter:var(--lq-lens) blur(2px) saturate(190%) brightness(1.06)}
 @media (prefers-reduced-transparency:reduce){.glass{background:rgba(30,30,32,.94)!important}}
 
 /* spring physics from @liquefy-ui/core drive these variables */
-[data-liquid-motion]{position:relative;will-change:transform;transform-origin:50% 60%;
+[data-liquid-motion]{position:relative;transform-origin:50% 60%;
   translate:var(--lq-magnet-x,0px) calc(var(--lq-magnet-y,0px) + var(--lq-lift,0px));
   scale:var(--lq-scale-x,1) var(--lq-scale-y,1);
   transform:perspective(600px) rotateX(var(--lq-rotate-x,0deg)) rotateY(var(--lq-rotate-y,0deg)) skewX(var(--lq-skew-x,0deg))}
 [data-liquid-motion]::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:0;opacity:var(--lq-shine-opacity,0);
   background:radial-gradient(120px circle at var(--lq-pointer-x,50%) var(--lq-pointer-y,50%),rgba(255,255,255,.16),transparent 60%);mix-blend-mode:plus-lighter}
-.lq-canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:inherit;pointer-events:none;z-index:0}
 .btn>:not(.lq-canvas),.radio>:not(.lq-canvas),#pPlay>:not(.lq-canvas){position:relative;z-index:1}
 .radio,.btn,#pPlay{isolation:isolate}
 
@@ -305,3 +303,5 @@ img{display:block}
 @keyframes flag-in{from{scale:.6;rotate:-8deg;opacity:0}}
 @keyframes sheen{to{background-position:-220% 0}}
 .radio.on{background-image:linear-gradient(110deg,rgba(255,55,95,.95),rgba(191,90,242,.9) 40%,rgba(255,120,160,.95) 50%,rgba(191,90,242,.9) 60%,rgba(255,55,95,.95))}
+
+.btn.primary[data-liquid-motion]::before,.radio[data-liquid-motion]::before,#pPlay[data-liquid-motion]::before{background:radial-gradient(90px circle at var(--lq-pointer-x,50%) var(--lq-pointer-y,50%),rgba(255,255,255,.34),transparent 65%)}

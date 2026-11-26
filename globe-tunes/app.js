@@ -108,6 +108,7 @@ const START_ZOOM = () => phone() ? 1.15 : 2.15;
 const map = new maplibregl.Map({
   container: 'map', center: [12, 28], zoom: reduceMotion.matches ? START_ZOOM() : 0.3, maxPitch: 75,
   attributionControl: { compact: true }, fadeDuration: 200,
+  pixelRatio: Math.min(devicePixelRatio || 1, 2),   // phones are 3x: 2x looks the same and draws ~45% fewer pixels
   style: {
     version: 8,
     projection: { type: 'globe' },
